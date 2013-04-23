@@ -47,10 +47,12 @@ struct wrapvec
 
 
 // constants for integration
-#DEFINE N_GH 10
+#define N_GH 10
 
 static __constant__ double c_rt2 = 1.4142135623730951;
+
 static __constant__ double c_rt2pi = 2.5066282746310002;
+
 static __constant__ double c_absc[] = {
 	-3.4361591188377352, -2.5327316742327906, -1.756683649299881, -1.0366108297895147,
 	-0.34290132722370503, 0.34290132722370431, 1.0366108297895129, 1.7566836492998816,
@@ -81,8 +83,9 @@ void marginals(double *theta, int d, double **features, double **sigmas, int m, 
 		double rho;
 		marg[i] = 0;
 		for (int j=0; j<N_GH; j++) {
-			x = features[0][i] + c_rt2*sigmas[0][i]*c_absc[j]
-			rho = exp(-(x-mu)**2/(2.*var))/c_rt2pi
+			x = features[0][i] + c_rt2*sigmas[0][i]*c_absc[j];
+			double t = x-mu;
+			rho = exp(-t*t/(2.0*var))/c_rt2pi;
 			marg[i] += c_wts[j]*rho;
 		}
 	}
@@ -123,15 +126,15 @@ int main(void)
 	wrapvec d_features(m,n);
 	wrapvec d_sigmas(m,n);
 
-	unsigned int seed = 9872498732;
+	unsigned int seed = 98724732;
 	static thrust::minstd_rand rng(seed);
 	thrust::random::experimental::normal_distribution<double> dist(0.0, 1.0);
 	// thrust::generate(d_vec.begin(), d_vec.end(), dist(rng));
 
 	for (int i=0; i<n; i++) {
 		for (int j=0; j<m; j++) {
-			d_features[j][i] = 5.;
-			d_sigmas[j][i] = 1.;
+			d_features.v[j][i] = 5.0;
+			d_sigmas.v[j][i] = 1.;
 		}
 	}
 

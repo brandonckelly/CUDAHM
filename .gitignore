@@ -25,7 +25,7 @@ profile
 
 ####
 # Xcode temporary files that should never be committed
-# 
+#
 # NB: NIB/XIB files still exist even on Storyboard projects, so we want this...
 
 *~.nib
@@ -125,7 +125,7 @@ xcuserdata
 
 ####
 # Cocoapods: cocoapods.org
-# 
+#
 # Ignoring these files means that whoever uses the code will first have to run:
 # pod install
 # in the App.xcodeproj directory.
@@ -141,3 +141,54 @@ Podfile.lock
 # Ignore PyCharm files
 .idea/
 __pychache__/
+
+#Visual Studio files
+#
+*.[Oo]bj
+*.user
+*.aps
+*.pch
+*.vspscc
+*.vssscc
+*_i.c
+*_p.c
+*.ncb
+*.suo
+*.tlb
+*.tlh
+*.bak
+*.[Cc]ache
+*.ilk
+*.log
+*.lib
+*.sbr
+*.sdf
+ipch/
+obj/
+[Bb]in
+[Dd]ebug*/
+[Rr]elease*/
+ 
+#
+#Tooling
+#
+_ReSharper*/
+*.resharper
+[Tt]est[Rr]esult*
+ 
+#
+#Project files
+#
+[Bb]uild/
+ 
+#
+#Subversion files
+#
+.svn
+ 
+#
+# Microsoft Office Temp Files
+#
+~$*
+ 
+# End of file

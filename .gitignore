@@ -164,6 +164,7 @@ __pychache__/
 *.sbr
 *.sdf
 *.pdb
+*.opensdf
 ipch/
 obj/
 [Bb]in

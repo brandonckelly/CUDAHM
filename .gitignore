@@ -192,5 +192,10 @@ _ReSharper*/
 # Microsoft Office Temp Files
 #
 ~$*
+
+#
+# Built CUDA files
+#
+*.out
  
 # End of file

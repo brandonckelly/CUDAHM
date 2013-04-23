@@ -163,6 +163,7 @@ __pychache__/
 *.lib
 *.sbr
 *.sdf
+*.pdb
 ipch/
 obj/
 [Bb]in
@@ -180,7 +181,7 @@ _ReSharper*/
 #Project files
 #
 [Bb]uild/
- 
+
 #
 #Subversion files
 #

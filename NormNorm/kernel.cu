@@ -7,6 +7,8 @@
 #include <thrust/random/linear_congruential_engine.h>
 #include <thrust/random/normal_distribution.h>
 
+#include <stdio.h>
+
 //#include <thrust/sort.h>
 //#include <thrust/copy.h>
 

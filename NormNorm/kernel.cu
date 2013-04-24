@@ -90,41 +90,51 @@ void marginals(double *theta, int dim_theta, int n_theta, double **features, dou
 }
 	  
 
-
 int main(void)
 {
 	// measurements
-	int n = 10; // # of items
+	int n = 100; // # of items
 	int m = 1; // # of features
 	wrapvec d_features(m,n);
 	wrapvec d_sigmas(m,n);
 
 	unsigned int seed = 98724732;
+	double sigma_msmt = 3.;
 	static thrust::minstd_rand rng(seed);
-	thrust::random::experimental::normal_distribution<double> dist(0., 3.);
+	thrust::random::experimental::normal_distribution<double> dist(0., sigma_msmt);
 	// thrust::generate(d_vec.begin(), d_vec.end(), dist(rng));
 
+	double mu_popn_true = 20.;
+	double sigma_popn_true = 1.;
+	// Create simulated data; copies to GPU dumbly!
 	for (int i=0; i<n; i++) {
 		for (int j=0; j<m; j++) {
-			d_features.v[j][i] = 20.0 + dist(rng);
-			d_sigmas.v[j][i] = 1.;
+			d_features.v[j][i] = mu_popn_true + dist(rng);
+			d_sigmas.v[j][i] = sigma_popn_true;
 		}
 	}
 
-	// alloc mem for marginals
-	thrust::device_vector<double> d_marg(n);
-
-	// theta (shd be broadcasted, too?)
+	// Create array of hyperparameter values.
+	// Here we condition on sigma_popn_true (for simple analytical result).
+	// Currently ineffecient; should build host vector and copy over.
 	int dim_theta = 2;
-	int n_theta = 100;
+	int n_theta = 10;
+	double mu_lo = mu_popn_true - 5*sigma_msmt/sqrt(n);
+	double mu_hi = mu_popn_true + 5*sigma_msmt/sqrt(n);
+	double dmu = (mu_hi - mu_lo)/(n_theta-1.);
+	double mu;
 	thrust::device_vector<double> d_theta(dim_theta*n_theta);
-
-	// init, etc
-	d_theta[0] = 5;
-	d_theta[1] = 3.;
+	for (int i=0; i<n_theta; i++) {
+		mu = mu_lo + i*dmu;
+		d_theta[i*dim_theta] = mu;
+		d_theta[i*dim_theta+1] = sigma_popn_true;
+	}
 
 	// To load a single set of thetas into constant memory, copy to a global:
 	// cudaMemcpyToSymbol(c_theta, p_theta, d_theta.size() * sizeof(*p_theta));
+
+	// Alloc mem for marginals for individuals, for each set of hyperparams.
+	thrust::device_vector<double> d_marg(n*n_theta);
 
 	{
 		// log marginal likelhoods in parallel on all threads independently
@@ -136,14 +146,19 @@ int main(void)
 		// cuda grid launch
 		int nThreads = 256;
 		int nBlocks = (n + nThreads-1) / nThreads;
-		marginals<<<nBlocks,nThreads>>>(p_theta,d_theta.size(), p_features,p_sigmas,m,n, p_marg);
+		marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta, 
+			p_features, p_sigmas, m, n, p_marg);
 		// wait for it to finish
 		cudaError_t err = cudaDeviceSynchronize();
 
-		// sum up
-		double log_marg = thrust::reduce(d_marg.begin(), d_marg.end());
+		// Loop over hyperparams; reduce over individuals for each case.
+		for (int i=0; i<n_theta; i++) {
+			int start = i*n;
+			int end = start + n;
+			double log_marg = thrust::reduce(d_marg.begin()+start, d_marg.begin()+end);
+			std::cout << log_marg << std::endl;
+		}
 
-		std::cout << log_marg << std::endl;
 	}
 	  
 	return 0;

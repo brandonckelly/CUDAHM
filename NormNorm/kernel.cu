@@ -90,7 +90,7 @@ void marginals(double *theta, int dim_theta, int n_theta, double *features, doub
 			rho = exp(-t*t/(2.0*var));
 			mrg += c_wts[j]*rho;
 		}
-		marg[i+n*i_theta] = mrg / c_rt2pi;
+		marg[i+n*i_theta] = log(mrg / c_rt2pi);
 	}
 }
 	  
@@ -98,7 +98,7 @@ void marginals(double *theta, int dim_theta, int n_theta, double *features, doub
 int main(void)
 {
 	// measurements
-	int n = 10000000; // # of items
+	int n = 2000000; // # of items
 	int m = 1; // # of features
 	/*
 	wrapvec d_features(m,n);
@@ -129,8 +129,8 @@ int main(void)
 	// Currently ineffecient; should build host vector and copy over.
 	int dim_theta = 2;
 	int n_theta = 11;
-	double mu_lo = mu_popn_true - 5*sigma_msmt/sqrt(n);
-	double mu_hi = mu_popn_true + 5*sigma_msmt/sqrt(n);
+	double mu_lo = mu_popn_true - 2*sigma_msmt/sqrt(n);
+	double mu_hi = mu_popn_true + 2*sigma_msmt/sqrt(n);
 	double dmu = (mu_hi - mu_lo)/(n_theta-1.);
 	double mu;
 	thrust::host_vector<double> h_theta(dim_theta*n_theta);
@@ -157,10 +157,16 @@ int main(void)
 		// cuda grid launch
 		dim3 nThreads(32,8);
 		dim3 nBlocks((n + nThreads.x-1) / nThreads.x, (n_theta + nThreads.y-1) / nThreads.y);
+		printf("nBlocks: %d  %d\n", nBlocks.x, nBlocks.y);  // no more than 64k blocks!
 		marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta, 
 			p_features, p_sigmas, m, n, p_marg);
 		// wait for it to finish
 		cudaError_t err = cudaDeviceSynchronize();
+
+		thrust::host_vector<double> h_marg = d_marg;
+		for (int i=0; i<20; i++) {
+		  printf("%d %20.10f \n", i, h_marg[i]);
+		}
 
 		// Loop over hyperparams; reduce over individuals for each case.
 		for (int i=0; i<n_theta; i++) {

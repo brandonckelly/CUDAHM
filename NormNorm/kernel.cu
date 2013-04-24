@@ -129,8 +129,8 @@ int main(void)
 	// Currently ineffecient; should build host vector and copy over.
 	int dim_theta = 2;
 	int n_theta = 11;
-	double mu_lo = mu_popn_true - 1*sigma_msmt/10; //sqrt(n);
-	double mu_hi = mu_popn_true + 1*sigma_msmt/10; //sqrt(n);
+	double mu_lo = mu_popn_true - 5*sigma_msmt/sqrt(n);
+	double mu_hi = mu_popn_true + 5*sigma_msmt/sqrt(n);
 	double dmu = (mu_hi - mu_lo)/(n_theta-1.);
 	double mu;
 	thrust::host_vector<double> h_theta(dim_theta*n_theta);

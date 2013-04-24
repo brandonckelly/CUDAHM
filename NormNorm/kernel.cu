@@ -96,7 +96,7 @@ void marginals(double *theta, int dim_theta, int n_theta, double *features, doub
 int main(void)
 {
 	// measurements
-	int n = 10000000; // # of items
+	int n = 1000000; // # of items
 	int m = 1; // # of features
 	/*
 	wrapvec d_features(m,n);
@@ -126,9 +126,9 @@ int main(void)
 	// Here we condition on sigma_popn_true (for simple analytical result).
 	// Currently ineffecient; should build host vector and copy over.
 	int dim_theta = 2;
-	int n_theta = 10;
-	double mu_lo = mu_popn_true - 5*sigma_msmt/10; //sqrt(n);
-	double mu_hi = mu_popn_true + 5*sigma_msmt/10; //sqrt(n);
+	int n_theta = 11;
+	double mu_lo = mu_popn_true - 1*sigma_msmt/10; //sqrt(n);
+	double mu_hi = mu_popn_true + 1*sigma_msmt/10; //sqrt(n);
 	double dmu = (mu_hi - mu_lo)/(n_theta-1.);
 	double mu;
 	thrust::host_vector<double> h_theta(dim_theta*n_theta);
@@ -166,7 +166,8 @@ int main(void)
 			int end = start + n;
 			double log_marg = 0;
 			log_marg = thrust::reduce(d_marg.begin()+start, d_marg.begin()+end);
-			std::cout << i << " " << log_marg << std::endl;
+			//std::cout << i << " " << log_marg << std::endl;
+            printf("%d %20.10f %20.10f \n", i, log_marg, h_theta[i*dim_theta]);
 		}
 
 	}

@@ -98,7 +98,7 @@ void marginals(double *theta, int dim_theta, int n_theta, double *features, doub
 int main(void)
 {
 	// measurements
-	int n = 1000000; // # of items
+	int n = 10000000; // # of items
 	int m = 1; // # of features
 	/*
 	wrapvec d_features(m,n);

@@ -84,7 +84,7 @@ void marginals(double *theta, int dim_theta, int n_theta, double **features, dou
 			x = features[0][i] + c_rt2*sigmas[0][i]*c_absc[j];
 			double t = x-mu;
 			rho = exp(-t*t/(2.0*var))/c_rt2pi;
-			marg[i+n*n_theta] += c_wts[j]*rho;
+			marg[i+n*i_theta] += c_wts[j]*rho;
 		}
 	}
 }

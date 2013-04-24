@@ -17,7 +17,7 @@
 //#include <cstdlib>
 
 #include <vector>
-
+/*
 typedef thrust::device_vector<double> dvec;
 typedef std::vector<dvec> vdvec;
 
@@ -42,7 +42,7 @@ struct wrapvec
 		return (double**) thrust::raw_pointer_cast(&d_ptr[0]); 
 	}
 };
-
+*/
 // constants for integration
 #define N_GH 10
 
@@ -69,7 +69,7 @@ double rho(double r)
 
 
 __global__
-void marginals(double *theta, int dim_theta, int n_theta, double **features, double **sigmas, int m, int n, double *marg)
+void marginals(double *theta, int dim_theta, int n_theta, double *features, double *sigmas, int m, int n, double *marg)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int i_theta = blockDim.y * blockIdx.y + threadIdx.y;
@@ -79,13 +79,16 @@ void marginals(double *theta, int dim_theta, int n_theta, double **features, dou
 		double var = theta[1+dim_theta*i_theta];
 		double x;
 		double rho;
-		marg[i] = 0;
+		double mrg = 0;
+		double pi = features[i]; // here only 1 feature!!!
+		double si = sigmas[i];
 		for (int j=0; j<N_GH; j++) {
-			x = features[0][i] + c_rt2*sigmas[0][i]*c_absc[j];
+			x = pi + c_rt2 * si * c_absc[j];
 			double t = x-mu;
-			rho = exp(-t*t/(2.0*var))/c_rt2pi;
-			marg[i+n*i_theta] += c_wts[j]*rho;
+			rho = exp(-t*t/(2.0*var));
+			mrg += c_wts[j]*rho;
 		}
+		marg[i+n*i_theta] = mrg / c_rt2pi;
 	}
 }
 	  
@@ -93,42 +96,48 @@ void marginals(double *theta, int dim_theta, int n_theta, double **features, dou
 int main(void)
 {
 	// measurements
-	int n = 100; // # of items
+	int n = 10000000; // # of items
 	int m = 1; // # of features
+	/*
 	wrapvec d_features(m,n);
 	wrapvec d_sigmas(m,n);
+	*/
+	thrust::host_vector<double> h_features(n*m);
+	thrust::host_vector<double> h_sigmas(n*m);
 
 	unsigned int seed = 98724732;
 	double sigma_msmt = 3.;
 	static thrust::minstd_rand rng(seed);
 	thrust::random::experimental::normal_distribution<double> dist(0., sigma_msmt);
-	// thrust::generate(d_vec.begin(), d_vec.end(), dist(rng));
 
 	double mu_popn_true = 20.;
 	double sigma_popn_true = 1.;
 	// Create simulated data; copies to GPU dumbly!
 	for (int i=0; i<n; i++) {
 		for (int j=0; j<m; j++) {
-			d_features.v[j][i] = mu_popn_true + dist(rng);
-			d_sigmas.v[j][i] = sigma_popn_true;
+			h_features[i*m+0] = mu_popn_true + dist(rng);
+			h_sigmas[i*m+1] = sigma_popn_true;
 		}
 	}
+	thrust::device_vector<double> d_features = h_features;
+	thrust::device_vector<double> d_sigmas = h_sigmas;
 
 	// Create array of hyperparameter values.
 	// Here we condition on sigma_popn_true (for simple analytical result).
 	// Currently ineffecient; should build host vector and copy over.
 	int dim_theta = 2;
 	int n_theta = 10;
-	double mu_lo = mu_popn_true - 5*sigma_msmt/sqrt(n);
-	double mu_hi = mu_popn_true + 5*sigma_msmt/sqrt(n);
+	double mu_lo = mu_popn_true - 5*sigma_msmt/10; //sqrt(n);
+	double mu_hi = mu_popn_true + 5*sigma_msmt/10; //sqrt(n);
 	double dmu = (mu_hi - mu_lo)/(n_theta-1.);
 	double mu;
-	thrust::device_vector<double> d_theta(dim_theta*n_theta);
+	thrust::host_vector<double> h_theta(dim_theta*n_theta);
 	for (int i=0; i<n_theta; i++) {
 		mu = mu_lo + i*dmu;
-		d_theta[i*dim_theta] = mu;
-		d_theta[i*dim_theta+1] = sigma_popn_true;
+		h_theta[i*dim_theta] = mu;
+		h_theta[i*dim_theta+1] = sigma_popn_true;
 	}
+	thrust::device_vector<double> d_theta = h_theta;
 
 	// To load a single set of thetas into constant memory, copy to a global:
 	// cudaMemcpyToSymbol(c_theta, p_theta, d_theta.size() * sizeof(*p_theta));
@@ -140,11 +149,11 @@ int main(void)
 		// log marginal likelhoods in parallel on all threads independently
 		double* p_marg = thrust::raw_pointer_cast(&d_marg[0]);
 		double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
-		double** p_features = d_features.ptrs();
-		double** p_sigmas = d_sigmas.ptrs();
+		double* p_features = thrust::raw_pointer_cast(&d_features[0]);
+		double* p_sigmas = thrust::raw_pointer_cast(&d_sigmas[0]);
 
 		// cuda grid launch
-		dim3 nThreads(16,16);
+		dim3 nThreads(32,8);
 		dim3 nBlocks((n + nThreads.x-1) / nThreads.x, (n_theta + nThreads.y-1) / nThreads.y);
 		marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta, 
 			p_features, p_sigmas, m, n, p_marg);
@@ -155,8 +164,9 @@ int main(void)
 		for (int i=0; i<n_theta; i++) {
 			int start = i*n;
 			int end = start + n;
-			double log_marg = thrust::reduce(d_marg.begin()+start, d_marg.begin()+end);
-			std::cout << log_marg << std::endl;
+			double log_marg = 0;
+			log_marg = thrust::reduce(d_marg.begin()+start, d_marg.begin()+end);
+			std::cout << i << " " << log_marg << std::endl;
 		}
 
 	}

@@ -69,13 +69,14 @@ double rho(double r)
 
 
 __global__
-void marginals(double *theta, int d, double **features, double **sigmas, int m, int n, double *marg)
+void marginals(double *theta, int dim_theta, int n_theta, double **features, double **sigmas, int m, int n, double *marg)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
-	if (i<n)
+	int i_theta = blockDim.y * blockIdx.y + threadIdx.y;
+	if (i<n && i_theta<n_theta)
 	{
-		double mu = theta[0];
-		double var = theta[1];
+		double mu = theta[0+dim_theta*i_theta];
+		double var = theta[1+dim_theta*i_theta];
 		double x;
 		double rho;
 		marg[i] = 0;
@@ -83,7 +84,7 @@ void marginals(double *theta, int d, double **features, double **sigmas, int m, 
 			x = features[0][i] + c_rt2*sigmas[0][i]*c_absc[j];
 			double t = x-mu;
 			rho = exp(-t*t/(2.0*var))/c_rt2pi;
-			marg[i] += c_wts[j]*rho;
+			marg[i+n*n_theta] += c_wts[j]*rho;
 		}
 	}
 }
@@ -100,12 +101,12 @@ int main(void)
 
 	unsigned int seed = 98724732;
 	static thrust::minstd_rand rng(seed);
-	thrust::random::experimental::normal_distribution<double> dist(0.0, 1.0);
+	thrust::random::experimental::normal_distribution<double> dist(0., 3.);
 	// thrust::generate(d_vec.begin(), d_vec.end(), dist(rng));
 
 	for (int i=0; i<n; i++) {
 		for (int j=0; j<m; j++) {
-			d_features.v[j][i] = 5.0;
+			d_features.v[j][i] = 20.0 + dist(rng);
 			d_sigmas.v[j][i] = 1.;
 		}
 	}
@@ -114,15 +115,19 @@ int main(void)
 	thrust::device_vector<double> d_marg(n);
 
 	// theta (shd be broadcasted, too?)
-	thrust::device_vector<double> d_theta(2);
+	int dim_theta = 2;
+	int n_theta = 100;
+	thrust::device_vector<double> d_theta(dim_theta*n_theta);
 
 	// init, etc
 	d_theta[0] = 5;
-	d_theta[1] = 2;
+	d_theta[1] = 3.;
+
+	// To load a single set of thetas into constant memory, copy to a global:
 	// cudaMemcpyToSymbol(c_theta, p_theta, d_theta.size() * sizeof(*p_theta));
+
 	{
 		// log marginal likelhoods in parallel on all threads independently
-		//thrust::transform(d_fhat.begin(), d_fhat.end(), d_marg.begin(), log_marginal(mu,var));	  
 		double* p_marg = thrust::raw_pointer_cast(&d_marg[0]);
 		double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
 		double** p_features = d_features.ptrs();

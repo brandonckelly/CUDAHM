@@ -144,8 +144,8 @@ int main(void)
 		double** p_sigmas = d_sigmas.ptrs();
 
 		// cuda grid launch
-		int nThreads = 256;
-		int nBlocks = (n + nThreads-1) / nThreads;
+		dim3 nThreads(16,16);
+		dim3 nBlocks((n + nThreads.x-1) / nThreads.x, (n_theta + nThreads.y-1) / nThreads.y);
 		marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta, 
 			p_features, p_sigmas, m, n, p_marg);
 		// wait for it to finish

@@ -126,7 +126,7 @@ void update_chi(double* theta, double* chi, double* meas, double* meas_unc, int 
 int main(void)
 {
 	// measurements
-	int n = 2000000; // # of items
+	int n = 2000; // # of items
 	int m = 1; // # of features
 	/*
      wrapvec d_features(m,n);
@@ -177,10 +177,10 @@ int main(void)
 	thrust::device_vector<double> d_marg(n*n_theta);
 
     // Cuda grid launch
-    dim3 nThreads(256,1);
+    dim3 nThreads(256);
     dim3 nBlocks((n + nThreads.x-1) / nThreads.x);
-    printf("nBlocks: %d  %d\n", nBlocks.x, nBlocks.y);  // no more than 64k blocks!
-    if (nBlocks.x > 65535 || nBlocks.y > 65535)
+    printf("nBlocks: %d\n", nBlocks.x);  // no more than 64k blocks!
+    if (nBlocks.x > 65535)
     {
         std::cerr << "ERROR: Block is too large" << std::endl;
         return 2;
@@ -195,6 +195,7 @@ int main(void)
     // Wait until everything is done running on the GPU
     CUDA_CALL(cudaDeviceSynchronize());
 
+    /*
 	{
 		// log marginal likelhoods in parallel on all threads independently
 		double* p_marg = thrust::raw_pointer_cast(&d_marg[0]);
@@ -204,7 +205,7 @@ int main(void)
         
 		//marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta, p_features, p_sigmas, m, n, p_marg);
 		// wait for it to finish
-		cudaDeviceSynchronize();
+		//cudaDeviceSynchronize();
         
 		thrust::host_vector<double> h_marg = d_marg;
 		for (int i=0; i<20; i++) {
@@ -221,6 +222,7 @@ int main(void)
             printf("%d %20.10f %20.10f \n", i, log_marg, h_theta[i*dim_theta]);
 		}
 	}
+    */
     cudaFree(devStates);
     
 	return 0;

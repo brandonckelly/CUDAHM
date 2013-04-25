@@ -19,32 +19,6 @@
 //#include <cstdlib>
 
 #include <vector>
-/*
-typedef thrust::device_vector<double> dvec;
-typedef std::vector<dvec> vdvec;
-
-struct wrapvec
-{
-	vdvec v;
-
-	wrapvec(int m, int n) : v(m)
-	{
-		for (int i=0; i<m; i++)	{			
-			v[i].reserve(n);
-		}
-	}
-
-	double** ptrs()
-	{
-		thrust::host_vector<double*> h_ptr(v.size());
-		for (unsigned int i=0; i<v.size(); i++)	
-			h_ptr[i] = (double*) thrust::raw_pointer_cast(&(v[i][0]));
-
-		thrust::device_vector<double*> d_ptr = h_ptr;
-		return (double**) thrust::raw_pointer_cast(&d_ptr[0]); 
-	}
-};
-*/
 // constants for integration
 #define N_GH 10
 
@@ -95,15 +69,21 @@ void marginals(double *theta, int dim_theta, int n_theta, double *features, doub
 }
 	  
 
-int main(void)
+int main(int argc, char *argv[])
 {
 	// measurements
-	int n = 2000000; // # of items
+	int n = 10000000; // # of items
 	int m = 1; // # of features
-	/*
-	wrapvec d_features(m,n);
-	wrapvec d_sigmas(m,n);
-	*/
+
+	int devId = 0;
+
+	if (argc > 1) n = atoi(argv[1]);
+	if (argc > 2) devId = atoi(argv[2]);
+
+	cudaError_t err = cudaSetDevice(devId);
+	if (err != CUDA_SUCCESS) { return 1; }
+
+
 	thrust::host_vector<double> h_features(n*m);
 	thrust::host_vector<double> h_sigmas(n*m);
 
@@ -129,8 +109,9 @@ int main(void)
 	// Currently ineffecient; should build host vector and copy over.
 	int dim_theta = 2;
 	int n_theta = 11;
-	double mu_lo = mu_popn_true - 2*sigma_msmt/sqrt(n);
-	double mu_hi = mu_popn_true + 2*sigma_msmt/sqrt(n);
+	double sqrt_n = sqrt((double)n);
+	double mu_lo = mu_popn_true - 2*sigma_msmt/sqrt_n;
+	double mu_hi = mu_popn_true + 2*sigma_msmt/sqrt_n;
 	double dmu = (mu_hi - mu_lo)/(n_theta-1.);
 	double mu;
 	thrust::host_vector<double> h_theta(dim_theta*n_theta);
@@ -155,7 +136,7 @@ int main(void)
 		double* p_sigmas = thrust::raw_pointer_cast(&d_sigmas[0]);
 
 		// cuda grid launch
-		dim3 nThreads(32,8);
+		dim3 nThreads(512,1);
 		dim3 nBlocks((n + nThreads.x-1) / nThreads.x, (n_theta + nThreads.y-1) / nThreads.y);
 		printf("nBlocks: %d  %d\n", nBlocks.x, nBlocks.y);  // no more than 64k blocks!
 		marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta, 

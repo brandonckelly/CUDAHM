@@ -48,7 +48,7 @@ double rho(double x, double mu, double var)
 
 // Kernel to derive the log marginals for each data item and parameters
 __global__
-void marginals(double *theta, int dim_theta, int n_theta, double *features, double *sigmas, int m, int n, double *marg)
+void marginals(double *theta, int dim_theta, int n_theta, double *meas, double *meas_unc, int m, int n, double *marg)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int i_theta = blockDim.y * blockIdx.y + threadIdx.y;
@@ -59,10 +59,10 @@ void marginals(double *theta, int dim_theta, int n_theta, double *features, doub
 		double x;
 		double r;
 		double mrg = 0;
-		double pi = features[i]; // here only 1 feature!!!
-		double si = sigmas[i];
+		double mi = meas[i]; // here only 1 feature!!!
+		double ui = meas_unc[i];
 		for (int j=0; j<N_GH; j++) {
-			x = pi + c_rt2 * si * c_absc[j];
+			x = mi + c_rt2 * ui * c_absc[j];
 			r = rho(x, mu, var);
 			mrg += c_wts[j] * r;
 		}
@@ -89,8 +89,8 @@ int main(int argc, char *argv[])
 	if (err != CUDA_SUCCESS) { return 1; }
 
 	// Allocate data on CPU and load 
-	thrust::host_vector<double> h_features(n*m);
-	thrust::host_vector<double> h_sigmas(n*m);
+	thrust::host_vector<double> h_meas(n*m);
+	thrust::host_vector<double> h_meas_unc(n*m);
 
 	unsigned int seed = 98724732;
 	double sigma_msmt = 3.;
@@ -102,14 +102,14 @@ int main(int argc, char *argv[])
 	// Create simulated data; copies to GPU dumbly!
 	for (int i=0; i<n; i++) {
 		for (int j=0; j<m; j++) {
-			h_features[i*m+0] = mu_popn_true + dist(rng);
-			h_sigmas[i*m+1] = sigma_popn_true;
+			h_meas[i*m+0] = mu_popn_true + dist(rng);
+			h_meas_unc[i*m+1] = sigma_popn_true;
 		}
 	}
 
 	// Copy data to GPU
-	thrust::device_vector<double> d_features = h_features;
-	thrust::device_vector<double> d_sigmas = h_sigmas;
+	thrust::device_vector<double> d_meas = h_meas;
+	thrust::device_vector<double> d_meas_unc = h_meas_unc;
 
 	// Create array of hyperparameter values.
 	// Here we condition on sigma_popn_true (for simple analytical result).
@@ -141,8 +141,8 @@ int main(int argc, char *argv[])
 		// log marginal likelhoods in parallel on all threads independently
 		double* p_marg = thrust::raw_pointer_cast(&d_marg[0]);
 		double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
-		double* p_features = thrust::raw_pointer_cast(&d_features[0]);
-		double* p_sigmas = thrust::raw_pointer_cast(&d_sigmas[0]);
+		double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
+		double* p_meas_unc = thrust::raw_pointer_cast(&d_meas_unc[0]);
 
 		// cuda grid launch
 		dim3 nThreads(512,1);
@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
 			std::cerr << "ERROR: Block is too large" << std::endl;
 			return 2;
 		}
-		marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta, p_features, p_sigmas, m, n, p_marg);
+		marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta, p_meas, p_meas_unc, m, n, p_marg);
 
 		// do anything here on the CPU?
 

@@ -59,11 +59,15 @@ static __constant__ double c_target_rate = 0.4;
 
 // Decay rate for proposal scaling factor updates. The proposal scaling factors decay as 1 / niter^decay_rate.
 // This is gamma in the notation of Vihola (2012)
-static __constant__ double c_decay_rate = 2.0 / 3.0;
+static __constant__ double c_decay_rate = 0.66667;
 
 // Current iteration of the MCMC sampler, needed to calculate the decay sequence for the RAM algorithm. Is it
 // best to put this in constant memory on the GPU and update from the CPU every iteration?
 static __constant__ int c_current_iter = 0;
+
+// Pointer to the current value of theta. This is stored in constant memory so that all the threads on the GPU
+// can access the same theta quickly.
+static __constant__ double c_theta[2];
 
 // Initialize the random number generator state
 __global__ void setup_kernel(curandState *state)
@@ -125,57 +129,62 @@ void update_chi(double* theta, double* chi, double* meas, double* meas_unc, int 
 
 int main(void)
 {
-	// measurements
-	int n = 2000; // # of items
-	int m = 1; // # of features
-	/*
-     wrapvec d_features(m,n);
-     wrapvec d_sigmas(m,n);
-     */
-	thrust::host_vector<double> h_features(n*m);
-	thrust::host_vector<double> h_sigmas(n*m);
-    curandState* devStates;
+	int n = 2000; // # of data points
+	int m = 1; // # of features per data point (e.g., # of points in the SED for the i^th source)
+    int p = 1; // * of characteristics per data point
 
+    // Random number generator and distribution needed to simulate some data
 	unsigned int seed = 98724732;
-	double sigma_msmt = 3.;
 	static thrust::minstd_rand rng(seed);
-	thrust::random::experimental::normal_distribution<double> dist(0., sigma_msmt);
+	thrust::random::experimental::normal_distribution<double> snorm(0., 1.0);
     
-	double mu_popn_true = 20.;
-	double sigma_popn_true = 1.;
-	// Create simulated data; copies to GPU dumbly!
+    // Population level parameters: theta, where theta parameterizes the distribution of chi
+    int dim_theta = 2;
+	double mu_popn_true = 20.;  // Average value of the chi values
+	double sigma_popn_true = 1.;  // Standard deviation of the chi values
+    thrust::host_vector<double> h_theta(dim_theta);  // Allocate memory on host
+    h_theta[0] = mu_popn_true;
+    h_theta[1] = sigma_popn_true * sigma_popn_true;  // theta = (mu,var)
+    
+    // Allocate memory for arrays on host
+    thrust::host_vector<double> h_meas(n * m);  // The measurements, m values for each of n data points
+	thrust::host_vector<double> h_meas_unc(n * m);  // The measurement uncertainties
+    thrust::host_vector<double> h_chi(n * p);  // Unknown characteristics, p values for each of n data points
+    
+    // Scale of proposal distribution for each data point, used by the Metropolis algorithm. When p > 1 this will be
+    // the Cholesky factor of the proposal covariance matrix.
+    thrust::host_vector<double> h_jump_sigma(n);
+    
+	// Create simulated characteristics and data
+    std::vector<double> true_chi(n * p);
+    double sigma_msmt = 3.;  // Standard deviation for the measurement errors
+    
 	for (int i=0; i<n; i++) {
-		for (int j=0; j<m; j++) {
-			h_features[i*m+0] = mu_popn_true + dist(rng);
-			h_sigmas[i*m+1] = sigma_popn_true;
+		for (int j=0; j<p; j++) {
+            // First generate true value of the characteristics
+			true_chi[i * p + j] = mu_popn_true + sigma_popn_true * snorm(rng);
+            // Initialize the scale of the chi proposal distributions to just be the measurement uncertainty
+            h_jump_sigma[i * m + j] = sigma_msmt;
+        }
+        for (int k=0; k<m; k++) {
+            // Now generate measurements given the true characteristics
+			h_meas_unc[i * m + k] = sigma_msmt;
+            // Just assume E(meas|chi) = chi for now
+            h_meas[i * m + k] = true_chi[i * p + k] + sigma_msmt * snorm(rng);
 		}
 	}
-	thrust::device_vector<double> d_features = h_features;
-	thrust::device_vector<double> d_sigmas = h_sigmas;
     
-	// Create array of hyperparameter values.
-	// Here we condition on sigma_popn_true (for simple analytical result).
-	// Currently ineffecient; should build host vector and copy over.
-	int dim_theta = 2;
-	int n_theta = 11;
-	double mu_lo = mu_popn_true - 2*sigma_msmt/sqrt(n);
-	double mu_hi = mu_popn_true + 2*sigma_msmt/sqrt(n);
-	double dmu = (mu_hi - mu_lo)/(n_theta-1.);
-	double mu;
-	thrust::host_vector<double> h_theta(dim_theta*n_theta);
-	for (int i=0; i<n_theta; i++) {
-		mu = mu_lo + i*dmu;
-		h_theta[i*dim_theta] = mu;
-		h_theta[i*dim_theta+1] = sigma_popn_true;
-	}
-	thrust::device_vector<double> d_theta = h_theta;
+    // Allocate memory for arrays on device and copy the values from the host
+    thrust::device_vector<double> d_meas = h_meas;
+	thrust::device_vector<double> d_meas_unc = h_meas_unc;
+    thrust::device_vector<double> d_chi = h_chi;
+    thrust::device_vector<double> d_jump_sigma = h_jump_sigma;
+    thrust::device_vector<double> d_logdens;  // log posteriors for an individual data point
     
-	// To load a single set of thetas into constant memory, copy to a global:
-	// cudaMemcpyToSymbol(c_theta, p_theta, d_theta.size() * sizeof(*p_theta));
+	// Load a single set of thetas into constant memory
+    double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
+	CUDA_CALL(cudaMemcpyToSymbol(c_theta, p_theta, h_theta.size() * sizeof(*p_theta)));
     
-	// Alloc mem for marginals for individuals, for each set of hyperparams.
-	thrust::device_vector<double> d_marg(n*n_theta);
-
     // Cuda grid launch
     dim3 nThreads(256);
     dim3 nBlocks((n + nThreads.x-1) / nThreads.x);
@@ -186,15 +195,18 @@ int main(void)
         return 2;
     }
 
+    curandState* devStates;  // Create state object for random number generators on the GPU
     // Allocate memory on GPU for RNG states
     CUDA_CALL(cudaMalloc((void **)&devStates, nThreads.x * nBlocks.x *
                          sizeof(curandState)));
     // Initialize the random number generator states on the GPU
     setup_kernel<<<nBlocks,nThreads>>>(devStates);
 
-    // Wait until everything is done running on the GPU
+    // Wait until everything is done running on the GPU, make sure everything went OK
     CUDA_CALL(cudaDeviceSynchronize());
 
+    // Now run the MCMC sampler
+    
     /*
 	{
 		// log marginal likelhoods in parallel on all threads independently
@@ -223,8 +235,7 @@ int main(void)
 		}
 	}
     */
-    cudaFree(devStates);
+    cudaFree(devStates);  // Free up the memory on the GPU from the RNG states
     
 	return 0;
-    
 }

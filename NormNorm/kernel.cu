@@ -39,9 +39,10 @@ static __constant__ double c_wts[] = {
 
 // Functions used in kernels and CPU test codes
 __device__ __host__
-double rho(double r)
+double rho(double x, double mu, double var)
 {
-	return 1;
+	double t = x - mu;
+	return exp(-t*t/(2.0*var));
 }
 
 
@@ -56,15 +57,14 @@ void marginals(double *theta, int dim_theta, int n_theta, double *features, doub
 		double mu = theta[0+dim_theta*i_theta];
 		double var = theta[1+dim_theta*i_theta];
 		double x;
-		double rho;
+		double r;
 		double mrg = 0;
 		double pi = features[i]; // here only 1 feature!!!
 		double si = sigmas[i];
 		for (int j=0; j<N_GH; j++) {
 			x = pi + c_rt2 * si * c_absc[j];
-			double t = x-mu;
-			rho = exp(-t*t/(2.0*var));
-			mrg += c_wts[j]*rho;
+			r = rho(x, mu, var);
+			mrg += c_wts[j] * r;
 		}
 		marg[i+n*i_theta] = log(mrg / c_rt2pi);
 	}

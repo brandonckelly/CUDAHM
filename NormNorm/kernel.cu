@@ -2,6 +2,13 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
+#include <cuda.h>
+#include <curand_kernel.h>
+
+#define CUDA_CALL(x) do { if((x) != cudaSuccess) { \
+    printf("Error at %s:%d\n",__FILE__,__LINE__); \
+    return EXIT_FAILURE;}} while(0)
+
 // Thrust classes
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
@@ -86,7 +93,7 @@ int main(int argc, char *argv[])
 	if (argc > 2) devId = atoi(argv[2]);
 
 	cudaError_t err = cudaSetDevice(devId);
-	if (err != CUDA_SUCCESS) { return 1; }
+	if (err != cudaSuccess) { return 1; }
 
 	// Allocate data on CPU and load 
 	thrust::host_vector<double> h_meas(n*m);

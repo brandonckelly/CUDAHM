@@ -1,6 +1,7 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
+#include <cuda.h>
 #include <curand.h>
 #include <curand_kernel.h>
 #include <thrust/device_vector.h>
@@ -11,6 +12,7 @@
 #include <thrust/random.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 
 //#include <thrust/sort.h>
 //#include <thrust/copy.h>

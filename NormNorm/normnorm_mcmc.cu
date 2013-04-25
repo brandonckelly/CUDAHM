@@ -1,6 +1,8 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
+#include <curand.h>
+#include <curand_kernel.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
@@ -46,29 +48,34 @@
  }
  };
  */
-
-// Uniform random number transform, used for doing MHA acceptance step on the GPU
-static __constant__ thrust::uniform_real_distribution<double> unif(0.0,1.0);
-
-// Norm random number transform, used for generating new parameter proposals on the GPU
-static __constant__ thrust::random::experimental::normal_distribution<double> snorm(0.0, 1.0);
+#define CUDA_CALL(x) do { if((x) != cudaSuccess) { \
+printf("Error at %s:%d\n",__FILE__,__LINE__); \
+return EXIT_FAILURE;}} while(0)
 
 // Target acceptance rate for Robust Adaptive Metropolis (RAM).
-static __constant__ double target_rate = 0.4;
+static __constant__ double c_target_rate = 0.4;
 
 // Decay rate for proposal scaling factor updates. The proposal scaling factors decay as 1 / niter^decay_rate.
 // This is gamma in the notation of Vihola (2012)
-static __constant__ double decay_rate = 2.0 / 3.0;
+static __constant__ double c_decay_rate = 2.0 / 3.0;
 
 // Current iteration of the MCMC sampler, needed to calculate the decay sequence for the RAM algorithm. Is it
 // best to put this in constant memory on the GPU and update from the CPU every iteration?
-static __constant__ int current_iter = 0
+static __constant__ int c_current_iter = 0;
 
+// Initialize the random number generator state
+__global__ void setup_kernel(curandState *state)
+{
+    int id = threadIdx.x + blockIdx.x * blockDim.x;
+    /* Each thread gets same seed, a different sequence
+     number, no offset */
+    curand_init(1234, id, 0, &state[id]);
+}
 
 // Perform the MHA update on the n parameters, done in parallel on the GPU. This is what the kernel does.
 __global__
-void update_parameters(double* theta, double* parameters, double* data, double* sigmas, int n, double* logdens,
-                       double* jump_sigma)
+void update_chi(double* theta, double* chi, double* meas, double* meas_unc, int n, double* logdens, double* jump_sigma,
+                curandState* state)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	if (i<n)
@@ -76,30 +83,40 @@ void update_parameters(double* theta, double* parameters, double* data, double* 
 		double mu = theta[0];  // Get population parameters
 		double var = theta[1];
         
-        // Propose a new value for the parameters for this data point
-        new_parameter = parameters[i] + jump_sigma[i] * snorm(rng);  // Not quite sure how to do this in parallel...
+        double meas_i = meas[i];  // Get measurements
+        double meas_unc_i = meas_unc[i];
         
+        /* Copy state to local memory for efficiency */
+        curandState localState = state[i];
+        
+        // Propose a new value of the characteristics for this data point
+        double new_chi = chi[i] + jump_sigma[i] * curand_normal_double(&localState);
+
         // Compute the conditional log-posterior of the proposed parameter values for this data point
-        double logdens_prop = -0.5 * (data[i] - new_parameter) * (data[i] - new_parameter) / (sigmas[i] * sigmas[i]) +
-            0.5 * log(var) - 0.5 * (new_parameter - mu) * (new_parameter - mu) / var;
+        double logdens_prop = -0.5 * (meas_i - new_chi) * (meas_i - new_chi) / (meas_unc_i * meas_unc_i) +
+            0.5 * log(var) - 0.5 * (new_chi - mu) * (new_chi - mu) / var;
         
         // Compute the Metropolis ratio
         double ratio = logdens_prop - logdens[i];
-        ratio = (ratio < 0.0) ? ratio : 0.0;  // Isn't there a min() function I can use to make this more obvious?
+        ratio = (ratio < 0.0) ? ratio : 0.0;
         ratio = exp(ratio);
         
         // Now randomly decide whether to accept or reject
-        unif_draw = unif(rng);  // Not quite sure if this is the correct way to do this in parallel on the GPU...
+        double unif_draw = curand_uniform_double(&localState);
+        
         if (unif_draw < ratio) {
             // Accept this proposal, so save this parameter value and conditional log-posterior
-            parameters[i] = new_parameter;
+            chi[i] = new_chi;
             logdens[i] = logdens_prop;
         }
-        
+
+        // Copy state back to global memory
+        state[i] = localState;
+
         // Finally, adapt the scale of the proposal distribution
         // TODO: check that the ratio is finite before doing this step
-        double decay_sequence = 1.0 / pow(niter, decay_rate)
-        sigmas[i] *= exp(decay_sequence / 2.0 * (ratio - target_rate))
+        double decay_sequence = 1.0 / pow(c_current_iter, c_decay_rate);
+        jump_sigma[i] *= exp(decay_sequence / 2.0 * (ratio - c_target_rate));
 	}
 }
 
@@ -115,7 +132,8 @@ int main(void)
      */
 	thrust::host_vector<double> h_features(n*m);
 	thrust::host_vector<double> h_sigmas(n*m);
-    
+    curandState* devStates;
+
 	unsigned int seed = 98724732;
 	double sigma_msmt = 3.;
 	static thrust::minstd_rand rng(seed);
@@ -155,7 +173,26 @@ int main(void)
     
 	// Alloc mem for marginals for individuals, for each set of hyperparams.
 	thrust::device_vector<double> d_marg(n*n_theta);
-    
+
+    // Cuda grid launch
+    dim3 nThreads(256,1);
+    dim3 nBlocks((n + nThreads.x-1) / nThreads.x);
+    printf("nBlocks: %d  %d\n", nBlocks.x, nBlocks.y);  // no more than 64k blocks!
+    if (nBlocks.x > 65535 || nBlocks.y > 65535)
+    {
+        std::cerr << "ERROR: Block is too large" << std::endl;
+        return 2;
+    }
+
+    // Allocate memory on GPU for RNG states
+    CUDA_CALL(cudaMalloc((void **)&devStates, nThreads.x * nBlocks.x *
+                         sizeof(curandState)));
+    // Initialize the random number generator states on the GPU
+    setup_kernel<<<nBlocks,nThreads>>>(devStates);
+
+    // Wait until everything is done running on the GPU
+    CUDA_CALL(cudaDeviceSynchronize());
+
 	{
 		// log marginal likelhoods in parallel on all threads independently
 		double* p_marg = thrust::raw_pointer_cast(&d_marg[0]);
@@ -163,14 +200,9 @@ int main(void)
 		double* p_features = thrust::raw_pointer_cast(&d_features[0]);
 		double* p_sigmas = thrust::raw_pointer_cast(&d_sigmas[0]);
         
-		// cuda grid launch
-		dim3 nThreads(32,8);
-		dim3 nBlocks((n + nThreads.x-1) / nThreads.x, (n_theta + nThreads.y-1) / nThreads.y);
-		printf("nBlocks: %d  %d\n", nBlocks.x, nBlocks.y);  // no more than 64k blocks!
-		marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta,
-                                        p_features, p_sigmas, m, n, p_marg);
+		//marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta, p_features, p_sigmas, m, n, p_marg);
 		// wait for it to finish
-		cudaError_t err = cudaDeviceSynchronize();
+		cudaDeviceSynchronize();
         
 		thrust::host_vector<double> h_marg = d_marg;
 		for (int i=0; i<20; i++) {
@@ -186,8 +218,8 @@ int main(void)
 			//std::cout << i << " " << log_marg << std::endl;
             printf("%d %20.10f %20.10f \n", i, log_marg, h_theta[i*dim_theta]);
 		}
-        
 	}
+    cudaFree(devStates);
     
 	return 0;
     

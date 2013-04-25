@@ -1,25 +1,25 @@
+// Definitions for IntelliSense
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
+// Thrust classes
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
-
 #include <thrust/random/linear_congruential_engine.h>
 #include <thrust/random/normal_distribution.h>
-
-#include <stdio.h>
-
 //#include <thrust/sort.h>
 //#include <thrust/copy.h>
-
 //#include <thrust/transform_reduce.h>
 //#include <thrust/functional.h>
 
+// Standard headers
+#include <vector>
+#include <stdio.h>
 //#include <algorithm>
 //#include <cstdlib>
 
-#include <vector>
-// constants for integration
+
+// Constant memory is broadcasted to all threads (special caching)
 #define N_GH 10
 
 static __constant__ double c_rt2 = 1.4142135623730951;
@@ -37,6 +37,7 @@ static __constant__ double c_wts[] = {
 	0.00075807093431222135, 4.3106526307190323e-06 }; 
 
 
+// Functions used in kernels and CPU test codes
 __device__ __host__
 double rho(double r)
 {
@@ -44,6 +45,7 @@ double rho(double r)
 }
 
 
+// Kernel to derive the log marginals for each data item and parameters
 __global__
 void marginals(double *theta, int dim_theta, int n_theta, double *features, double *sigmas, int m, int n, double *marg)
 {
@@ -69,21 +71,24 @@ void marginals(double *theta, int dim_theta, int n_theta, double *features, doub
 }
 	  
 
+// Entry point
 int main(int argc, char *argv[])
 {
 	// measurements
-	int n = 10000000; // # of items
+	int n = 20000000; // # of items
 	int m = 1; // # of features
 
+	// default GPU
 	int devId = 0;
 
+	// simple command line arguments
 	if (argc > 1) n = atoi(argv[1]);
 	if (argc > 2) devId = atoi(argv[2]);
 
 	cudaError_t err = cudaSetDevice(devId);
 	if (err != CUDA_SUCCESS) { return 1; }
 
-
+	// Allocate data on CPU and load 
 	thrust::host_vector<double> h_features(n*m);
 	thrust::host_vector<double> h_sigmas(n*m);
 
@@ -101,6 +106,8 @@ int main(int argc, char *argv[])
 			h_sigmas[i*m+1] = sigma_popn_true;
 		}
 	}
+
+	// Copy data to GPU
 	thrust::device_vector<double> d_features = h_features;
 	thrust::device_vector<double> d_sigmas = h_sigmas;
 
@@ -120,6 +127,7 @@ int main(int argc, char *argv[])
 		h_theta[i*dim_theta] = mu;
 		h_theta[i*dim_theta+1] = sigma_popn_true;
 	}
+	// copy to GPU
 	thrust::device_vector<double> d_theta = h_theta;
 
 	// To load a single set of thetas into constant memory, copy to a global:
@@ -128,6 +136,7 @@ int main(int argc, char *argv[])
 	// Alloc mem for marginals for individuals, for each set of hyperparams.
 	thrust::device_vector<double> d_marg(n*n_theta);
 
+	// Here comes the GPU calculation
 	{
 		// log marginal likelhoods in parallel on all threads independently
 		double* p_marg = thrust::raw_pointer_cast(&d_marg[0]);
@@ -139,17 +148,27 @@ int main(int argc, char *argv[])
 		dim3 nThreads(512,1);
 		dim3 nBlocks((n + nThreads.x-1) / nThreads.x, (n_theta + nThreads.y-1) / nThreads.y);
 		printf("nBlocks: %d  %d\n", nBlocks.x, nBlocks.y);  // no more than 64k blocks!
-		marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta, 
-			p_features, p_sigmas, m, n, p_marg);
-		// wait for it to finish
+		if (nBlocks.x > 65535 || nBlocks.y > 65535) 
+		{
+			std::cerr << "ERROR: Block is too large" << std::endl;
+			return 2;
+		}
+		marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta, p_features, p_sigmas, m, n, p_marg);
+
+		// do anything here on the CPU?
+
+		// wait for GPU to finish
 		cudaError_t err = cudaDeviceSynchronize();
 
+		/*
+		// copy results back to host
 		thrust::host_vector<double> h_marg = d_marg;
 		for (int i=0; i<20; i++) {
 		  printf("%d %20.10f \n", i, h_marg[i]);
 		}
+		*/
 
-		// Loop over hyperparams; reduce over individuals for each case.
+		// Reduction for all theta values - could use thrust::reduce_by_key() ?
 		for (int i=0; i<n_theta; i++) {
 			int start = i*n;
 			int end = start + n;
@@ -162,5 +181,4 @@ int main(int argc, char *argv[])
 	}
 	  
 	return 0;
-
 }

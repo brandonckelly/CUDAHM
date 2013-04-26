@@ -202,5 +202,6 @@ _ReSharper*/
 # Data Files
 #
 *.dat
+NormNorm/*.dat
 
 # End of file

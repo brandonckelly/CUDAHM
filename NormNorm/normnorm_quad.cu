@@ -79,7 +79,7 @@ void marginals(double *theta, int dim_theta, int n_theta, double *meas, double *
 	  
 
 // Entry point
-int main(int argc, char *argv[])
+int main_quad(int argc, char *argv[])
 {
 	// measurements
 	int n = 20000000; // # of items

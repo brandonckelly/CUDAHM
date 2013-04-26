@@ -10,8 +10,11 @@
 #include <thrust/random/linear_congruential_engine.h>
 #include <thrust/random/normal_distribution.h>
 #include <thrust/random.h>
+#include <thrust/reduce.h>
+#include <thrust/transform_reduce.h>
 
 #include <stdio.h>
+#include <fstream>
 #include <stdlib.h>
 
 //#include <thrust/sort.h>
@@ -61,10 +64,6 @@ static __constant__ double c_target_rate = 0.4;
 // This is gamma in the notation of Vihola (2012)
 static __constant__ double c_decay_rate = 0.66667;
 
-// Current iteration of the MCMC sampler, needed to calculate the decay sequence for the RAM algorithm. Is it
-// best to put this in constant memory on the GPU and update from the CPU every iteration?
-static __constant__ int c_current_iter = 0;
-
 // Pointer to the current value of theta. This is stored in constant memory so that all the threads on the GPU
 // can access the same theta quickly.
 static __constant__ double c_theta[2];
@@ -80,14 +79,14 @@ __global__ void setup_kernel(curandState *state)
 
 // Perform the MHA update on the n parameters, done in parallel on the GPU. This is what the kernel does.
 __global__
-void update_chi(double* theta, double* chi, double* meas, double* meas_unc, int n, double* logdens, double* jump_sigma,
-                curandState* state)
+void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logdens, double* jump_sigma,
+                curandState* state, int current_iter)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	if (i<n)
 	{
-		double mu = theta[0];  // Get population parameters
-		double var = theta[1];
+        double mu = c_theta[0];  // Get population parameters
+        double var = c_theta[1];
         
         double meas_i = meas[i];  // Get measurements
         double meas_unc_i = meas_unc[i];
@@ -121,10 +120,23 @@ void update_chi(double* theta, double* chi, double* meas, double* meas_unc, int 
 
         // Finally, adapt the scale of the proposal distribution
         // TODO: check that the ratio is finite before doing this step
-        double decay_sequence = 1.0 / pow(c_current_iter, c_decay_rate);
+        double decay_sequence = 1.0 / pow(current_iter, c_decay_rate);
         jump_sigma[i] *= exp(decay_sequence / 2.0 * (ratio - c_target_rate));
 	}
 }
+
+struct zsqr {
+    double* theta;
+    int p;
+    zsqr(double* t, int tdim) : theta(t), p(tdim) {}
+    
+    __device__ __host__
+    double operator()(double chi) {
+        double chi_cent = chi - theta[0];
+        double chisqr = -0.5 * chi_cent * chi_cent / theta[1];
+        return chisqr;
+    }
+};
 
 
 int main(void)
@@ -137,6 +149,7 @@ int main(void)
 	unsigned int seed = 98724732;
 	static thrust::minstd_rand rng(seed);
 	thrust::random::experimental::normal_distribution<double> snorm(0., 1.0);
+    thrust::random::uniform_real_distribution<double> uniform(0.0, 1.0);
     
     // Population level parameters: theta, where theta parameterizes the distribution of chi
     int dim_theta = 2;
@@ -176,10 +189,12 @@ int main(void)
     
     // Allocate memory for arrays on device and copy the values from the host
     thrust::device_vector<double> d_meas = h_meas;
-	thrust::device_vector<double> d_meas_unc = h_meas_unc;
+    thrust::device_vector<double> d_meas_unc = h_meas_unc;
     thrust::device_vector<double> d_chi = h_chi;
     thrust::device_vector<double> d_jump_sigma = h_jump_sigma;
-    thrust::device_vector<double> d_logdens;  // log posteriors for an individual data point
+    thrust::device_vector<double> d_logdens(n);  // log posteriors for an individual data point
+    
+    thrust::fill(d_logdens.begin(), d_logdens.end(), -1.0e300);
     
 	// Load a single set of thetas into constant memory
     double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
@@ -206,35 +221,60 @@ int main(void)
     CUDA_CALL(cudaDeviceSynchronize());
 
     // Now run the MCMC sampler
+
+    std::ofstream chifile("chis.dat");
+    std::ofstream thetafile("thetas.dat");
     
-    /*
-	{
-		// log marginal likelhoods in parallel on all threads independently
-		double* p_marg = thrust::raw_pointer_cast(&d_marg[0]);
-		double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
-		double* p_features = thrust::raw_pointer_cast(&d_features[0]);
-		double* p_sigmas = thrust::raw_pointer_cast(&d_sigmas[0]);
+    int mcmc_iter = 1000;
+    int naccept_theta = 0;
+    for (int i=0; i<mcmc_iter; i++) {
+        // Now grab the pointers to the vectors, needed to run the kernel since it doesn't understand Thrust
+        // We do this here because the thrust vector are smart, and we want to make sure they don't reassign
+        // memory for whatever reason. This is very cheap to do, so better safe than sorry.
+        double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
+        double* p_meas_unc = thrust::raw_pointer_cast(&d_meas_unc[0]);
+        double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
+        double* p_jump_sigma = thrust::raw_pointer_cast(&d_jump_sigma[0]);
+        double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
+        int current_iter = i + 1;
+        update_chi<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, n, p_logdens, p_jump_sigma, devStates, current_iter);
         
-		//marginals<<<nBlocks,nThreads>>>(p_theta, dim_theta, n_theta, p_features, p_sigmas, m, n, p_marg);
-		// wait for it to finish
-		//cudaDeviceSynchronize();
+        // Generate new theta in parallel with GPU calculation above
+        double proposed_theta[2];
+        proposed_theta[0] = h_theta[0] + 0.01 * snorm(rng);
+        proposed_theta[1] = h_theta[1] + 0.01 * snorm(rng);
         
-		thrust::host_vector<double> h_marg = d_marg;
-		for (int i=0; i<20; i++) {
-            printf("%d %20.10f \n", i, h_marg[i]);
-		}
+        CUDA_CALL(cudaDeviceSynchronize());
         
-		// Loop over hyperparams; reduce over individuals for each case.
-		for (int i=0; i<n_theta; i++) {
-			int start = i*n;
-			int end = start + n;
-			double log_marg = 0;
-			log_marg = thrust::reduce(d_marg.begin()+start, d_marg.begin()+end);
-			//std::cout << i << " " << log_marg << std::endl;
-            printf("%d %20.10f %20.10f \n", i, log_marg, h_theta[i*dim_theta]);
-		}
-	}
-    */
+        double logdens_pop = thrust::transform_reduce(d_chi.begin(), d_chi.end(), zsqr(proposed_theta,2), 0.0, thrust::plus<double>());
+        logdens_pop += -n / 2.0 * proposed_theta[1];
+        
+        double logdens_old = thrust::reduce(d_logdens.begin(), d_logdens.end());
+        
+        double lograt = logdens_pop - logdens_old;
+        lograt = std::min(lograt, 0.0);
+        double ratio = exp(lograt);
+        double unif = uniform(rng);
+        
+        if (unif < ratio) {
+            h_theta[0] = proposed_theta[0];
+            h_theta[1] = proposed_theta[1];
+            CUDA_CALL(cudaMemcpyToSymbol(c_theta, p_theta, h_theta.size() * sizeof(*p_theta)));
+            naccept_theta++;
+        }
+        
+        thetafile << h_theta[0] << " " << h_theta[1] << std::endl;
+
+        std::cout << current_iter << std::endl;
+        thrust::copy(d_chi.begin(), d_chi.end(), h_chi.begin());
+        for (int j=0; j<n; j++){
+            chifile << " " << h_chi[j];
+        }
+        chifile << std::endl;
+    }
+    std::cout << "Number of accepted thetas: " << naccept_theta << std::endl;
+    chifile.close();
+    thetafile.close();
     cudaFree(devStates);  // Free up the memory on the GPU from the RNG states
     
 	return 0;

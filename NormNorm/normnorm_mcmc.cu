@@ -20,9 +20,6 @@
 //#include <thrust/sort.h>
 //#include <thrust/copy.h>
 
-//#include <thrust/transform_reduce.h>
-//#include <thrust/functional.h>
-
 //#include <algorithm>
 //#include <cstdlib>
 

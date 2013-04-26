@@ -126,14 +126,13 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
 }
 
 struct zsqr {
-    double* theta;
-    int p;
-    zsqr(double* t, int tdim) : theta(t), p(tdim) {}
+    double mu, var;
+    zsqr(double m, double v) : mu(m), var(v) {}
     
     __device__ __host__
     double operator()(double chi) {
-        double chi_cent = chi - theta[0];
-        double chisqr = -0.5 * chi_cent * chi_cent / theta[1];
+        double chi_cent = chi - mu;
+        double chisqr = -0.5 * chi_cent * chi_cent / var;
         return chisqr;
     }
 };
@@ -246,7 +245,7 @@ int main(void)
         
         CUDA_CALL(cudaDeviceSynchronize());
         
-        double logdens_pop = thrust::transform_reduce(d_chi.begin(), d_chi.end(), zsqr(proposed_theta,2), 0.0, thrust::plus<double>());
+        double logdens_pop = thrust::transform_reduce(d_chi.begin(), d_chi.end(), zsqr(proposed_theta[0], proposed_theta[1]), 0.0, thrust::plus<double>());
         logdens_pop += -n / 2.0 * proposed_theta[1];
         
         double logdens_old = thrust::reduce(d_logdens.begin(), d_logdens.end());

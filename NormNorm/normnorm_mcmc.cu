@@ -98,8 +98,11 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         double new_chi = chi[i] + jump_sigma[i] * curand_normal_double(&localState);
 
         // Compute the conditional log-posterior of the proposed parameter values for this data point
-        double logdens_prop = -0.5 * (meas_i - new_chi) * (meas_i - new_chi) / (meas_unc_i * meas_unc_i) +
-            0.5 * log(var) - 0.5 * (new_chi - mu) * (new_chi - mu) / var;
+        double centered_meas = meas_i - new_chi;
+        double logdens_meas = -0.5 * centered_meas * centered_meas / (meas_unc_i * meas_unc_i);
+        double centered_chi = new_chi - mu;
+        double logdens_pop = -0.5 * log(var) - 0.5 * centered_chi * centered_chi / var;
+        double logdens_prop = logdens_meas + logdens_pop;
         
         // Compute the Metropolis ratio
         double ratio = logdens_prop - logdens[i];
@@ -112,7 +115,7 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         if (unif_draw < ratio) {
             // Accept this proposal, so save this parameter value and conditional log-posterior
             chi[i] = new_chi;
-            logdens[i] = logdens_prop;
+            logdens[i] = logdens_pop;
         }
 
         // Copy state back to global memory
@@ -145,7 +148,8 @@ int main(void)
     int p = 1; // * of characteristics per data point
 
     // Random number generator and distribution needed to simulate some data
-	unsigned int seed = 98724732;
+	// unsigned int seed = 98724732;
+    unsigned int seed =123455;
 	static thrust::minstd_rand rng(seed);
 	thrust::random::experimental::normal_distribution<double> snorm(0., 1.0);
     thrust::random::uniform_real_distribution<double> uniform(0.0, 1.0);
@@ -153,7 +157,7 @@ int main(void)
     // Population level parameters: theta, where theta parameterizes the distribution of chi
     int dim_theta = 2;
 	double mu_popn_true = 20.;  // Average value of the chi values
-	double sigma_popn_true = 1.;  // Standard deviation of the chi values
+	double sigma_popn_true = 3.;  // Standard deviation of the chi values
     thrust::host_vector<double> h_theta(dim_theta);  // Allocate memory on host
     h_theta[0] = mu_popn_true;
     h_theta[1] = sigma_popn_true * sigma_popn_true;  // theta = (mu,var)
@@ -169,22 +173,25 @@ int main(void)
     
 	// Create simulated characteristics and data
     std::vector<double> true_chi(n * p);
-    double sigma_msmt = 3.;  // Standard deviation for the measurement errors
+    double sigma_msmt = 0.5;  // Standard deviation for the measurement errors
     
 	for (int i=0; i<n; i++) {
 		for (int j=0; j<p; j++) {
             // First generate true value of the characteristics
-			true_chi[i * p + j] = mu_popn_true + sigma_popn_true * snorm(rng);
+			true_chi[i + n * j] = mu_popn_true + sigma_popn_true * snorm(rng);
             // Initialize the scale of the chi proposal distributions to just be the measurement uncertainty
-            h_jump_sigma[i * m + j] = sigma_msmt;
+            h_jump_sigma[i + n * j] = sigma_msmt;
         }
         for (int k=0; k<m; k++) {
             // Now generate measurements given the true characteristics
-			h_meas_unc[i * m + k] = sigma_msmt;
+			h_meas_unc[i + k * n] = sigma_msmt;
             // Just assume E(meas|chi) = chi for now
-            h_meas[i * m + k] = true_chi[i * p + k] + sigma_msmt * snorm(rng);
+            h_meas[i + k * n] = true_chi[i + k * n] + sigma_msmt * snorm(rng);
 		}
 	}
+    
+    // Initialize the chis to their measurements
+    thrust::copy(h_meas.begin(), h_meas.end(), h_chi.begin());
     
     // Allocate memory for arrays on device and copy the values from the host
     thrust::device_vector<double> d_meas = h_meas;
@@ -240,13 +247,13 @@ int main(void)
         
         // Generate new theta in parallel with GPU calculation above
         double proposed_theta[2];
-        proposed_theta[0] = h_theta[0] + 0.01 * snorm(rng);
-        proposed_theta[1] = h_theta[1] + 0.01 * snorm(rng);
+        proposed_theta[0] = h_theta[0] + 0.1 * snorm(rng);
+        proposed_theta[1] = h_theta[1] + 0.1 * snorm(rng);
         
         CUDA_CALL(cudaDeviceSynchronize());
         
         double logdens_pop = thrust::transform_reduce(d_chi.begin(), d_chi.end(), zsqr(proposed_theta[0], proposed_theta[1]), 0.0, thrust::plus<double>());
-        logdens_pop += -n / 2.0 * proposed_theta[1];
+        logdens_pop += -n / 2.0 * log(proposed_theta[1]);
         
         double logdens_old = thrust::reduce(d_logdens.begin(), d_logdens.end());
         

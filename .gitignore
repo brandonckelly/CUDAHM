@@ -198,4 +198,9 @@ _ReSharper*/
 #
 *.out
  
+#
+# Data Files
+#
+*.dat
+
 # End of file

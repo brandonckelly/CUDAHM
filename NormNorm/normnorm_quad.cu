@@ -81,7 +81,7 @@ void marginals(double *theta, int dim_theta, int n_theta, double *meas, double *
 	  
 
 // Entry point
-int main_quad(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	// measurements
 	int n = 20000000; // # of items
@@ -106,16 +106,17 @@ int main_quad(int argc, char *argv[])
 	static thrust::minstd_rand rng(seed);
 	thrust::random::experimental::normal_distribution<double> dist(0., sigma_msmt);
 
+
 	double mu_popn_true = 20.;
 	double sigma_popn_true = 1.;
 	// Create simulated data; copies to GPU dumbly!
 	for (int i=0; i<n; i++) {
 		for (int j=0; j<m; j++) {
-			h_meas[i*m+0] = mu_popn_true + dist(rng);
-			h_meas_unc[i*m+1] = sigma_popn_true;
+			h_meas[i+j*n] = mu_popn_true + dist(rng);
+			h_meas_unc[i+j*n] = sigma_popn_true;
 		}
 	}
-
+	
 	// Copy data to GPU
 	thrust::device_vector<double> d_meas = h_meas;
 	thrust::device_vector<double> d_meas_unc = h_meas_unc;
@@ -131,11 +132,13 @@ int main_quad(int argc, char *argv[])
 	double dmu = (mu_hi - mu_lo)/(n_theta-1.);
 	double mu;
 	thrust::host_vector<double> h_theta(dim_theta*n_theta);
+
 	for (int i=0; i<n_theta; i++) {
 		mu = mu_lo + i*dmu;
 		h_theta[i*dim_theta] = mu;
 		h_theta[i*dim_theta+1] = sigma_popn_true;
 	}
+
 	// copy to GPU
 	thrust::device_vector<double> d_theta = h_theta;
 

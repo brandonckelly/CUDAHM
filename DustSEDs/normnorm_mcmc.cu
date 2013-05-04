@@ -1,21 +1,25 @@
+// Cuda Includes
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
-
 #include <cuda.h>
 #include <curand.h>
 #include <curand_kernel.h>
+
+// Thrust includes
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
-
 #include <thrust/random/linear_congruential_engine.h>
 #include <thrust/random/normal_distribution.h>
 #include <thrust/random.h>
 #include <thrust/reduce.h>
 #include <thrust/transform_reduce.h>
 
+// Standard includes
 #include <stdio.h>
 #include <fstream>
 #include <stdlib.h>
+#include <math.h>
+#include <vector>
 
 //#include <thrust/sort.h>
 //#include <thrust/copy.h>
@@ -23,33 +27,6 @@
 //#include <algorithm>
 //#include <cstdlib>
 
-#include <vector>
-/*
- typedef thrust::device_vector<double> dvec;
- typedef std::vector<dvec> vdvec;
- 
- struct wrapvec
- {
- vdvec v;
- 
- wrapvec(int m, int n) : v(m)
- {
- for (int i=0; i<m; i++)	{
- v[i].reserve(n);
- }
- }
- 
- double** ptrs()
- {
- thrust::host_vector<double*> h_ptr(v.size());
- for (unsigned int i=0; i<v.size(); i++)
- h_ptr[i] = (double*) thrust::raw_pointer_cast(&(v[i][0]));
- 
- thrust::device_vector<double*> d_ptr = h_ptr;
- return (double**) thrust::raw_pointer_cast(&d_ptr[0]);
- }
- };
- */
 #define CUDA_CALL(x) do { if((x) != cudaSuccess) { \
 printf("Error at %s:%d\n",__FILE__,__LINE__); \
 return EXIT_FAILURE;}} while(0)
@@ -63,10 +40,33 @@ static __constant__ double c_decay_rate = 0.66667;
 
 // Pointer to the current value of theta. This is stored in constant memory so that all the threads on the GPU
 // can access the same theta quickly.
-static __constant__ double c_theta[2];
+static __constant__ double c_theta[6];
+
+// Constants used for the model SED
+static __constant__ double c_nu0 = 2.3e11;  // nu0 = 230 GHz
+static const double nu0 = 2.3e11;
+static const double hplanck = 6.6260755e-27;  // Planck's constant, in cgs
+static const double clight = 2.997925e10;
+static const double kboltz = 1.380658e-16;
+static __constant__ double c_2h_over_csqr = 1.4745002e-47;  // 2 * hplanck / clight^2, used in the Planck function
+static __constant__ double c_h_over_k = 4.7992157e-11;  // hplanck / kboltz
+
+// Function to return the model SED at a input frequency, given the characteristics chi = (norm, beta, temp)
+__device__
+double modified_bbody(double nu, double normalization, double beta, double temperature)
+{
+    double bbody_numer = c_2h_over_csqr * nu * nu * nu;
+    double bbody_denom = exp(c_h_over_k * nu / temperature) - 1.0;
+    double bbody = bbody_numer / bbody_denom;
+    double nu_over_nu0 = nu / c_nu0;
+    double SED = normalization * pow(nu_over_nu0, beta) * bbody;
+    return SED;
+}
+
 
 // Initialize the random number generator state
-__global__ void setup_kernel(curandState *state)
+__global__
+void setup_kernel(curandState *state)
 {
     int id = threadIdx.x + blockIdx.x * blockDim.x;
     /* Each thread gets same seed, a different sequence
@@ -140,10 +140,6 @@ struct zsqr {
 
 int main(void)
 {
-	int n = 2000; // # of data points
-	int m = 5; // # of features per data point (i.e., # of points in the SED for the i^th source)
-    int p = 3; // # of characteristics per data point.
-
     // Random number generator and distribution needed to simulate some data
 	// unsigned int seed = 98724732;
     unsigned int seed =123455;
@@ -151,50 +147,93 @@ int main(void)
 	thrust::random::experimental::normal_distribution<double> snorm(0., 1.0);
     thrust::random::uniform_real_distribution<double> uniform(0.0, 1.0);
     
-    // Population level parameters: theta, where theta parameterizes the distribution of chi
+    /*
+     Population level parameters: theta, where theta parameterizes the distribution of chi.
+     For this application, chi = (log10(norm), beta, log10(temp)), where the model SED is a
+     modified black body:
+    
+        SED(nu) = norm * (nu / nu0)^beta * Bbody(nu,temp).
+     
+     Here, Bbody(nu,temp) is the Planck function. For simplicity, right now I just assume that
+     log10(norm), beta, and log10(temp) are independently drawn from different Gaussian distributions,
+     although we should later include correlations among the parameters. So, for now, theta is just the
+     collection of the mean and variances of the normal distributions.
+    */
+    
+    int n = 2000; // # of data points
+	int m = 5; // # of features per data point (i.e., # of points in the SED for the i^th source)
+    int p = 3; // # of characteristics per data point.
     int dim_theta = 2 * p;
-	double mu_popn_true = 20.;  // Average value of the chi values
-	double sigma_popn_true = 3.;  // Standard deviation of the chi values
+    
+    double mu_norm = 8.5 * log(10);  // Average value of the natural logarithm of the SED normalization
+    double sig_norm = 0.5 * log(10);  // Standard deviation in the SED normalization
+    double mu_beta = 2.0;  // Average value of the SED power-law index
+    double sig_beta = 0.2;  // Standard deviation in the SED power-law index
+    double mu_temp = log(15.0);  // Average value of the logarithm of the dust temperature
+    double sig_temp = 0.2;  // Standard deviation in the logarithm of the SED temperature
+    
     thrust::host_vector<double> h_theta(dim_theta);  // Allocate memory on host
-    h_theta[0] = mu_popn_true;
-    h_theta[1] = sigma_popn_true * sigma_popn_true;  // theta = (mu,var)
+    h_theta[0] = mu_norm;
+    h_theta[1] = mu_beta;
+    h_theta[2] = mu_temp;
+    h_theta[3] = sig_norm * sig_norm;
+    h_theta[4] = sig_beta * sig_beta;
+    h_theta[5] = sig_temp * sig_temp;
     
     // Allocate memory for arrays on host
     thrust::host_vector<double> h_meas(n * m);  // The measurements, m values for each of n data points
 	thrust::host_vector<double> h_meas_unc(n * m);  // The measurement uncertainties
     thrust::host_vector<double> h_chi(n * p);  // Unknown characteristics, p values for each of n data points
     
-    // Scale of proposal distribution for each data point, used by the Metropolis algorithm. When p > 1 this will be
-    // the Cholesky factor of the proposal covariance matrix.
-    thrust::host_vector<double> h_jump_sigma(n);
+    // Cholesky factor of proposal distribution for each data point, used by the Metropolis algorithm. The proposal
+    // covariance matrix for each data point is Covar_i = PropChol_i * transpose(PropChol_i).
+    dim_cholfactor = p * p - ((p - 1) * p) / 2  // only need one of the off-diagonal terms
+    thrust::host_vector<double> h_prop_cholfact(n * dim_chol_factor);
     
 	// Create simulated characteristics and data
-    std::vector<double> true_chi(n * p);
-    double sigma_msmt = 0.5;  // Standard deviation for the measurement errors
+    thrust::host_vector<double> h_true_chi(n * p);
+    double sigma_msmt = [2.2e-4, 3.3e-4, 5.2e-4, 3.7e-4, 2.2e-4];  // Standard deviation for the measurement errors
+    double lambda = [70.0, 170.0, 250.0, 350.0, 500.0];  // frequency bands correspond to Herschel PACS and SPIRES wavelengths
+    double frequencies[5];
+    for (int k=0; k<m; k++) {
+        frequencies[k] = 1e6 / lambda[i];
+    }
     
 	for (int i=0; i<n; i++) {
+        // Loop over the data indices
 		for (int j=0; j<p; j++) {
-            // First generate true value of the characteristics
-			true_chi[i + n * j] = mu_popn_true + sigma_popn_true * snorm(rng);
-            // Initialize the scale of the chi proposal distributions to just be the measurement uncertainty
-            h_jump_sigma[i + n * j] = sigma_msmt;
+            // Loop over the chi indices to generate true value of the characteristics
+			h_true_chi[i + n * j] = h_theta[j] + sqrt(h_theta[p + j]) * snorm(rng);
+            // Initialize the scale of the chi proposal distributions to just be some small constant value
+            h_jump_sigma[i + n * j] = 0.01;
         }
         for (int k=0; k<m; k++) {
-            // Now generate measurements given the true characteristics
-			h_meas_unc[i + k * n] = sigma_msmt;
+            // Loop over the feature indices to generate measurements, given the characteristics
+            double bbody_numer = 2.0 * hplanck * frequencies[k] * frequencies[k] * frequencies[k] / (clight * clight);
+            double temperature = exp(h_true_chi[n * 2 + i]); // Grap the temperature for this data point
+            double bbody_denom = exp(hplanck * frequencies[k] / (kboltz * temperature)) - 1.0;
+            double bbody = bbody_numer / bbody_denom;
+            // Grab the SED normalization and power-law index
+            double normalization = exp(h_true_chi[i]);
+            double beta = h_true_chi[n + i];
+            
+            double nu_over_nu0 = frequencies[k] / nu0
+            double SED_ik = normalization * pow(nu_over_nu0, beta) * bbody;
+            
+			h_meas_unc[k * n + i] = sigma_msmt[k];
             // Just assume E(meas|chi) = chi for now
-            h_meas[i + k * n] = true_chi[i + k * n] + sigma_msmt * snorm(rng);
+            h_meas[k * n + i] = SED_ik + sigma_msmt[k] * snorm(rng);
 		}
 	}
     
-    // Initialize the chis to their measurements
-    thrust::copy(h_meas.begin(), h_meas.end(), h_chi.begin());
+    // Initialize the chis to their true values for now
+    thrust::copy(h_true_chi.begin(), h_true_chi.end(), h_chi.begin());
     
     // Allocate memory for arrays on device and copy the values from the host
     thrust::device_vector<double> d_meas = h_meas;
     thrust::device_vector<double> d_meas_unc = h_meas_unc;
     thrust::device_vector<double> d_chi = h_chi;
-    thrust::device_vector<double> d_jump_sigma = h_jump_sigma;
+    thrust::device_vector<double> d_prop_cholfact = h_prop_cholfact;
     thrust::device_vector<double> d_logdens(n);  // log posteriors for an individual data point
     
     thrust::fill(d_logdens.begin(), d_logdens.end(), -1.0e300);

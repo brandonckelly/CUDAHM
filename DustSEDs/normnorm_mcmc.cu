@@ -76,7 +76,7 @@ void setup_kernel(curandState *state)
 
 // Perform the MHA update on the n parameters, done in parallel on the GPU. This is what the kernel does.
 __global__
-void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logdens, double* jump_sigma,
+void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logdens, double* prop_cholfact,
                 curandState* state, int current_iter)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -187,13 +187,14 @@ int main(void)
     
     // Cholesky factor of proposal distribution for each data point, used by the Metropolis algorithm. The proposal
     // covariance matrix for each data point is Covar_i = PropChol_i * transpose(PropChol_i).
-    dim_cholfactor = p * p - ((p - 1) * p) / 2  // only need one of the off-diagonal terms
+    dim_cholfactor = p * p - ((p - 1) * p) / 2  // cholesky factor is a lower-diagonal matrix
     thrust::host_vector<double> h_prop_cholfact(n * dim_chol_factor);
+    thrust::fill(h_prop_cholfact.begin(), h_prop_cholfact.end(), 0.0);
     
 	// Create simulated characteristics and data
     thrust::host_vector<double> h_true_chi(n * p);
-    double sigma_msmt = [2.2e-4, 3.3e-4, 5.2e-4, 3.7e-4, 2.2e-4];  // Standard deviation for the measurement errors
-    double lambda = [70.0, 170.0, 250.0, 350.0, 500.0];  // frequency bands correspond to Herschel PACS and SPIRES wavelengths
+    double sigma_msmt[5] = {2.2e-4, 3.3e-4, 5.2e-4, 3.7e-4, 2.2e-4};  // Standard deviation for the measurement errors
+    double lambda[5] = {70.0, 170.0, 250.0, 350.0, 500.0};  // frequency bands correspond to Herschel PACS and SPIRES wavelengths
     double frequencies[5];
     for (int k=0; k<m; k++) {
         frequencies[k] = 1e6 / lambda[i];
@@ -201,11 +202,13 @@ int main(void)
     
 	for (int i=0; i<n; i++) {
         // Loop over the data indices
+        int diag_index = 0
 		for (int j=0; j<p; j++) {
             // Loop over the chi indices to generate true value of the characteristics
 			h_true_chi[i + n * j] = h_theta[j] + sqrt(h_theta[p + j]) * snorm(rng);
-            // Initialize the scale of the chi proposal distributions to just be some small constant value
-            h_jump_sigma[i + n * j] = 0.01;
+            // Initialize the covariance matrix of the chi proposal distribution to be 0.01 * identity(p)
+            h_prop_cholfact[i + n * diag_index[j]] = 0.01;
+            diag_index += j + 2;
         }
         for (int k=0; k<m; k++) {
             // Loop over the feature indices to generate measurements, given the characteristics
@@ -216,12 +219,11 @@ int main(void)
             // Grab the SED normalization and power-law index
             double normalization = exp(h_true_chi[i]);
             double beta = h_true_chi[n + i];
-            
+            // Compute the model SED
             double nu_over_nu0 = frequencies[k] / nu0
             double SED_ik = normalization * pow(nu_over_nu0, beta) * bbody;
-            
+            // Generate measured SEDs
 			h_meas_unc[k * n + i] = sigma_msmt[k];
-            // Just assume E(meas|chi) = chi for now
             h_meas[k * n + i] = SED_ik + sigma_msmt[k] * snorm(rng);
 		}
 	}
@@ -276,10 +278,10 @@ int main(void)
         double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
         double* p_meas_unc = thrust::raw_pointer_cast(&d_meas_unc[0]);
         double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
-        double* p_jump_sigma = thrust::raw_pointer_cast(&d_jump_sigma[0]);
+        double* p_prop_cholfact = thrust::raw_pointer_cast(&d_prop_cholfact[0]);
         double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
         int current_iter = i + 1;
-        update_chi<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, n, p_logdens, p_jump_sigma, devStates, current_iter);
+        update_chi<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, n, p_logdens, p_prop_cholfact, devStates, current_iter);
         
         // Generate new theta in parallel with GPU calculation above
         double proposed_theta[2];

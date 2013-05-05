@@ -31,6 +31,16 @@
 printf("Error at %s:%d\n",__FILE__,__LINE__); \
 return EXIT_FAILURE;}} while(0)
 
+/****************** CONSTANTS ******************/
+
+// dimension of the characteristics, chi
+static const int p = 3;
+static __constant__ int c_p = 3;
+
+// dimension of the chi population parameter, theta
+static const int dim_theta = 6;
+static __constant__ int c_dim_theta = 6;
+
 // Target acceptance rate for Robust Adaptive Metropolis (RAM).
 static __constant__ double c_target_rate = 0.4;
 
@@ -40,7 +50,7 @@ static __constant__ double c_decay_rate = 0.66667;
 
 // Pointer to the current value of theta. This is stored in constant memory so that all the threads on the GPU
 // can access the same theta quickly.
-static __constant__ double c_theta[6];
+static __constant__ double c_theta[dim_theta];
 
 // Constants used for the model SED
 static __constant__ double c_nu0 = 2.3e11;  // nu0 = 230 GHz
@@ -63,6 +73,23 @@ double modified_bbody(double nu, double normalization, double beta, double tempe
     return SED;
 }
 
+// Function to compute the conditional log-density of the measurements given the chi value
+__device__
+double logdensity_meas(double* meas, double* meas_unc, int m, double* chi) {
+    
+    
+    
+    
+    double centered_meas = meas_i - new_chi;
+    double logdens_meas = -0.5 * centered_meas * centered_meas / (meas_unc_i * meas_unc_i);
+
+}
+
+// Function to compute the conditional log-density of the chi values given theta
+__device__ __host__
+double logdensity_pop(double* chi, double* theta) {
+    
+}
 
 // Initialize the random number generator state
 __global__
@@ -74,25 +101,41 @@ void setup_kernel(curandState *state)
     curand_init(1234, id, 0, &state[id]);
 }
 
-// Perform the MHA update on the n parameters, done in parallel on the GPU. This is what the kernel does.
+// Perform the MHA update on the n characteristics, done in parallel on the GPU.
 __global__
-void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logdens, double* prop_cholfact,
+void update_chi(double* chi, double* meas, int m, double* meas_unc, int n, double* logdens, double* prop_cholfact,
                 curandState* state, int current_iter)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
-	if (i<n)
+	if (i < n)
 	{
-        double mu = c_theta[0];  // Get population parameters
-        double var = c_theta[1];
-        
-        double meas_i = meas[i];  // Get measurements
-        double meas_unc_i = meas_unc[i];
-        
-        /* Copy state to local memory for efficiency */
+        // Copy variables to local memory for efficiency
         curandState localState = state[i];
+        dim_cholfactor = c_p * c_p - ((c_p - 1) * c_p) / 2;  // cholesky factor is a lower-diagonal matrix
+        double* cholfactor[dim_cholfactor];
+        for (int j=0; j<dim_cholfactor; j++) {
+            cholfactor[j] = prop_cholfact[n * j + i];
+        }
+
+        // get the unit proposal
+        double* snorm_deviate[c_p];
+        for (int j=0; j<c_p; j++) {
+            snorm_deviate[j] = curand_normal_double(&localState);
+        }
         
-        // Propose a new value of the characteristics for this data point
-        double new_chi = chi[i] + jump_sigma[i] * curand_normal_double(&localState);
+        // propose a new chi value
+        double* new_chi[c_p];
+        cholfact_index = 0
+        for (int j=0; j<c_p; j++) {
+            double centered_proposal = 0.0;
+            for (int k=0; k<(j+1); k++) {
+                // transform the unit proposal to the centered proposal, drawn from a multivariate normal
+                // or t-distribution.
+                centered_proposal += cholfactor[n * cholfact_index + i] * snorm_deviate[j];
+                cholfact_index++
+            }
+            new_chi[i] = chi[i] + centered_proposal;
+        }
 
         // Compute the conditional log-posterior of the proposed parameter values for this data point
         double centered_meas = meas_i - new_chi;
@@ -162,8 +205,6 @@ int main(void)
     
     int n = 2000; // # of data points
 	int m = 5; // # of features per data point (i.e., # of points in the SED for the i^th source)
-    int p = 3; // # of characteristics per data point.
-    int dim_theta = 2 * p;
     
     double mu_norm = 8.5 * log(10);  // Average value of the natural logarithm of the SED normalization
     double sig_norm = 0.5 * log(10);  // Standard deviation in the SED normalization
@@ -187,7 +228,7 @@ int main(void)
     
     // Cholesky factor of proposal distribution for each data point, used by the Metropolis algorithm. The proposal
     // covariance matrix for each data point is Covar_i = PropChol_i * transpose(PropChol_i).
-    dim_cholfactor = p * p - ((p - 1) * p) / 2  // cholesky factor is a lower-diagonal matrix
+    dim_cholfactor = p * p - ((p - 1) * p) / 2; // cholesky factor is a lower-diagonal matrix
     thrust::host_vector<double> h_prop_cholfact(n * dim_chol_factor);
     thrust::fill(h_prop_cholfact.begin(), h_prop_cholfact.end(), 0.0);
     

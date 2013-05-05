@@ -80,7 +80,7 @@ double modified_bbody(double nu, double normalization, double beta, double tempe
 
 // Function to compute the conditional log-density of the measurements given the chi value
 __device__
-double logdensity_meas(double* meas, double* meas_unc, int m, double* chi) {
+double logdensity_meas(double* meas, double* meas_unc, double* chi) {
 
     double normalization, beta, temperature;
     normalization = exp(chi[0]);
@@ -88,7 +88,7 @@ double logdensity_meas(double* meas, double* meas_unc, int m, double* chi) {
     temperature = exp(chi[2]);
     
     double logdensity = 0.0
-    for (int k=0; k<m; k++) {
+    for (int k=0; k<c_m; k++) {
         model_sed = modified_bbody(c_nu[k], normalization, beta, temperature);
         double stnd_meas = (meas[k] - model_sed) / meas_unc[k]
         logdensity += -0.5 * stnd_meas * stnd_meas;
@@ -131,19 +131,19 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         // Copy variables to local memory for efficiency
         curandState localState = state[i];
         dim_cholfactor = c_p * c_p - ((c_p - 1) * c_p) / 2;  // cholesky factor is a lower-diagonal matrix
-        double* cholfactor[dim_cholfactor];
+        double cholfactor[dim_cholfactor];
         for (int j=0; j<dim_cholfactor; j++) {
             cholfactor[j] = prop_cholfact[n * j + i];
         }
 
         // get the unit proposal
-        double* snorm_deviate[c_p];
+        double snorm_deviate[c_p];
         for (int j=0; j<c_p; j++) {
             snorm_deviate[j] = curand_normal_double(&localState);
         }
         
         // propose a new chi value
-        double* new_chi[c_p];
+        double new_chi[c_p];
         cholfact_index = 0
         for (int j=0; j<c_p; j++) {
             double centered_proposal = 0.0;
@@ -157,10 +157,16 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         }
 
         // Compute the conditional log-posterior of the proposed parameter values for this data point
-        double centered_meas = meas_i - new_chi;
-        double logdens_meas = -0.5 * centered_meas * centered_meas / (meas_unc_i * meas_unc_i);
-        double centered_chi = new_chi - mu;
-        double logdens_pop = -0.5 * log(var) - 0.5 * centered_chi * centered_chi / var;
+        double meas_i[c_m]
+        double meas_unc_i[c_m]
+        for (int k=0; k<c_m; k++) {
+            // grab the measurements for this data point
+            meas_i[k] = meas[n * k + i];
+            meas_unc_i[k] = meas_unc[n * k + i];
+        }
+        
+        logdens_meas = logdensity_meas(meas_i, meas_unc_i, new_chi);
+        logdens_pop = logdensity_pop(new_chi, c_theta);
         double logdens_prop = logdens_meas + logdens_pop;
         
         // Compute the Metropolis ratio
@@ -173,17 +179,19 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         
         if (unif_draw < ratio) {
             // Accept this proposal, so save this parameter value and conditional log-posterior
-            chi[i] = new_chi;
+            for (int j=0; j<c_p; j++) {
+                chi[n * j + i] = new_chi[j];
+            }
             logdens[i] = logdens_pop;
         }
 
         // Copy state back to global memory
         state[i] = localState;
 
-        // Finally, adapt the scale of the proposal distribution
+        // Finally, adapt the Cholesky factor of the proposal distribution
         // TODO: check that the ratio is finite before doing this step
         double decay_sequence = 1.0 / pow(current_iter, c_decay_rate);
-        jump_sigma[i] *= exp(decay_sequence / 2.0 * (ratio - c_target_rate));
+        
 	}
 }
 

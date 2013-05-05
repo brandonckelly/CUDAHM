@@ -53,8 +53,13 @@ static __constant__ double c_decay_rate = 0.66667;
 static __constant__ double c_theta[dim_theta];
 
 // Constants used for the model SED
-static __constant__ double c_nu0 = 2.3e11;  // nu0 = 230 GHz
+static __constant__ double c_nu0 = 2.3e11;  // reference frequency, nu0 = 230 GHz
 static const double nu0 = 2.3e11;
+static const int m = 5;  // the number of measured features per data point
+static __constant__ int c_m = 5;
+    // observational frequencies, corresponding to the Herschel PACS and SPIRES bands
+static const double nu[m] = {4.286e12, 1.765e12, 1.200e12, 8.571e11, 6.000e11};
+static __constant__ c_nu[m] = {4.286e12, 1.765e12, 1.200e12, 8.571e11, 6.000e11};
 static const double hplanck = 6.6260755e-27;  // Planck's constant, in cgs
 static const double clight = 2.997925e10;
 static const double kboltz = 1.380658e-16;
@@ -76,19 +81,33 @@ double modified_bbody(double nu, double normalization, double beta, double tempe
 // Function to compute the conditional log-density of the measurements given the chi value
 __device__
 double logdensity_meas(double* meas, double* meas_unc, int m, double* chi) {
-    
-    
-    
-    
-    double centered_meas = meas_i - new_chi;
-    double logdens_meas = -0.5 * centered_meas * centered_meas / (meas_unc_i * meas_unc_i);
 
+    double normalization, beta, temperature;
+    normalization = exp(chi[0]);
+    beta = chi[1];
+    temperature = exp(chi[2]);
+    
+    double logdensity = 0.0
+    for (int k=0; k<m; k++) {
+        model_sed = modified_bbody(c_nu[k], normalization, beta, temperature);
+        double stnd_meas = (meas[k] - model_sed) / meas_unc[k]
+        logdensity += -0.5 * stnd_meas * stnd_meas;
+    }
+    return logdensity;
 }
 
 // Function to compute the conditional log-density of the chi values given theta
 __device__ __host__
 double logdensity_pop(double* chi, double* theta) {
-    
+    // right now this is just an independent p-dimensional gaussian distribution, for simplicity
+    double logdensity = 0.0;
+    for (int j=0; j<c_p; j++) {
+        double mu_j = theta[j];
+        double var_j = theta[j + c_p];
+        double centered_chi_j = chi[j] - mu_j;
+        logdensity += -0.5 * log(var_j) - 0.5 * centered_chi_j * centered_chi_j / var_j;
+    }
+    return logdensity;
 }
 
 // Initialize the random number generator state
@@ -103,7 +122,7 @@ void setup_kernel(curandState *state)
 
 // Perform the MHA update on the n characteristics, done in parallel on the GPU.
 __global__
-void update_chi(double* chi, double* meas, int m, double* meas_unc, int n, double* logdens, double* prop_cholfact,
+void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logdens, double* prop_cholfact,
                 curandState* state, int current_iter)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -204,7 +223,6 @@ int main(void)
     */
     
     int n = 2000; // # of data points
-	int m = 5; // # of features per data point (i.e., # of points in the SED for the i^th source)
     
     double mu_norm = 8.5 * log(10);  // Average value of the natural logarithm of the SED normalization
     double sig_norm = 0.5 * log(10);  // Standard deviation in the SED normalization
@@ -235,11 +253,6 @@ int main(void)
 	// Create simulated characteristics and data
     thrust::host_vector<double> h_true_chi(n * p);
     double sigma_msmt[5] = {2.2e-4, 3.3e-4, 5.2e-4, 3.7e-4, 2.2e-4};  // Standard deviation for the measurement errors
-    double lambda[5] = {70.0, 170.0, 250.0, 350.0, 500.0};  // frequency bands correspond to Herschel PACS and SPIRES wavelengths
-    double frequencies[5];
-    for (int k=0; k<m; k++) {
-        frequencies[k] = 1e6 / lambda[i];
-    }
     
 	for (int i=0; i<n; i++) {
         // Loop over the data indices

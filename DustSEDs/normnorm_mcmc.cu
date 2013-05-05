@@ -115,7 +115,7 @@ double logdensity_pop(double* chi, double* theta) {
     return logdensity;
 }
 
-// Function to compute the rank-1 Cholesky update/downdate
+// Function to compute the rank-1 Cholesky update/downdate. Note that this is done in place.
 __device__ __host__
 void CholUpdateR1(double* cholfactor, double* v, bool downdate) {
 #ifdef __CUDA_ARCH__
@@ -123,7 +123,35 @@ void CholUpdateR1(double* cholfactor, double* v, bool downdate) {
 #else
     dim_chi = p;
 #endif
-    
+    double sign = 1.0;
+	if (downdate) {
+		// Perform the downdate instead
+		sign = -1.0;
+	}
+    int diag_index = 0;  // index of the diagonal of the cholesky factor
+	for (int i=0; i<dim_chi; i++) {
+        // loop over the columns of the Cholesky factor
+        double L_ii = cholfactor[diag_index];
+        double v_i = v[i];
+        double r = sqrt( L_ii * L_ii + sign * v_i * v_i);
+		double c = r / L_ii;
+		double s = v_i / L_ii;
+		cholfactor[diag_index] = r;
+        int index_ji = diag_index; // index of the cholesky factor array that points to L[j,i]
+        // update the rest of the rows of the Cholesky factor for this column
+        for (int j=i+1; j<dim_chi; j++) {
+            // loop over the rows of the i^th column of the Cholesky factor
+            index_ji += j;
+            cholfactor[index_ji] = (cholfactor[index_ji] + sign * s * v[j]) / c;
+        }
+        // update the elements of the vector v[i+1:dim_chi-1]
+        index_ji = diag_index;
+        for (int j=i+1; j<dim_chi; j++) {
+            index_ji += j;
+            v[j] = c * v[j] - s * cholfactor[index_ji];
+        }
+        diag_index += i + 2;
+    }
 }
 
 // Initialize the random number generator state

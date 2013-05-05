@@ -87,10 +87,10 @@ double logdensity_meas(double* meas, double* meas_unc, double* chi) {
     beta = chi[1];
     temperature = exp(chi[2]);
     
-    double logdensity = 0.0
+    double logdensity = 0.0;
     for (int k=0; k<c_m; k++) {
         model_sed = modified_bbody(c_nu[k], normalization, beta, temperature);
-        double stnd_meas = (meas[k] - model_sed) / meas_unc[k]
+        double stnd_meas = (meas[k] - model_sed) / meas_unc[k];
         logdensity += -0.5 * stnd_meas * stnd_meas;
     }
     return logdensity;
@@ -99,15 +99,31 @@ double logdensity_meas(double* meas, double* meas_unc, double* chi) {
 // Function to compute the conditional log-density of the chi values given theta
 __device__ __host__
 double logdensity_pop(double* chi, double* theta) {
+#ifdef __CUDA_ARCH__
+    dim_chi = c_p;  // function is called from device, so need to access constant memory on the GPU
+#else
+    dim_chi = p;
+#endif
     // right now this is just an independent p-dimensional gaussian distribution, for simplicity
     double logdensity = 0.0;
-    for (int j=0; j<c_p; j++) {
+    for (int j=0; j<dim_chi; j++) {
         double mu_j = theta[j];
-        double var_j = theta[j + c_p];
+        double var_j = theta[j + dim_chi];
         double centered_chi_j = chi[j] - mu_j;
         logdensity += -0.5 * log(var_j) - 0.5 * centered_chi_j * centered_chi_j / var_j;
     }
     return logdensity;
+}
+
+// Function to compute the rank-1 Cholesky update/downdate
+__device__ __host__
+void CholUpdateR1(double* cholfactor, double* v, bool downdate) {
+#ifdef __CUDA_ARCH__
+    dim_chi = c_p;  // function is called from device, so need to access constant memory on the GPU
+#else
+    dim_chi = p;
+#endif
+    
 }
 
 // Initialize the random number generator state
@@ -150,15 +166,15 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
             for (int k=0; k<(j+1); k++) {
                 // transform the unit proposal to the centered proposal, drawn from a multivariate normal
                 // or t-distribution.
-                centered_proposal += cholfactor[n * cholfact_index + i] * snorm_deviate[j];
-                cholfact_index++
+                centered_proposal += cholfactor[cholfact_index] * snorm_deviate[j];
+                cholfact_index++;
             }
             new_chi[i] = chi[i] + centered_proposal;
         }
 
         // Compute the conditional log-posterior of the proposed parameter values for this data point
-        double meas_i[c_m]
-        double meas_unc_i[c_m]
+        double meas_i[c_m];
+        double meas_unc_i[c_m];
         for (int k=0; k<c_m; k++) {
             // grab the measurements for this data point
             meas_i[k] = meas[n * k + i];
@@ -190,8 +206,24 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
 
         // Finally, adapt the Cholesky factor of the proposal distribution
         // TODO: check that the ratio is finite before doing this step
+        double unit_norm = 0.0;
+        for (int j=0; j<c_p; j++) {
+            unit_norm += snorm_deviate[j] * snorm_deviate[j];
+        }
+        unit_norm = sqrt(unitnorm);
         double decay_sequence = 1.0 / pow(current_iter, c_decay_rate);
+        scaled_coef = sqrt(decay_sequence * fabs(ratio - c_target_rate)) / unit_norm;
+        for (int j=0; j<c_p; j++) {
+            scaled_proposal[j] *= scaled_coef;
+        }
+        bool downdate = (ratio < c_target_rate);
+        CholUpdateR1(cholfactor, scaled_proposal, downdate);
         
+        // copy cholesky factor for this data point back to global memory
+        cholfact_index = 0
+        for (int j=0; j<dim_cholfactor; j++) {
+            prop_cholfact[n * j + i] = cholfactor[j];
+        }
 	}
 }
 
@@ -212,7 +244,7 @@ int main(void)
 {
     // Random number generator and distribution needed to simulate some data
 	// unsigned int seed = 98724732;
-    unsigned int seed =123455;
+    unsigned int seed = 123455;
 	static thrust::minstd_rand rng(seed);
 	thrust::random::experimental::normal_distribution<double> snorm(0., 1.0);
     thrust::random::uniform_real_distribution<double> uniform(0.0, 1.0);
@@ -255,7 +287,7 @@ int main(void)
     // Cholesky factor of proposal distribution for each data point, used by the Metropolis algorithm. The proposal
     // covariance matrix for each data point is Covar_i = PropChol_i * transpose(PropChol_i).
     dim_cholfactor = p * p - ((p - 1) * p) / 2; // cholesky factor is a lower-diagonal matrix
-    thrust::host_vector<double> h_prop_cholfact(n * dim_chol_factor);
+    thrust::host_vector<double> h_prop_cholfact(n * dim_cholfactor);
     thrust::fill(h_prop_cholfact.begin(), h_prop_cholfact.end(), 0.0);
     
 	// Create simulated characteristics and data

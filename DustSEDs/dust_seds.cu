@@ -36,6 +36,8 @@ return EXIT_FAILURE;}} while(0)
 // dimension of the characteristics, chi
 static const int p = 3;
 static __constant__ int c_p = 3;
+static const int dim_cholfactor = 6; // = p * p - ((p - 1) * p) / 2;
+static const int c_dim_cholfactor = 6;
 
 // dimension of the chi population parameter, theta
 static const int dim_theta = 6;
@@ -61,7 +63,7 @@ static const int m = 5;  // the number of measured features per data point
 static __constant__ int c_m = 5;
     // observational frequencies, corresponding to the Herschel PACS and SPIRES bands
 static const double nu[m] = {4.286e12, 1.765e12, 1.200e12, 8.571e11, 6.000e11};
-static __constant__ c_nu[m] = {4.286e12, 1.765e12, 1.200e12, 8.571e11, 6.000e11};
+static __constant__ double c_nu[m] = {4.286e12, 1.765e12, 1.200e12, 8.571e11, 6.000e11};
 static const double hplanck = 6.6260755e-27;  // Planck's constant, in cgs
 static const double clight = 2.997925e10;
 static const double kboltz = 1.380658e-16;
@@ -91,7 +93,7 @@ double logdensity_meas(double* meas, double* meas_unc, double* chi) {
     
     double logdensity = 0.0;
     for (int k=0; k<c_m; k++) {
-        model_sed = modified_bbody(c_nu[k], normalization, beta, temperature);
+        double model_sed = modified_bbody(c_nu[k], normalization, beta, temperature);
         double stnd_meas = (meas[k] - model_sed) / meas_unc[k];
         logdensity += -0.5 * stnd_meas * stnd_meas;
     }
@@ -102,15 +104,17 @@ double logdensity_meas(double* meas, double* meas_unc, double* chi) {
 __device__ __host__
 double logdensity_pop(double* chi, double* theta) {
 #ifdef __CUDA_ARCH__
-    dim_chi = c_p;  // function is called from device, so need to access constant memory on the GPU
+    int dim_chi = c_p;  // function is called from device, so need to access constant memory on the GPU
+    int ntheta = c_dim_theta;
 #else
-    dim_chi = p;
+    int dim_chi = p;
+    int ntheta = dim_theta;
 #endif
     // right now this is just an independent p-dimensional gaussian distribution, for simplicity
     double logdensity = 0.0;
-    for (int j=0; j<c_dim_theta/2; j++) {
+    for (int j=0; j<dim_chi; j++) {
         double mu_j = theta[j];
-        double var_j = exp(theta[j + c_dim_theta]);
+        double var_j = exp(theta[j + ntheta]);
         double centered_chi_j = chi[j] - mu_j;
         logdensity += -0.5 * log(var_j) - 0.5 * centered_chi_j * centered_chi_j / var_j;
     }
@@ -172,22 +176,21 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
 	{
         // Copy variables to local memory for efficiency
         curandState localState = state[i];
-        dim_cholfactor = c_p * c_p - ((c_p - 1) * c_p) / 2;  // cholesky factor is a lower-diagonal matrix
         double cholfactor[dim_cholfactor];
         for (int j=0; j<dim_cholfactor; j++) {
             cholfactor[j] = prop_cholfact[n * j + i];
         }
 
         // get the unit proposal
-        double snorm_deviate[c_p];
+        double snorm_deviate[p];
         for (int j=0; j<c_p; j++) {
             snorm_deviate[j] = curand_normal_double(&localState);
         }
         
         // propose a new chi value
-        double new_chi[c_p];
-        double scaled_proposal[c_p]
-        cholfact_index = 0
+        double new_chi[p];
+        double scaled_proposal[p];
+        int cholfact_index = 0;
         for (int j=0; j<c_p; j++) {
             double scaled_proposal_j = 0.0;
             for (int k=0; k<(j+1); k++) {
@@ -201,16 +204,16 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         }
 
         // Compute the conditional log-posterior of the proposed parameter values for this data point
-        double meas_i[c_m];
-        double meas_unc_i[c_m];
+        double meas_i[m];
+        double meas_unc_i[m];
         for (int k=0; k<c_m; k++) {
             // grab the measurements for this data point
             meas_i[k] = meas[n * k + i];
             meas_unc_i[k] = meas_unc[n * k + i];
         }
         
-        logdens_meas = logdensity_meas(meas_i, meas_unc_i, new_chi);
-        logdens_pop = logdensity_pop(new_chi, c_theta);
+        double logdens_meas = logdensity_meas(meas_i, meas_unc_i, new_chi);
+        double logdens_pop = logdensity_pop(new_chi, c_theta);
         double logdens_prop = logdens_meas + logdens_pop;
         
         // Compute the Metropolis ratio
@@ -240,7 +243,7 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         }
         unit_norm = sqrt(unit_norm);
         double decay_sequence = 1.0 / pow(current_iter, c_decay_rate);
-        scaled_coef = sqrt(decay_sequence * fabs(ratio - c_target_rate)) / unit_norm;
+        double scaled_coef = sqrt(decay_sequence * fabs(ratio - c_target_rate)) / unit_norm;
         for (int j=0; j<c_p; j++) {
             scaled_proposal[j] *= scaled_coef;
         }
@@ -248,7 +251,7 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         CholUpdateR1(cholfactor, scaled_proposal, c_p, downdate);
         
         // copy cholesky factor for this data point back to global memory
-        cholfact_index = 0
+        cholfact_index = 0;
         for (int j=0; j<dim_cholfactor; j++) {
             prop_cholfact[n * j + i] = cholfactor[j];
         }
@@ -292,7 +295,7 @@ int main(void)
      collection of the mean and variances of the normal distributions.
     */
     
-    int n = 2000; // # of data points
+    int n = 10000; // # of data points
     
     double mu_norm = 8.5 * log(10);  // Average value of the natural logarithm of the SED normalization
     double sig_norm = 0.5 * log(10);  // Standard deviation in the SED normalization
@@ -312,9 +315,9 @@ int main(void)
     // Construct initial cholesky factor for the covariance matrix of the theta proposal distribution
     int dim_cholfactor_theta = dim_theta * dim_theta - ((dim_theta - 1) * dim_theta) / 2;
     thrust::host_vector<double> h_theta_cholfact(dim_cholfactor_theta);
-    int diag_index = 0
+    int diag_index = 0;
     for (int j=0; j<dim_theta; j++) {
-        h_theta_cholfact[diag_index[j]] = 1e-2;
+        h_theta_cholfact[diag_index] = 1e-2;
         diag_index += j + 2;
     }
     
@@ -325,7 +328,6 @@ int main(void)
     
     // Cholesky factor of proposal distribution for each data point, used by the Metropolis algorithm. The proposal
     // covariance matrix for each data point is Covar_i = PropChol_i * transpose(PropChol_i).
-    dim_cholfactor = p * p - ((p - 1) * p) / 2; // cholesky factor is a lower-diagonal matrix
     thrust::host_vector<double> h_prop_cholfact(n * dim_cholfactor);
     thrust::fill(h_prop_cholfact.begin(), h_prop_cholfact.end(), 0.0);
     
@@ -333,27 +335,29 @@ int main(void)
     thrust::host_vector<double> h_true_chi(n * p);
     double sigma_msmt[5] = {2.2e-4, 3.3e-4, 5.2e-4, 3.7e-4, 2.2e-4};  // Standard deviation for the measurement errors
     
+    std::cout << "Generating some data..." << std::endl;
+    
 	for (int i=0; i<n; i++) {
         // Loop over the data indices
-        int diag_index = 0
+        int diag_index = 0;
 		for (int j=0; j<p; j++) {
             // Loop over the chi indices to generate true value of the characteristics
 			h_true_chi[i + n * j] = h_theta[j] + sqrt(exp(h_theta[p + j])) * snorm(rng);
             // Initialize the covariance matrix of the chi proposal distribution to be 0.01 * identity(p)
-            h_prop_cholfact[i + n * diag_index[j]] = 0.01;
+            h_prop_cholfact[i + n * diag_index] = 0.01;
             diag_index += j + 2;
         }
         for (int k=0; k<m; k++) {
             // Loop over the feature indices to generate measurements, given the characteristics
-            double bbody_numer = 2.0 * hplanck * frequencies[k] * frequencies[k] * frequencies[k] / (clight * clight);
+            double bbody_numer = 2.0 * hplanck * nu[k] * nu[k] * nu[k] / (clight * clight);
             double temperature = exp(h_true_chi[n * 2 + i]); // Grap the temperature for this data point
-            double bbody_denom = exp(hplanck * frequencies[k] / (kboltz * temperature)) - 1.0;
+            double bbody_denom = exp(hplanck * nu[k] / (kboltz * temperature)) - 1.0;
             double bbody = bbody_numer / bbody_denom;
             // Grab the SED normalization and power-law index
             double normalization = exp(h_true_chi[i]);
             double beta = h_true_chi[n + i];
             // Compute the model SED
-            double nu_over_nu0 = frequencies[k] / nu0
+            double nu_over_nu0 = nu[k] / nu0;
             double SED_ik = normalization * pow(nu_over_nu0, beta) * bbody;
             // Generate measured SEDs
 			h_meas_unc[k * n + i] = sigma_msmt[k];
@@ -399,11 +403,13 @@ int main(void)
 
     // Now run the MCMC sampler
 
-    std::ofstream chifile("chis.dat");
+    //std::ofstream chifile("chis.dat");
     std::ofstream thetafile("thetas.dat");
     
-    int mcmc_iter = 1000;
+    int mcmc_iter = 10000;
     int naccept_theta = 0;
+    std::cout << "Running MCMC Sampler...." << std::endl;
+    
     for (int i=0; i<mcmc_iter; i++) {
         // Now grab the pointers to the vectors, needed to run the kernel since it doesn't understand Thrust
         // We do this here because the thrust vector are smart, and we want to make sure they don't reassign
@@ -417,7 +423,7 @@ int main(void)
         update_chi<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, n, p_logdens, p_prop_cholfact, devStates, current_iter);
         
         // Generate new theta in parallel with GPU calculation above
-        thrust::host_vector<double> proposed_theta(dim_theta)
+        thrust::host_vector<double> proposed_theta(dim_theta);
 
             // get the unit proposal
         thrust::host_vector<double> snorm_deviate(dim_theta);
@@ -428,7 +434,7 @@ int main(void)
             // transform unit proposal so that is has a multivariate normal distribution
         thrust::host_vector<double> scaled_proposal(dim_theta);
         thrust::fill(scaled_proposal.begin(), scaled_proposal.end(), 0.0);
-        cholfact_index = 0;
+        int cholfact_index = 0;
         for (int j=0; j<dim_theta; j++) {
             for (int k=0; k<(j+1); k++) {
                 scaled_proposal[j] += h_theta_cholfact[cholfact_index] * snorm_deviate[j];
@@ -452,7 +458,7 @@ int main(void)
             double proposed_var_j = exp(proposed_theta[j + dim_theta]);
             // transform and reduction is over d_chi[j * n : (j+1) * n - 1]
             logdens_pop += thrust::transform_reduce(chi_iter_begin, chi_iter_end,
-                                                    zsqr(proposed_mu_j, proposed_var_j)),
+                                                    zsqr(proposed_mu_j, proposed_var_j),
                                                     0.0, thrust::plus<double>());
             thrust::advance(chi_iter_begin, n);
         }
@@ -486,15 +492,18 @@ int main(void)
         unit_norm = sqrt(unit_norm);
         double decay_sequence = 1.0 / pow(current_iter, decay_rate);
         double scaled_coef = sqrt(decay_sequence * fabs(ratio - theta_target_rate)) / unit_norm;
-        scaled_proposal *= scaled_coef;
+        for (int j=0; j<dim_theta; j++) {
+            scaled_proposal[j] *= scaled_coef;
+        }
         
         bool downdate = (ratio < theta_target_rate);
-        double* p_theta_cholfact = thrust::raw_pointer_cast(&h_theta_cholfact);
-        CholUpdateR1(p_theta_cholfact, scaled_proposal, dim_theta, downdate);
+        double* p_theta_cholfact = thrust::raw_pointer_cast(&h_theta_cholfact[0]);
+        double* p_scaled_proposal = thrust::raw_pointer_cast(&scaled_proposal[0]);
+        CholUpdateR1(p_theta_cholfact, p_scaled_proposal, dim_theta, downdate);
         
         // Save the theta values
         for (int j=0; j<dim_theta; j++) {
-            thetafile << h_theta[j] << " "
+            thetafile << h_theta[j] << " ";
         }
         thetafile << std::endl;
     }

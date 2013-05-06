@@ -43,10 +43,12 @@ static __constant__ int c_dim_theta = 6;
 
 // Target acceptance rate for Robust Adaptive Metropolis (RAM).
 static __constant__ double c_target_rate = 0.4;
+static const double theta_target_rate = 0.4;
 
 // Decay rate for proposal scaling factor updates. The proposal scaling factors decay as 1 / niter^decay_rate.
 // This is gamma in the notation of Vihola (2012)
 static __constant__ double c_decay_rate = 0.66667;
+static const double decay_rate = 0.666667;
 
 // Pointer to the current value of theta. This is stored in constant memory so that all the threads on the GPU
 // can access the same theta quickly.
@@ -106,9 +108,9 @@ double logdensity_pop(double* chi, double* theta) {
 #endif
     // right now this is just an independent p-dimensional gaussian distribution, for simplicity
     double logdensity = 0.0;
-    for (int j=0; j<dim_chi; j++) {
+    for (int j=0; j<c_dim_theta/2; j++) {
         double mu_j = theta[j];
-        double var_j = theta[j + dim_chi];
+        double var_j = exp(theta[j + c_dim_theta]);
         double centered_chi_j = chi[j] - mu_j;
         logdensity += -0.5 * log(var_j) - 0.5 * centered_chi_j * centered_chi_j / var_j;
     }
@@ -117,19 +119,15 @@ double logdensity_pop(double* chi, double* theta) {
 
 // Function to compute the rank-1 Cholesky update/downdate. Note that this is done in place.
 __device__ __host__
-void CholUpdateR1(double* cholfactor, double* v, bool downdate) {
-#ifdef __CUDA_ARCH__
-    dim_chi = c_p;  // function is called from device, so need to access constant memory on the GPU
-#else
-    dim_chi = p;
-#endif
+void CholUpdateR1(double* cholfactor, double* v, int dim_v, bool downdate) {
+
     double sign = 1.0;
 	if (downdate) {
 		// Perform the downdate instead
 		sign = -1.0;
 	}
     int diag_index = 0;  // index of the diagonal of the cholesky factor
-	for (int i=0; i<dim_chi; i++) {
+	for (int i=0; i<dim_v; i++) {
         // loop over the columns of the Cholesky factor
         double L_ii = cholfactor[diag_index];
         double v_i = v[i];
@@ -139,14 +137,14 @@ void CholUpdateR1(double* cholfactor, double* v, bool downdate) {
 		cholfactor[diag_index] = r;
         int index_ji = diag_index; // index of the cholesky factor array that points to L[j,i]
         // update the rest of the rows of the Cholesky factor for this column
-        for (int j=i+1; j<dim_chi; j++) {
+        for (int j=i+1; j<dim_v; j++) {
             // loop over the rows of the i^th column of the Cholesky factor
             index_ji += j;
             cholfactor[index_ji] = (cholfactor[index_ji] + sign * s * v[j]) / c;
         }
-        // update the elements of the vector v[i+1:dim_chi-1]
+        // update the elements of the vector v[i+1:dim_v-1]
         index_ji = diag_index;
-        for (int j=i+1; j<dim_chi; j++) {
+        for (int j=i+1; j<dim_v; j++) {
             index_ji += j;
             v[j] = c * v[j] - s * cholfactor[index_ji];
         }
@@ -188,16 +186,18 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         
         // propose a new chi value
         double new_chi[c_p];
+        double scaled_proposal[c_p]
         cholfact_index = 0
         for (int j=0; j<c_p; j++) {
-            double centered_proposal = 0.0;
+            double scaled_proposal_j = 0.0;
             for (int k=0; k<(j+1); k++) {
                 // transform the unit proposal to the centered proposal, drawn from a multivariate normal
                 // or t-distribution.
-                centered_proposal += cholfactor[cholfact_index] * snorm_deviate[j];
+                scaled_proposal_j += cholfactor[cholfact_index] * snorm_deviate[j];
                 cholfact_index++;
             }
-            new_chi[i] = chi[i] + centered_proposal;
+            new_chi[j] = chi[j] + scaled_proposal_j;
+            scaled_proposal[j] = scaled_proposal_j;
         }
 
         // Compute the conditional log-posterior of the proposed parameter values for this data point
@@ -238,14 +238,14 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         for (int j=0; j<c_p; j++) {
             unit_norm += snorm_deviate[j] * snorm_deviate[j];
         }
-        unit_norm = sqrt(unitnorm);
+        unit_norm = sqrt(unit_norm);
         double decay_sequence = 1.0 / pow(current_iter, c_decay_rate);
         scaled_coef = sqrt(decay_sequence * fabs(ratio - c_target_rate)) / unit_norm;
         for (int j=0; j<c_p; j++) {
             scaled_proposal[j] *= scaled_coef;
         }
         bool downdate = (ratio < c_target_rate);
-        CholUpdateR1(cholfactor, scaled_proposal, downdate);
+        CholUpdateR1(cholfactor, scaled_proposal, c_p, downdate);
         
         // copy cholesky factor for this data point back to global memory
         cholfact_index = 0
@@ -270,6 +270,8 @@ struct zsqr {
 
 int main(void)
 {
+    /* TODO: Should use the boost random number generator libraries for doing this on the host */
+    
     // Random number generator and distribution needed to simulate some data
 	// unsigned int seed = 98724732;
     unsigned int seed = 123455;
@@ -303,9 +305,18 @@ int main(void)
     h_theta[0] = mu_norm;
     h_theta[1] = mu_beta;
     h_theta[2] = mu_temp;
-    h_theta[3] = sig_norm * sig_norm;
-    h_theta[4] = sig_beta * sig_beta;
-    h_theta[5] = sig_temp * sig_temp;
+    h_theta[3] = log(sig_norm * sig_norm);
+    h_theta[4] = log(sig_beta * sig_beta);
+    h_theta[5] = log(sig_temp * sig_temp);
+    
+    // Construct initial cholesky factor for the covariance matrix of the theta proposal distribution
+    int dim_cholfactor_theta = dim_theta * dim_theta - ((dim_theta - 1) * dim_theta) / 2;
+    thrust::host_vector<double> h_theta_cholfact(dim_cholfactor_theta);
+    int diag_index = 0
+    for (int j=0; j<dim_theta; j++) {
+        h_theta_cholfact[diag_index[j]] = 1e-2;
+        diag_index += j + 2;
+    }
     
     // Allocate memory for arrays on host
     thrust::host_vector<double> h_meas(n * m);  // The measurements, m values for each of n data points
@@ -327,7 +338,7 @@ int main(void)
         int diag_index = 0
 		for (int j=0; j<p; j++) {
             // Loop over the chi indices to generate true value of the characteristics
-			h_true_chi[i + n * j] = h_theta[j] + sqrt(h_theta[p + j]) * snorm(rng);
+			h_true_chi[i + n * j] = h_theta[j] + sqrt(exp(h_theta[p + j])) * snorm(rng);
             // Initialize the covariance matrix of the chi proposal distribution to be 0.01 * identity(p)
             h_prop_cholfact[i + n * diag_index[j]] = 0.01;
             diag_index += j + 2;
@@ -406,14 +417,48 @@ int main(void)
         update_chi<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, n, p_logdens, p_prop_cholfact, devStates, current_iter);
         
         // Generate new theta in parallel with GPU calculation above
-        double proposed_theta[2];
-        proposed_theta[0] = h_theta[0] + 0.1 * snorm(rng);
-        proposed_theta[1] = h_theta[1] + 0.1 * snorm(rng);
+        thrust::host_vector<double> proposed_theta(dim_theta)
+
+            // get the unit proposal
+        thrust::host_vector<double> snorm_deviate(dim_theta);
+        for (int j=0; j<dim_theta; j++) {
+            snorm_deviate[j] = snorm(rng);
+        }
+        
+            // transform unit proposal so that is has a multivariate normal distribution
+        thrust::host_vector<double> scaled_proposal(dim_theta);
+        thrust::fill(scaled_proposal.begin(), scaled_proposal.end(), 0.0);
+        cholfact_index = 0;
+        for (int j=0; j<dim_theta; j++) {
+            for (int k=0; k<(j+1); k++) {
+                scaled_proposal[j] += h_theta_cholfact[cholfact_index] * snorm_deviate[j];
+                cholfact_index++;
+            }
+            proposed_theta[j] = h_theta[j] + scaled_proposal[j];
+        }
         
         CUDA_CALL(cudaDeviceSynchronize());
         
-        double logdens_pop = thrust::transform_reduce(d_chi.begin(), d_chi.end(), zsqr(proposed_theta[0], proposed_theta[1]), 0.0, thrust::plus<double>());
-        logdens_pop += -n / 2.0 * log(proposed_theta[1]);
+        // Compute Metropolis ratio
+        double logdens_pop = 0.0;
+        // right now we loop over the elements of chi because we assume that they are statistically independent, i.e.,
+        // the theta array does not contain correlations among the element of chi. this is unrealistic, and we will need
+        // to come up with a better way to do the transform + reduction: maybe use CUBLAS?
+        thrust::device_vector<double>::iterator chi_iter_begin = d_chi.begin();
+        thrust::device_vector<double>::iterator chi_iter_end = d_chi.begin();
+        for (int j=0; j<dim_theta/2; j++) {
+            thrust::advance(chi_iter_end, n);
+            double proposed_mu_j = proposed_theta[j];
+            double proposed_var_j = exp(proposed_theta[j + dim_theta]);
+            // transform and reduction is over d_chi[j * n : (j+1) * n - 1]
+            logdens_pop += thrust::transform_reduce(chi_iter_begin, chi_iter_end,
+                                                    zsqr(proposed_mu_j, proposed_var_j)),
+                                                    0.0, thrust::plus<double>());
+            thrust::advance(chi_iter_begin, n);
+        }
+        for (int j=0; j<dim_theta/2; j++) {
+            logdens_pop += -n / 2.0 * proposed_theta[j + dim_theta];
+        }
         
         double logdens_old = thrust::reduce(d_logdens.begin(), d_logdens.end());
         
@@ -423,24 +468,39 @@ int main(void)
         double unif = uniform(rng);
         
         if (unif < ratio) {
-            h_theta[0] = proposed_theta[0];
-            h_theta[1] = proposed_theta[1];
+            // Accept the proposed theta
+            h_theta = proposed_theta;
+            // grab the pointer in case thrust changed the memory location on us
+            double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
+            // copy the new theta to constant memory on the device
             CUDA_CALL(cudaMemcpyToSymbol(c_theta, p_theta, h_theta.size() * sizeof(*p_theta)));
             naccept_theta++;
         }
         
-        thetafile << h_theta[0] << " " << h_theta[1] << std::endl;
-
-        std::cout << current_iter << std::endl;
-        thrust::copy(d_chi.begin(), d_chi.end(), h_chi.begin());
-        for (int j=0; j<n; j++){
-            chifile << " " << h_chi[j];
+        // finally, adapt the proposal covariance of theta by updating its cholesky factor
+        double unit_norm = 0.0;
+        for (int j=0; j<dim_theta; j++) {
+            unit_norm += snorm_deviate[j] * snorm_deviate[j];
         }
-        chifile << std::endl;
+        
+        unit_norm = sqrt(unit_norm);
+        double decay_sequence = 1.0 / pow(current_iter, decay_rate);
+        double scaled_coef = sqrt(decay_sequence * fabs(ratio - theta_target_rate)) / unit_norm;
+        scaled_proposal *= scaled_coef;
+        
+        bool downdate = (ratio < theta_target_rate);
+        double* p_theta_cholfact = thrust::raw_pointer_cast(&h_theta_cholfact);
+        CholUpdateR1(p_theta_cholfact, scaled_proposal, dim_theta, downdate);
+        
+        // Save the theta values
+        for (int j=0; j<dim_theta; j++) {
+            thetafile << h_theta[j] << " "
+        }
+        thetafile << std::endl;
     }
     std::cout << "Number of accepted thetas: " << naccept_theta << std::endl;
-    chifile.close();
     thetafile.close();
+    
     cudaFree(devStates);  // Free up the memory on the GPU from the RNG states
     
 	return 0;

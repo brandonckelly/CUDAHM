@@ -20,7 +20,7 @@
 
 /* Begin PBXFileReference section */
 		DF430B6217356E630074CDD1 /* DustSED */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = DustSED; sourceTree = BUILT_PRODUCTS_DIR; };
-		DF430B6E17356F4F0074CDD1 /* normnorm_mcmc.cu */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = normnorm_mcmc.cu; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.cpp; };
+		DF430B6E17356F4F0074CDD1 /* dust_seds.cu */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = dust_seds.cu; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.cpp; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,7 +37,7 @@
 		DF430B5917356E630074CDD1 = {
 			isa = PBXGroup;
 			children = (
-				DF430B6E17356F4F0074CDD1 /* normnorm_mcmc.cu */,
+				DF430B6E17356F4F0074CDD1 /* dust_seds.cu */,
 				DF430B6317356E630074CDD1 /* Products */,
 			);
 			sourceTree = "<group>";

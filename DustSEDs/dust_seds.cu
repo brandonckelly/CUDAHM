@@ -477,6 +477,7 @@ int main(void)
             std::cout << h_theta[j] << " ";
         }
         std::cout << std::endl;
+         */
         // Compute Metropolis ratio
         double logdens_pop = 0.0;
         // right now we loop over the elements of chi because we assume that they are statistically independent, i.e.,
@@ -484,6 +485,7 @@ int main(void)
         // to come up with a better way to do the transform + reduction: maybe use CUBLAS?
         thrust::device_vector<double>::iterator chi_iter_begin = d_chi.begin();
         thrust::device_vector<double>::iterator chi_iter_end = d_chi.begin();
+        /*
         for (int j=0; j<dim_theta/2; j++) {
             thrust::advance(chi_iter_end, n);
             double proposed_mu_j = proposed_theta[j];
@@ -493,6 +495,15 @@ int main(void)
                                                     zsqr(proposed_mu_j, proposed_var_j),
                                                     0.0, thrust::plus<double>());
             thrust::advance(chi_iter_begin, n);
+        }
+         */
+        for (int j=0; j<n; j++) {
+            double chi_cent = h_chi[j] - h_theta[0];
+            logdens_pop += -0.5 * chi_cent * chi_cent / exp(h_theta[3]);
+            chi_cent = h_chi[j+n] - h_theta[1];
+            logdens_pop += -0.5 * chi_cent * chi_cent / exp(h_theta[4]);
+            chi_cent = h_chi[j+2*n] - h_theta[2];
+            logdens_pop += -0.5 * chi_cent * chi_cent / exp(h_theta[5]);
         }
         for (int j=0; j<dim_theta/2; j++) {
             logdens_pop += -n / 2.0 * proposed_theta[j + dim_theta];
@@ -534,7 +545,7 @@ int main(void)
         double* p_theta_cholfact = thrust::raw_pointer_cast(&h_theta_cholfact[0]);
         double* p_scaled_proposal = thrust::raw_pointer_cast(&scaled_proposal[0]);
         CholUpdateR1(p_theta_cholfact, p_scaled_proposal, dim_theta, downdate);
-        */
+        
         // Save the theta values
         for (int j=0; j<dim_theta; j++) {
             thetafile << h_theta[j] << " ";

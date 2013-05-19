@@ -169,7 +169,7 @@ void setup_kernel(curandState *state)
 // Perform the MHA update on the n characteristics, done in parallel on the GPU.
 __global__
 void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logdens, double* prop_cholfact,
-                curandState* state, int current_iter)
+                curandState* state, int current_iter, double* p_mha_ratio)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	if (i < n)
@@ -196,9 +196,12 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
             for (int k=0; k<(j+1); k++) {
                 // transform the unit proposal to the centered proposal, drawn from a multivariate normal
                 // or t-distribution.
+                
+                // DOUBLE CHECK THIS: DOES NOT LOOK RIGHT, WHY DOES K NOT APPEAR????
                 scaled_proposal_j += cholfactor[cholfact_index] * snorm_deviate[j];
                 cholfact_index++;
             }
+            scaled_proposal_j = 0.0;
             new_chi[j] = chi[j] + scaled_proposal_j;
             scaled_proposal[j] = scaled_proposal_j;
         }
@@ -217,9 +220,11 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         double logdens_prop = logdens_meas + logdens_pop;
         
         // Compute the Metropolis ratio
-        double ratio = logdens_prop - logdens[i];
+        double ratio = logdens_prop - logdens[i] - logdens_meas;
         ratio = (ratio < 0.0) ? ratio : 0.0;
         ratio = exp(ratio);
+        
+        p_mha_ratio[i] = ratio;
         
         // Now randomly decide whether to accept or reject
         double unif_draw = curand_uniform_double(&localState);
@@ -406,9 +411,12 @@ int main(void)
     //std::ofstream chifile("chis.dat");
     std::ofstream thetafile("thetas.dat");
     
-    int mcmc_iter = 10000;
+    int mcmc_iter = 10;
     int naccept_theta = 0;
     std::cout << "Running MCMC Sampler...." << std::endl;
+    
+    thrust::host_vector<double> h_mha_ratios(n);
+    thrust::device_vector<double> d_mha_ratios(n);
     
     for (int i=0; i<mcmc_iter; i++) {
         // Now grab the pointers to the vectors, needed to run the kernel since it doesn't understand Thrust
@@ -419,8 +427,9 @@ int main(void)
         double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
         double* p_prop_cholfact = thrust::raw_pointer_cast(&d_prop_cholfact[0]);
         double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
+        double* p_mha_ratio = thrust::raw_pointer_cast(&d_mha_ratios[0]);
         int current_iter = i + 1;
-        update_chi<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, n, p_logdens, p_prop_cholfact, devStates, current_iter);
+        update_chi<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, n, p_logdens, p_prop_cholfact, devStates, current_iter, p_mha_ratio);
         
         // Generate new theta in parallel with GPU calculation above
         thrust::host_vector<double> proposed_theta(dim_theta);
@@ -437,14 +446,37 @@ int main(void)
         int cholfact_index = 0;
         for (int j=0; j<dim_theta; j++) {
             for (int k=0; k<(j+1); k++) {
+                // CHECK THIS: SHOULDN'T THIS BE SNORM_DEVIATE[K]?????
                 scaled_proposal[j] += h_theta_cholfact[cholfact_index] * snorm_deviate[j];
                 cholfact_index++;
             }
+            scaled_proposal[j] = 0.0;
             proposed_theta[j] = h_theta[j] + scaled_proposal[j];
         }
         
         CUDA_CALL(cudaDeviceSynchronize());
         
+        h_mha_ratios = d_mha_ratios;
+        double min_mha_ratio = 1e10;
+        double max_mha_ratio = -1.0;
+        for (int idata=0; idata<n; idata++) {
+            min_mha_ratio = std::min(min_mha_ratio, h_mha_ratios[idata]);
+            max_mha_ratio = std::max(max_mha_ratio, h_mha_ratios[idata]);
+        }
+        std::cout << "Iteration: " << current_iter << std::endl;
+        std::cout << "Minimum, Maximum MHA ratio: " << min_mha_ratio << ", " << max_mha_ratio << std::endl;
+        
+        /*
+        std::cout << "Proposed theta: ";
+        for (int j=0; j<dim_theta; ++j) {
+            std::cout << proposed_theta[j] << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "Current theta: ";
+        for (int j=0; j<dim_theta; ++j) {
+            std::cout << h_theta[j] << " ";
+        }
+        std::cout << std::endl;
         // Compute Metropolis ratio
         double logdens_pop = 0.0;
         // right now we loop over the elements of chi because we assume that they are statistically independent, i.e.,
@@ -473,6 +505,8 @@ int main(void)
         double ratio = exp(lograt);
         double unif = uniform(rng);
         
+        std::cout << "MHA ratio for theta: " << ratio << std::endl;
+        
         if (unif < ratio) {
             // Accept the proposed theta
             h_theta = proposed_theta;
@@ -500,7 +534,7 @@ int main(void)
         double* p_theta_cholfact = thrust::raw_pointer_cast(&h_theta_cholfact[0]);
         double* p_scaled_proposal = thrust::raw_pointer_cast(&scaled_proposal[0]);
         CholUpdateR1(p_theta_cholfact, p_scaled_proposal, dim_theta, downdate);
-        
+        */
         // Save the theta values
         for (int j=0; j<dim_theta; j++) {
             thetafile << h_theta[j] << " ";

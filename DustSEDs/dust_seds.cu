@@ -323,8 +323,8 @@ int main(void)
     
     int n = 3; // # of data points
     
-    double mu_norm = 8.5 * log(10);  // Average value of the natural logarithm of the SED normalization
-    double sig_norm = 0.5 * log(10);  // Standard deviation in the SED normalization
+    double mu_norm = 8.5 * log(10.0);  // Average value of the natural logarithm of the SED normalization
+    double sig_norm = 0.5 * log(10.0);  // Standard deviation in the SED normalization
     double mu_beta = 2.0;  // Average value of the SED power-law index
     double sig_beta = 0.2;  // Standard deviation in the SED power-law index
     double mu_temp = log(15.0);  // Average value of the logarithm of the dust temperature

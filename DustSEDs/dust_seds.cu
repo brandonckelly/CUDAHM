@@ -268,7 +268,7 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
             unit_norm += snorm_deviate[j] * snorm_deviate[j];
         }
         unit_norm = sqrt(unit_norm);
-        double decay_sequence = 1.0 / pow(current_iter, c_decay_rate);
+        double decay_sequence = 1.0 / pow((double) current_iter, c_decay_rate);
         double scaled_coef = sqrt(decay_sequence * fabs(ratio - c_target_rate)) / unit_norm;
         for (int j=0; j<c_p; j++) {
             scaled_proposal[j] *= scaled_coef;

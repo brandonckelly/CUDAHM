@@ -523,8 +523,8 @@ int main(void)
             }
             // transform and reduction is over d_chi[j * n : (j+1) * n - 1]
             zsqr zsqrj(proposed_mu_j, proposed_var_j);
-            logdens_pop = thrust::transform_reduce(chi_iter_begin, chi_iter_begin+n-1,
-                                                    zsqrj, logdens_pop, thrust::plus<double>());
+            logdens_pop = thrust::transform_reduce(chi_iter_begin, chi_iter_begin+n,
+                                                zsqrj, logdens_pop, thrust::plus<double>());
             thrust::advance(chi_iter_begin, n);
         }
         std::cout << "logdens_pop from transform_reduce: " << logdens_pop << std::endl;

@@ -207,7 +207,6 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
                 scaled_proposal_j += cholfactor[cholfact_index] * snorm_deviate[k];
                 cholfact_index++;
             }
-            scaled_proposal_j = 0.0;
             new_chi[j] = chi[n * j + i] + scaled_proposal_j;
             scaled_proposal[j] = scaled_proposal_j;
         }
@@ -304,7 +303,7 @@ int main(void)
      collection of the mean and variances of the normal distributions.
     */
 
-    int n = 3; // # of data points
+    int n = 1000; // # of data points
 
     double mu_norm = 8.5 * log(10.0);  // Average value of the natural logarithm of the SED normalization
     double sig_norm = 0.5 * log(10.0);  // Standard deviation in the SED normalization
@@ -415,7 +414,7 @@ int main(void)
     //std::ofstream chifile("chis.dat");
     std::ofstream thetafile("thetas.dat");
 
-    int mcmc_iter = 2;
+    int mcmc_iter = 10000;
     int naccept_theta = 0;
     std::cout << "Running MCMC Sampler...." << std::endl;
 
@@ -451,7 +450,6 @@ int main(void)
                 scaled_proposal[j] += h_theta_cholfact[cholfact_index] * snorm_deviate[k];
                 cholfact_index++;
             }
-            scaled_proposal[j] = 0.0;
             proposed_theta[j] = h_theta[j] + scaled_proposal[j];
         }
 

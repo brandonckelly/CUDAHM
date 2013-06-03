@@ -298,13 +298,9 @@ void generate_data(int ndata, thrust::host_vector<double>& theta, thrust::host_v
 
 	for (int i=0; i<ndata; i++) {
         // Loop over the data indices
-        int diag_index = 0;
 		for (int j=0; j<p; j++) {
             // Loop over the chi indices to generate true value of the characteristics
 			chi[i + ndata * j] = theta[j] + sqrt(exp(theta[p + j])) * snorm(rng);
-            // Initialize the covariance matrix of the chi proposal distribution to be 0.01 * identity(p)
-            prop_cholfact[i + ndata * diag_index] = 0.01;
-            diag_index += j + 2;
         }
         for (int k=0; k<mfeat; k++) {
             // Loop over the feature indices to generate measurements, given the characteristics
@@ -323,6 +319,33 @@ void generate_data(int ndata, thrust::host_vector<double>& theta, thrust::host_v
             meas[k * ndata + i] = SED_ik + sigma_msmt[k] * snorm(rng);
 		}
 	}
+}
+
+// Initialize the chi and theta values. Right now this just initializes them to their true values. Also initialize the Cholesky factors
+// for the chi and theta proposals. The elements of the chi and theta proposals are initially independent.
+void initialize_parameters(int ndata, thrust::host_vector<double>& theta, thrust::host_vector<double>& chi,
+		thrust::host_vector<double>& theta_cholfactor, thrust::host_vector<double>& chi_cholfactor, thrust::host_vector<double>& true_chi) {
+
+	// Initalize the chi values to their true values for now
+	thrust::copy(true_chi.begin(), true_chi.end(), chi.begin());
+
+	// Initialize the cholesky factor for the theta proposals
+    int diag_index = 0;
+    for (int j=0; j<dim_theta; j++) {
+    	// Initialize the covariance matrix of the theta proposal distribution to be 0.01 * identity(p)
+        theta_cholfactor[j] = 1e-2;
+        diag_index += j + 2;
+    }
+
+    // Initialize the cholesky factor for the chi proposals
+    for (int i=0; i<ndata; i++) {
+        int diag_index = 0;
+        for (int j=0; j<p; j++) {
+        	// Initialize the covariance matrix of the chi proposal distribution to be 0.01 * identity(p)
+        	chi_cholfactor[i + ndata * diag_index] = 0.01;
+        	diag_index += j + 2;
+        }
+    }
 }
 
 int main(void)
@@ -359,44 +382,45 @@ int main(void)
     h_theta[4] = log(sig_beta * sig_beta);
     h_theta[5] = log(sig_temp * sig_temp);
 
-    // Construct initial cholesky factor for the covariance matrix of the theta proposal distribution
-    int dim_cholfactor_theta = dim_theta * dim_theta - ((dim_theta - 1) * dim_theta) / 2;
-    thrust::host_vector<double> h_theta_cholfact(dim_cholfactor_theta);
-    int diag_index = 0;
-    for (int j=0; j<dim_theta; j++) {
-        h_theta_cholfact[diag_index] = 1e-2;
-        diag_index += j + 2;
-    }
-
-    // Allocate memory for arrays on host
-    thrust::host_vector<double> h_meas(ndata * mfeat);  // The measurements, m values for each of n data points
+    // Allocate memory for arrays of chi, measurement, and measurement uncertainties on host
+    thrust::host_vector<double> h_meas(ndata * mfeat);  // The measurements, mfeat values for each of ndata data points
 	thrust::host_vector<double> h_meas_unc(ndata * mfeat);  // The measurement uncertainties
-    thrust::host_vector<double> h_chi(ndata * p);  // Unknown characteristics, p values for each of n data points
-
-    // Cholesky factor of proposal distribution for each data point, used by the Metropolis algorithm. The proposal
-    // covariance matrix for each data point is Covar_i = PropChol_i * transpose(PropChol_i).
-    thrust::host_vector<double> h_prop_cholfact(ndata * dim_cholfactor);
-    thrust::fill(h_prop_cholfact.begin(), h_prop_cholfact.end(), 0.0);
-
-	// Create simulated characteristics and data
+    thrust::host_vector<double> h_chi(ndata * p);  // Unknown characteristics, p values for each of ndata data points
     thrust::host_vector<double> h_true_chi(ndata * p);
+
+    // Generate characteristics and data
+    thrust::host_vector<double> h_true_chi(ndata * p); // true values of the chi-values
     double sigma_msmt[5] = {2.2e-4, 3.3e-4, 5.2e-4, 3.7e-4, 2.2e-4};  // Standard deviation for the measurement errors
 
     std::cout << "Generating some data..." << std::endl;
+    generate_data(ndata, h_theta, h_true_chi, h_meas, h_meas_unc);
 
-    // Initialize the chis to their true values for now
-    thrust::copy(h_true_chi.begin(), h_true_chi.end(), h_chi.begin());
+    // Allocate memory for cholesky factors on host.
+    //
+    // Cholesky factor of chi proposal distribution for each data point, used by the Metropolis algorithm. The proposal
+    // covariance matrix of chi for each data point is Covar_i = PropChol_i * transpose(PropChol_i).
+    thrust::host_vector<double> h_chi_cholfactor(ndata * dim_cholfactor);
+    thrust::fill(h_chi_cholfactor.begin(), h_chi_cholfactor.end(), 0.0);
+
+    // Cholesky factor for the covariance matrix of the theta proposal distribution
+    int dim_cholfactor_theta = dim_theta * dim_theta - ((dim_theta - 1) * dim_theta) / 2;
+    thrust::host_vector<double> h_theta_cholfact(dim_cholfactor_theta);
+
+    // Initialize the chi values, as well as the cholesky factors for the theta and chi proposals
+    initialize_parameters(ndata, h_theta, h_chi, h_theta_cholfact, h_chi_cholfactor, h_true_chi);
+
 
     // Allocate memory for arrays on device and copy the values from the host
     thrust::device_vector<double> d_meas = h_meas;
     thrust::device_vector<double> d_meas_unc = h_meas_unc;
     thrust::device_vector<double> d_chi = h_chi;
-    thrust::device_vector<double> d_prop_cholfact = h_prop_cholfact;
+    thrust::device_vector<double> d_chi_cholfactor = h_chi_cholfactor;
     thrust::device_vector<double> d_logdens(ndata);  // log posteriors for an individual data point
 
+    // Initialize the conditional log-posterior of chi|theta
     thrust::fill(d_logdens.begin(), d_logdens.end(), -1.0e300);
 
-	// Load a single set of thetas into constant memory
+	// Load the initial guess for theta into constant memory
     double* p_theta = &h_theta[0];
 	CUDA_CALL(cudaMemcpyToSymbol(c_theta, p_theta, h_theta.size() * sizeof(*p_theta)));
 
@@ -410,6 +434,9 @@ int main(void)
         return 2;
     }
 
+    /*
+    Set up parallel random number generations on the GPU
+    */
     curandState* devStates;  // Create state object for random number generators on the GPU
     // Allocate memory on GPU for RNG states
     CUDA_CALL(cudaMalloc((void **)&devStates, nThreads.x * nBlocks.x *
@@ -417,10 +444,12 @@ int main(void)
     // Initialize the random number generator states on the GPU
     setup_kernel<<<nBlocks,nThreads>>>(devStates);
 
-    // Wait until everything is done running on the GPU, make sure everything went OK
+    // Wait until RNG stuff is done running on the GPU, make sure everything went OK
     CUDA_CALL(cudaDeviceSynchronize());
 
-    // Now run the MCMC sampler
+    /*******************************
+    	Now run the MCMC sampler
+	*******************************/
 
     //std::ofstream chifile("chis.dat");
     std::ofstream thetafile("thetas.dat");
@@ -438,7 +467,7 @@ int main(void)
         double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
         double* p_meas_unc = thrust::raw_pointer_cast(&d_meas_unc[0]);
         double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
-        double* p_prop_cholfact = thrust::raw_pointer_cast(&d_prop_cholfact[0]);
+        double* p_prop_cholfact = thrust::raw_pointer_cast(&d_chi_cholfactor[0]);
         double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
         int current_iter = i + 1;
         update_chi<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, ndata, p_logdens, p_prop_cholfact, devStates, current_iter);

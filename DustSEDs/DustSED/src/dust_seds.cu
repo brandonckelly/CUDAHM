@@ -67,11 +67,11 @@ static __constant__ double c_theta[dim_theta];
 // Constants used for the model SED
 static __constant__ double c_nu0 = 2.3e11;  // reference frequency, nu0 = 230 GHz
 static const double nu0 = 2.3e11;
-static const int m = 5;  // the number of measured features per data point
+static const int mfeat = 5;  // the number of measured features per data point
 static __constant__ int c_m = 5;
     // observational frequencies, corresponding to the Herschel PACS and SPIRES bands
-static const double nu[m] = {4.286e12, 1.765e12, 1.200e12, 8.571e11, 6.000e11};
-static __constant__ double c_nu[m] = {4.286e12, 1.765e12, 1.200e12, 8.571e11, 6.000e11};
+static const double nu[mfeat] = {4.286e12, 1.765e12, 1.200e12, 8.571e11, 6.000e11};
+static __constant__ double c_nu[mfeat] = {4.286e12, 1.765e12, 1.200e12, 8.571e11, 6.000e11};
 static const double hplanck = 6.6260755e-27;  // Planck's constant, in cgs
 static const double clight = 2.997925e10;
 static const double kboltz = 1.380658e-16;
@@ -212,8 +212,8 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         }
 
         // Compute the conditional log-posterior of the proposed parameter values for this data point
-        double meas_i[m];
-        double meas_unc_i[m];
+        double meas_i[mfeat];
+        double meas_unc_i[mfeat];
         for (int k=0; k<c_m; k++) {
             // grab the measurements for this data point
             meas_i[k] = meas[n * k + i];
@@ -303,7 +303,7 @@ int main(void)
      collection of the mean and variances of the normal distributions.
     */
 
-    int n = 1000; // # of data points
+    int ndata = 1000; // # of data points
 
     double mu_norm = 8.5 * log(10.0);  // Average value of the natural logarithm of the SED normalization
     double sig_norm = 0.5 * log(10.0);  // Standard deviation in the SED normalization
@@ -330,46 +330,46 @@ int main(void)
     }
 
     // Allocate memory for arrays on host
-    thrust::host_vector<double> h_meas(n * m);  // The measurements, m values for each of n data points
-	thrust::host_vector<double> h_meas_unc(n * m);  // The measurement uncertainties
-    thrust::host_vector<double> h_chi(n * p);  // Unknown characteristics, p values for each of n data points
+    thrust::host_vector<double> h_meas(ndata * mfeat);  // The measurements, m values for each of n data points
+	thrust::host_vector<double> h_meas_unc(ndata * mfeat);  // The measurement uncertainties
+    thrust::host_vector<double> h_chi(ndata * p);  // Unknown characteristics, p values for each of n data points
 
     // Cholesky factor of proposal distribution for each data point, used by the Metropolis algorithm. The proposal
     // covariance matrix for each data point is Covar_i = PropChol_i * transpose(PropChol_i).
-    thrust::host_vector<double> h_prop_cholfact(n * dim_cholfactor);
+    thrust::host_vector<double> h_prop_cholfact(ndata * dim_cholfactor);
     thrust::fill(h_prop_cholfact.begin(), h_prop_cholfact.end(), 0.0);
 
 	// Create simulated characteristics and data
-    thrust::host_vector<double> h_true_chi(n * p);
+    thrust::host_vector<double> h_true_chi(ndata * p);
     double sigma_msmt[5] = {2.2e-4, 3.3e-4, 5.2e-4, 3.7e-4, 2.2e-4};  // Standard deviation for the measurement errors
 
     std::cout << "Generating some data..." << std::endl;
 
-	for (int i=0; i<n; i++) {
+	for (int i=0; i<ndata; i++) {
         // Loop over the data indices
         int diag_index = 0;
 		for (int j=0; j<p; j++) {
             // Loop over the chi indices to generate true value of the characteristics
-			h_true_chi[i + n * j] = h_theta[j] + sqrt(exp(h_theta[p + j])) * snorm(rng);
+			h_true_chi[i + ndata * j] = h_theta[j] + sqrt(exp(h_theta[p + j])) * snorm(rng);
             // Initialize the covariance matrix of the chi proposal distribution to be 0.01 * identity(p)
-            h_prop_cholfact[i + n * diag_index] = 0.01;
+            h_prop_cholfact[i + ndata * diag_index] = 0.01;
             diag_index += j + 2;
         }
-        for (int k=0; k<m; k++) {
+        for (int k=0; k<mfeat; k++) {
             // Loop over the feature indices to generate measurements, given the characteristics
             double bbody_numer = 2.0 * hplanck * nu[k] * nu[k] * nu[k] / (clight * clight);
-            double temperature = exp(h_true_chi[n * 2 + i]); // Grab the temperature for this data point
+            double temperature = exp(h_true_chi[ndata * 2 + i]); // Grab the temperature for this data point
             double bbody_denom = exp(hplanck * nu[k] / (kboltz * temperature)) - 1.0;
             double bbody = bbody_numer / bbody_denom;
             // Grab the SED normalization and power-law index
             double normalization = exp(h_true_chi[i]);
-            double beta = h_true_chi[n + i];
+            double beta = h_true_chi[ndata + i];
             // Compute the model SED
             double nu_over_nu0 = nu[k] / nu0;
             double SED_ik = normalization * pow(nu_over_nu0, beta) * bbody;
             // Generate measured SEDs
-			h_meas_unc[k * n + i] = sigma_msmt[k];
-            h_meas[k * n + i] = SED_ik + sigma_msmt[k] * snorm(rng);
+			h_meas_unc[k * ndata + i] = sigma_msmt[k];
+            h_meas[k * ndata + i] = SED_ik + sigma_msmt[k] * snorm(rng);
 		}
 	}
 
@@ -381,7 +381,7 @@ int main(void)
     thrust::device_vector<double> d_meas_unc = h_meas_unc;
     thrust::device_vector<double> d_chi = h_chi;
     thrust::device_vector<double> d_prop_cholfact = h_prop_cholfact;
-    thrust::device_vector<double> d_logdens(n);  // log posteriors for an individual data point
+    thrust::device_vector<double> d_logdens(ndata);  // log posteriors for an individual data point
 
     thrust::fill(d_logdens.begin(), d_logdens.end(), -1.0e300);
 
@@ -391,7 +391,7 @@ int main(void)
 
     // Cuda grid launch
     dim3 nThreads(256);
-    dim3 nBlocks((n + nThreads.x-1) / nThreads.x);
+    dim3 nBlocks((ndata + nThreads.x-1) / nThreads.x);
     printf("nBlocks: %d\n", nBlocks.x);  // no more than 64k blocks!
     if (nBlocks.x > 65535)
     {
@@ -430,7 +430,7 @@ int main(void)
         double* p_prop_cholfact = thrust::raw_pointer_cast(&d_prop_cholfact[0]);
         double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
         int current_iter = i + 1;
-        update_chi<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, n, p_logdens, p_prop_cholfact, devStates, current_iter);
+        update_chi<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, ndata, p_logdens, p_prop_cholfact, devStates, current_iter);
 
         // Generate new theta in parallel with GPU calculation above
         thrust::host_vector<double> proposed_theta(dim_theta);
@@ -470,9 +470,9 @@ int main(void)
             double proposed_var_j = exp(proposed_theta[j + p]);
             // transform and reduction is over d_chi[j * n : (j+1) * n - 1]
             zsqr zsqrj(proposed_mu_j, proposed_var_j);
-            logdens_pop = thrust::transform_reduce(chi_iter_begin, chi_iter_begin+n,
+            logdens_pop = thrust::transform_reduce(chi_iter_begin, chi_iter_begin+ndata,
                                                 zsqrj, logdens_pop, thrust::plus<double>());
-            thrust::advance(chi_iter_begin, n);
+            thrust::advance(chi_iter_begin, ndata);
         }
 
         double logdens_old = thrust::reduce(d_logdens.begin(), d_logdens.end());

@@ -29,6 +29,11 @@
 #include <math.h>
 #include <vector>
 
+// Boost includes
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/normal_distribution.hpp>
+#include <boost/random/uniform_real_distribution.hpp>
+
 //#include <thrust/sort.h>
 //#include <thrust/copy.h>
 
@@ -77,6 +82,13 @@ static const double clight = 2.997925e10;
 static const double kboltz = 1.380658e-16;
 static __constant__ double c_2h_over_csqr = 1.4745002e-47;  // 2 * hplanck / clight^2, used in the Planck function
 static __constant__ double c_h_over_k = 4.7992157e-11;  // hplanck / kboltz
+
+// Global random number generator and distributions for generating random numbers on the host. The random number generator used
+// is the Mersenne Twister mt19937 from the BOOST library.
+
+boost::random::mt19937 rng;
+boost::random::normal_distribution<> snorm(0.0, 1.0); // Standard normal distribution
+boost::random::uniform_real_distribution<> uniform(0.0, 1.0); // Uniform distribution from 0.0 to 1.0
 
 // Function to return the model SED at a input frequency, given the characteristics chi = (norm, beta, temp)
 __device__
@@ -278,17 +290,44 @@ struct zsqr : public thrust::unary_function<double,double> {
     }
 };
 
+// Generate a data set and fill the chi, meas, and meas_sigma host vector with the values
+void generate_data(int ndata, thrust::host_vector<double>& theta, thrust::host_vector<double>& chi, thrust::host_vector<double>& meas,
+		thrust::host_vector<double>& meas_sigma) {
+
+	double sigma_msmt[5] = {2.2e-4, 3.3e-4, 5.2e-4, 3.7e-4, 2.2e-4};  // Standard deviation for the measurement errors
+
+	for (int i=0; i<ndata; i++) {
+        // Loop over the data indices
+        int diag_index = 0;
+		for (int j=0; j<p; j++) {
+            // Loop over the chi indices to generate true value of the characteristics
+			chi[i + ndata * j] = theta[j] + sqrt(exp(theta[p + j])) * snorm(rng);
+            // Initialize the covariance matrix of the chi proposal distribution to be 0.01 * identity(p)
+            prop_cholfact[i + ndata * diag_index] = 0.01;
+            diag_index += j + 2;
+        }
+        for (int k=0; k<mfeat; k++) {
+            // Loop over the feature indices to generate measurements, given the characteristics
+            double bbody_numer = 2.0 * hplanck * nu[k] * nu[k] * nu[k] / (clight * clight);
+            double temperature = exp(chi[ndata * 2 + i]); // Grab the temperature for this data point
+            double bbody_denom = exp(hplanck * nu[k] / (kboltz * temperature)) - 1.0;
+            double bbody = bbody_numer / bbody_denom;
+            // Grab the SED normalization and power-law index
+            double normalization = exp(chi[i]);
+            double beta = chi[ndata + i];
+            // Compute the model SED
+            double nu_over_nu0 = nu[k] / nu0;
+            double SED_ik = normalization * pow(nu_over_nu0, beta) * bbody;
+            // Generate measured SEDs
+			meas_sigma[k * ndata + i] = sigma_msmt[k];
+            meas[k * ndata + i] = SED_ik + sigma_msmt[k] * snorm(rng);
+		}
+	}
+}
 
 int main(void)
 {
     /* TODO: Should use the boost random number generator libraries for doing this on the host */
-
-    // Random number generator and distribution needed to simulate some data
-	// unsigned int seed = 98724732;
-    unsigned int seed = 123455;
-	static thrust::minstd_rand rng(seed);
-	thrust::random::experimental::normal_distribution<double> snorm(0., 1.0);
-    thrust::random::uniform_real_distribution<double> uniform(0.0, 1.0);
 
     /*
      Population level parameters: theta, where theta parameterizes the distribution of chi.
@@ -344,34 +383,6 @@ int main(void)
     double sigma_msmt[5] = {2.2e-4, 3.3e-4, 5.2e-4, 3.7e-4, 2.2e-4};  // Standard deviation for the measurement errors
 
     std::cout << "Generating some data..." << std::endl;
-
-	for (int i=0; i<ndata; i++) {
-        // Loop over the data indices
-        int diag_index = 0;
-		for (int j=0; j<p; j++) {
-            // Loop over the chi indices to generate true value of the characteristics
-			h_true_chi[i + ndata * j] = h_theta[j] + sqrt(exp(h_theta[p + j])) * snorm(rng);
-            // Initialize the covariance matrix of the chi proposal distribution to be 0.01 * identity(p)
-            h_prop_cholfact[i + ndata * diag_index] = 0.01;
-            diag_index += j + 2;
-        }
-        for (int k=0; k<mfeat; k++) {
-            // Loop over the feature indices to generate measurements, given the characteristics
-            double bbody_numer = 2.0 * hplanck * nu[k] * nu[k] * nu[k] / (clight * clight);
-            double temperature = exp(h_true_chi[ndata * 2 + i]); // Grab the temperature for this data point
-            double bbody_denom = exp(hplanck * nu[k] / (kboltz * temperature)) - 1.0;
-            double bbody = bbody_numer / bbody_denom;
-            // Grab the SED normalization and power-law index
-            double normalization = exp(h_true_chi[i]);
-            double beta = h_true_chi[ndata + i];
-            // Compute the model SED
-            double nu_over_nu0 = nu[k] / nu0;
-            double SED_ik = normalization * pow(nu_over_nu0, beta) * bbody;
-            // Generate measured SEDs
-			h_meas_unc[k * ndata + i] = sigma_msmt[k];
-            h_meas[k * ndata + i] = SED_ik + sigma_msmt[k] * snorm(rng);
-		}
-	}
 
     // Initialize the chis to their true values for now
     thrust::copy(h_true_chi.begin(), h_true_chi.end(), h_chi.begin());

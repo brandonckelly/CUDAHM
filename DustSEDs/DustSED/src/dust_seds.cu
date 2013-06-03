@@ -129,27 +129,6 @@ double logdensity_pop(double* chi, double* theta) {
     return logdensity;
 }
 
-// Function to compute the conditional log-density of the chi values given theta
-double h_logdensity_pop(double* chi, double* theta) {
-    int dim_chi = p;
-    int ntheta = dim_theta;
-    // right now this is just an independent p-dimensional gaussian distribution, for simplicity
-    std::cout << "theta: ";
-    for (int j=0; j<dim_theta; j++) {
-        std::cout << " " << theta[j];
-    }
-    std::cout << std::endl;
-    double logdensity = 0.0;
-    for (int j=0; j<dim_chi; j++) {
-        double mu_j = theta[j];
-        double var_j = exp(theta[j + dim_chi]);
-        double centered_chi_j = chi[j] - mu_j;
-        std::cout << "mu_j: " << mu_j << ", var_j: " << var_j << ", chi[j]: " << chi[j] << std::endl;
-        logdensity += -0.5 * log(var_j) - 0.5 * centered_chi_j * centered_chi_j / var_j;
-    }
-    return logdensity;
-}
-
 // Function to compute the rank-1 Cholesky update/downdate. Note that this is done in place.
 __device__ __host__
 void CholUpdateR1(double* cholfactor, double* v, int dim_v, bool downdate) {
@@ -198,7 +177,7 @@ void setup_kernel(curandState *state)
 // Perform the MHA update on the n characteristics, done in parallel on the GPU.
 __global__
 void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logdens, double* prop_cholfact,
-                curandState* state, int current_iter, double* p_mha_ratio)
+                curandState* state, int current_iter)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	if (i < n)
@@ -225,9 +204,7 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
             for (int k=0; k<(j+1); k++) {
                 // transform the unit proposal to the centered proposal, drawn from a multivariate normal
                 // or t-distribution.
-
-                // DOUBLE CHECK THIS: DOES NOT LOOK RIGHT, WHY DOES K NOT APPEAR????
-                scaled_proposal_j += cholfactor[cholfact_index] * snorm_deviate[j];
+                scaled_proposal_j += cholfactor[cholfact_index] * snorm_deviate[k];
                 cholfact_index++;
             }
             scaled_proposal_j = 0.0;
@@ -252,8 +229,6 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         double ratio = logdens_prop - logdens[i] - logdens_meas;
         ratio = (ratio < 0.0) ? ratio : 0.0;
         ratio = exp(ratio);
-
-        p_mha_ratio[i] = ratio;
 
         // Now randomly decide whether to accept or reject
         double unif_draw = curand_uniform_double(&localState);
@@ -384,7 +359,7 @@ int main(void)
         for (int k=0; k<m; k++) {
             // Loop over the feature indices to generate measurements, given the characteristics
             double bbody_numer = 2.0 * hplanck * nu[k] * nu[k] * nu[k] / (clight * clight);
-            double temperature = exp(h_true_chi[n * 2 + i]); // Grap the temperature for this data point
+            double temperature = exp(h_true_chi[n * 2 + i]); // Grab the temperature for this data point
             double bbody_denom = exp(hplanck * nu[k] / (kboltz * temperature)) - 1.0;
             double bbody = bbody_numer / bbody_denom;
             // Grab the SED normalization and power-law index
@@ -444,8 +419,6 @@ int main(void)
     int naccept_theta = 0;
     std::cout << "Running MCMC Sampler...." << std::endl;
 
-    thrust::host_vector<double> h_mha_ratios(n);
-    thrust::device_vector<double> d_mha_ratios(n);
     thrust::host_vector<double> h_logdens;
 
     for (int i=0; i<mcmc_iter; i++) {
@@ -457,9 +430,8 @@ int main(void)
         double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
         double* p_prop_cholfact = thrust::raw_pointer_cast(&d_prop_cholfact[0]);
         double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
-        double* p_mha_ratio = thrust::raw_pointer_cast(&d_mha_ratios[0]);
         int current_iter = i + 1;
-        update_chi<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, n, p_logdens, p_prop_cholfact, devStates, current_iter, p_mha_ratio);
+        update_chi<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, n, p_logdens, p_prop_cholfact, devStates, current_iter);
 
         // Generate new theta in parallel with GPU calculation above
         thrust::host_vector<double> proposed_theta(dim_theta);
@@ -476,8 +448,7 @@ int main(void)
         int cholfact_index = 0;
         for (int j=0; j<dim_theta; j++) {
             for (int k=0; k<(j+1); k++) {
-                // CHECK THIS: SHOULDN'T THIS BE SNORM_DEVIATE[K]?????
-                scaled_proposal[j] += h_theta_cholfact[cholfact_index] * snorm_deviate[j];
+                scaled_proposal[j] += h_theta_cholfact[cholfact_index] * snorm_deviate[k];
                 cholfact_index++;
             }
             scaled_proposal[j] = 0.0;
@@ -488,30 +459,8 @@ int main(void)
         h_chi = d_chi;
         h_logdens = d_logdens;
 
-        h_mha_ratios = d_mha_ratios;
-        double min_mha_ratio = 1e10;
-        double max_mha_ratio = -1.0;
-        for (int idata=0; idata<n; idata++) {
-            min_mha_ratio = std::min(min_mha_ratio, h_mha_ratios[idata]);
-            max_mha_ratio = std::max(max_mha_ratio, h_mha_ratios[idata]);
-        }
-        std::cout << std::endl;
-        std::cout << "Iteration: " << current_iter << std::endl;
-        std::cout << "Minimum, Maximum MHA ratio: " << min_mha_ratio << ", " << max_mha_ratio << std::endl;
-
-        /*
-        std::cout << "Proposed theta: ";
-        for (int j=0; j<dim_theta; ++j) {
-            std::cout << proposed_theta[j] << " ";
-        }
-        std::cout << std::endl;
-        std::cout << "Current theta: ";
-        for (int j=0; j<dim_theta; ++j) {
-            std::cout << h_theta[j] << " ";
-        }
-        std::cout << std::endl;
-         */
         // Compute Metropolis ratio
+        //
         // right now we loop over the elements of chi because we assume that they are statistically independent, i.e.,
         // the theta array does not contain correlations among the element of chi. this is unrealistic, and we will need
         // to come up with a better way to do the transform + reduction: maybe use CUBLAS?
@@ -521,76 +470,18 @@ int main(void)
         for (int j=0; j<dim_theta/2; j++) {
             double proposed_mu_j = proposed_theta[j];
             double proposed_var_j = exp(proposed_theta[j + p]);
-            /*
-            std::cout << "h_chi (begin,end): " << h_chi[j * n] << " " << h_chi[(j+1)*n-1] << std::endl;
-            std::cout << "d_chi (begin,end): " << d_chi[j * n] << " " << d_chi[(j+1)*n-1] << std::endl;
-            std::cout << "chi_iter (begin,end): " << *chi_iter_begin << " " << *(chi_iter_begin+n-1) << std::endl;
-             */
-            for (int idata=0; idata<n; idata++) {
-                std::cout << "h_chi: " << h_chi[idata + j*n] << ", iterator: " << *(chi_iter_begin+idata) << std::endl;
-            }
             // transform and reduction is over d_chi[j * n : (j+1) * n - 1]
             zsqr zsqrj(proposed_mu_j, proposed_var_j);
             logdens_pop = thrust::transform_reduce(chi_iter_begin, chi_iter_begin+n,
                                                 zsqrj, logdens_pop, thrust::plus<double>());
             thrust::advance(chi_iter_begin, n);
         }
-        std::cout << "logdens_pop from transform_reduce: " << logdens_pop << std::endl;
-        logdens_pop = 0.0;
-        zsqr zsqr0(h_theta[0], exp(h_theta[3]));
-        zsqr zsqr1(h_theta[1], exp(h_theta[4]));
-        zsqr zsqr2(h_theta[2], exp(h_theta[5]));
-        for (int j=0; j<n; j++) {
-            double chi_cent = h_chi[j] - h_theta[0];
-            logdens_pop += zsqr0(h_chi[j]);
-            //logdens_pop += -0.5 * h_theta[3] - 0.5 * chi_cent * chi_cent / exp(h_theta[3]);
-            chi_cent = h_chi[j+n] - h_theta[1];
-            logdens_pop += zsqr1(h_chi[j+n]);
-            //logdens_pop += -0.5 * h_theta[4] - 0.5 * chi_cent * chi_cent / exp(h_theta[4]);
-            chi_cent = h_chi[j+2*n] - h_theta[2];
-            logdens_pop += zsqr2(h_chi[j+2*n]);
-            //logdens_pop += -0.5 * h_theta[5] - 0.5 * chi_cent * chi_cent / exp(h_theta[5]);
-        }
-        std::cout << "logdens_pop: " << logdens_pop << std::endl;
-        std::cout << "h_theta: ";
-        for (int j=0; j<dim_theta; j++) {
-            std::cout << " " << h_theta[j];
-        }
-        std::cout << std::endl;
-
-        double logdens_pop2 = 0.0;
-        for (int j=0; j<n; j++) {
-            double logdens_pop_j = 0.0;
-            double chi_cent = h_chi[j] - h_theta[0];
-            logdens_pop_j += -0.5 * h_theta[3] - 0.5 * chi_cent * chi_cent / exp(h_theta[3]);
-            chi_cent = h_chi[j+n] - h_theta[1];
-            logdens_pop_j += -0.5 * h_theta[4] - 0.5 * chi_cent * chi_cent / exp(h_theta[4]);
-            chi_cent = h_chi[j+2*n] - h_theta[2];
-            logdens_pop_j += -0.5 * h_theta[5] - 0.5 * chi_cent * chi_cent / exp(h_theta[5]);
-            double logdens_pop_j2;
-            double chi_j[3];
-            chi_j[0] = h_chi[j];
-            chi_j[1] = h_chi[j+n];
-            chi_j[2] = h_chi[j+2*n];
-            std::cout << std::endl;
-            std::cout << "iteration: " << j << std::endl;
-            logdens_pop_j2 = h_logdensity_pop(chi_j, &h_theta[0]);
-            std::cout << "chi: " << h_chi[j] << " " << h_chi[j+n] << " " << h_chi[j+2*n] << std::endl;
-            std::cout << chi_j[0] << " " << chi_j[1] << " " << chi_j[2] << std::endl;
-            std::cout << "logdensity: " << logdens_pop_j << " " << logdens_pop_j2 << std::endl;
-            logdens_pop2 += logdens_pop_j;
-        }
-
 
         double logdens_old = thrust::reduce(d_logdens.begin(), d_logdens.end());
-        std::cout << "logdens_pop: " << logdens_pop << " logdens_old: " << logdens_old <<
-        " logdens_pop2: " << logdens_pop2 << std::endl;
         double lograt = logdens_pop - logdens_old;
         lograt = std::min(lograt, 0.0);
         double ratio = exp(lograt);
         double unif = uniform(rng);
-
-        //std::cout << "MHA ratio for theta: " << ratio << std::endl;
 
         if (unif < ratio) {
             // Accept the proposed theta

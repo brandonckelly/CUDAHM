@@ -219,6 +219,7 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
                 scaled_proposal_j += cholfactor[cholfact_index] * snorm_deviate[k];
                 cholfact_index++;
             }
+            scaled_proposal_j = 0.0;
             new_chi[j] = chi[n * j + i] + scaled_proposal_j;
             scaled_proposal[j] = scaled_proposal_j;
         }
@@ -333,7 +334,7 @@ void initialize_parameters(int ndata, thrust::host_vector<double>& theta, thrust
     int diag_index = 0;
     for (int j=0; j<dim_theta; j++) {
     	// Initialize the covariance matrix of the theta proposal distribution to be 0.01 * identity(p)
-        theta_cholfactor[j] = 1e-2;
+        theta_cholfactor[diag_index] = 1e-2;
         diag_index += j + 2;
     }
 
@@ -346,6 +347,46 @@ void initialize_parameters(int ndata, thrust::host_vector<double>& theta, thrust
         	diag_index += j + 2;
         }
     }
+}
+
+// Test the rank-1 cholesky update
+void test_CholUpdateR1() {
+	int dim_cf = 4;
+	int size_cf = 10; //dim_cf * dim_cf - ((dim_cf - 1) * dim_cf) / 2
+	double L[10] = {31.088, 7.759, 31.559, 7.632, 6.998, 29.739, 6.345, 7.080, 6.108, 29.015};
+	// true values of the updated cholesky factor for A = L * transpose(L) +/- v * transpose(v)
+	double Lup0[10] = {31.542, 4.726, 36.504, 6.898, 8.527, 29.748, 7.414, 3.262, 5.894, 30.270};
+	double Ldown0[10] = {30.628, 10.884, 25.278, 8.389, 4.944, 29.718, 5.246, 13.219, 6.581, 26.017};
+	double v[4] = {-5.331, 17.284, 3.691, -6.861};
+
+	double Ldown[10];
+	double Lup[10];
+	double vup[4];
+	double vdown[4];
+	for (int i=0; i<size_cf; i++) {
+		Lup[i] = L[i];
+		Ldown[i] = L[i];
+	}
+	for (int i=0; i<dim_cf; i++) {
+		vup[i] = v[i];
+		vdown[i] = v[i];
+	}
+
+	// test the update first
+	CholUpdateR1(Lup, vup, dim_cf, false);
+	CholUpdateR1(Ldown, vdown, dim_cf, true);
+	double fracdiff_up = 0.0;
+	double fracdiff_down = 0.0;
+	for (int i=0; i<size_cf; i++) {
+		std::cout << "Lup[i]: " << Lup[i] << ", Ldown[i]: " << Ldown[i] << std::endl;
+		double fracdiff = abs(Lup[i] - Lup0[i]) / Lup0[i];
+		fracdiff_up = max(fracdiff_up, fracdiff);
+		fracdiff = abs(Ldown[i] - Ldown0[i]) / Ldown0[i];
+		fracdiff_down = max(fracdiff_down, fracdiff);
+	}
+	std::cout << "test_CholUpdateR1:" << std::endl;
+	std::cout << "Maximum fractional difference for rank-1 update: " << fracdiff_up << std::endl;
+	std::cout << "Maximum fractional difference for rank-1 downdat: " << fracdiff_down << std::endl;
 }
 
 int main(void)
@@ -389,9 +430,6 @@ int main(void)
     thrust::host_vector<double> h_true_chi(ndata * p);
 
     // Generate characteristics and data
-    thrust::host_vector<double> h_true_chi(ndata * p); // true values of the chi-values
-    double sigma_msmt[5] = {2.2e-4, 3.3e-4, 5.2e-4, 3.7e-4, 2.2e-4};  // Standard deviation for the measurement errors
-
     std::cout << "Generating some data..." << std::endl;
     generate_data(ndata, h_theta, h_true_chi, h_meas, h_meas_unc);
 
@@ -435,7 +473,7 @@ int main(void)
     }
 
     /*
-    Set up parallel random number generations on the GPU
+    Set up parallel random number generators on the GPU
     */
     curandState* devStates;  // Create state object for random number generators on the GPU
     // Allocate memory on GPU for RNG states
@@ -454,7 +492,7 @@ int main(void)
     //std::ofstream chifile("chis.dat");
     std::ofstream thetafile("thetas.dat");
 
-    int mcmc_iter = 10000;
+    int mcmc_iter = 5000;
     int naccept_theta = 0;
     std::cout << "Running MCMC Sampler...." << std::endl;
 

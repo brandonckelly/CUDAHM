@@ -218,7 +218,7 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
                 scaled_proposal_j += cholfactor[cholfact_index] * snorm_deviate[k];
                 cholfact_index++;
             }
-
+            // scaled_proposal_j = 0.0;
             new_chi[j] = chi[n * j + i] + scaled_proposal_j;
             scaled_proposal[j] = scaled_proposal_j;
         }
@@ -260,6 +260,7 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
                 chi[n * j + i] = new_chi[j];
             }
             logdens_pop[i] = logdens_pop_prop;
+            logdens_meas[i] = logdens_meas_prop;
             ++naccept[i];
         }
 
@@ -348,6 +349,10 @@ void generate_data(int ndata, thrust::host_vector<double>& theta, thrust::host_v
 
 	double sigma_msmt[5] = {2.2e-4, 3.3e-4, 5.2e-4, 3.7e-4, 2.2e-4};  // Standard deviation for the measurement errors
 
+	for (int j = 0; j < mfeat; ++j) {
+		sigma_msmt[j] *= 1.0;
+	}
+
 	for (int i=0; i<ndata; i++) {
         // Loop over the data indices
 		for (int j=0; j<p; j++) {
@@ -388,7 +393,7 @@ void initialize_parameters(int ndata, thrust::host_vector<double>& theta, thrust
 	}
 
 	for (int j = 0; j < dim_theta; ++j) {
-		theta[j] *= 0.2 * snorm(rng);
+		theta[j] = theta[j] + theta[j] * 0.2 * snorm(rng);
 	}
 
 	// Initialize the cholesky factor for the theta proposals
@@ -517,7 +522,7 @@ int main(void)
     thrust::device_vector<double> d_logdens_pop(ndata); // log densities of theta values for each chi
 
    	// Load the initial guess for theta into constant memory
-    double* p_theta = &h_theta[0];
+    double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
 	CUDA_CALL(cudaMemcpyToSymbol(c_theta, p_theta, h_theta.size() * sizeof(*p_theta)));
 
     // Cuda grid launch
@@ -530,27 +535,24 @@ int main(void)
         return 2;
     }
 
-    /*
-    Set up parallel random number generators on the GPU
-    */
-    curandState* devStates;  // Create state object for random number generators on the GPU
-    // Allocate memory on GPU for RNG states
-    CUDA_CALL(cudaMalloc((void **)&devStates, nThreads.x * nBlocks.x *
-                         sizeof(curandState)));
-    // Initialize the random number generator states on the GPU
-    setup_kernel<<<nBlocks,nThreads>>>(devStates);
-
-    // Wait until RNG stuff is done running on the GPU, make sure everything went OK
-    CUDA_CALL(cudaDeviceSynchronize());
-
     /*******************************
     	Now run the MCMC sampler
 	*******************************/
+    // Set up parallel random number generators on the GPU
+    curandState* devStates;  // Create state object for random number generators on the GPU
+    // Allocate memory on GPU for RNG states
+    CUDA_CALL(cudaMalloc((void **)&devStates, nThreads.x * nBlocks.x *
+    		sizeof(curandState)));
+     // Initialize the random number generator states on the GPU
+     setup_kernel<<<nBlocks,nThreads>>>(devStates);
+
+     // Wait until RNG stuff is done running on the GPU, make sure everything went OK
+     CUDA_CALL(cudaDeviceSynchronize());
 
     //std::ofstream chifile("chis.dat");
     std::ofstream thetafile("thetas.dat");
     std::ofstream chifile("chi0.dat");
-    int mcmc_iter = 25000;
+    int mcmc_iter = 50000;
     int naccept_theta = 0;
     std::cout << "Running MCMC Sampler...." << std::endl;
 
@@ -617,6 +619,7 @@ int main(void)
                 scaled_proposal[j] += h_theta_cholfact[cholfact_index] * snorm_deviate[k];
                 cholfact_index++;
             }
+            //scaled_proposal[j] = 0.0;
             proposed_theta[j] = h_theta[j] + scaled_proposal[j];
         }
 
@@ -639,21 +642,6 @@ int main(void)
 		*/
 
         // Update the theta values
-
-        /*
-        thrust::device_vector<double>::iterator chi_iter_begin = d_chi.begin();
-
-        double logdens_pop = 0.0;
-        for (int j=0; j<dim_theta/2; j++) {
-            double proposed_mu_j = proposed_theta[j];
-            double proposed_var_j = exp(proposed_theta[j + p]);
-            // transform and reduction is over d_chi[j * n : (j+1) * n - 1]
-            zsqr zsqrj(proposed_mu_j, proposed_var_j);
-            logdens_pop = thrust::transform_reduce(chi_iter_begin, chi_iter_begin+ndata,
-                                                zsqrj, logdens_pop, thrust::plus<double>());
-            thrust::advance(chi_iter_begin, ndata);
-        }
-        */
 
         // get log-density of current value of theta
         double logdens_old = thrust::reduce(d_logdens_pop.begin(), d_logdens_pop.end());
@@ -712,12 +700,14 @@ int main(void)
         for (int j=0; j<dim_theta; j++) {
             thetafile << h_theta[j] << " ";
         }
-        thetafile << std::endl;
+        double logdens_pop = thrust::reduce(d_logdens_pop.begin(), d_logdens_pop.end());
+        thetafile << logdens_pop << std::endl;
         // Save the chi values
         for (int j=0; j<p; j++) {
         	chifile << h_chi[ndata * j] << " ";
         }
-        chifile << std::endl;
+        double logdens_meas = thrust::reduce(d_logdens_meas.begin(), d_logdens_meas.end());
+        chifile << logdens_meas << std::endl;
     }
     thetafile.close();
 

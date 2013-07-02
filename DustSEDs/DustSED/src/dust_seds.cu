@@ -325,20 +325,23 @@ void g_logdens_pop(double* chi, int ndata, double* logdens_pop)
 		for (int j=0; j<p; j++) {
 			this_chi[j] = chi[j * ndata + i];
 		}
-		logdens_pop[i] = logdensity_pop(this_chi, c_theta);
+		double chi_sum = 0.0;
+		for (int j = 0; j < p; ++j) {
+			chi_sum += this_chi[j];
+		}
+
+		logdens_pop[i] = chi_sum;
 	}
 }
 
-/*
-struct zsqr : public thrust::unary_function<double,double> {
-    double mu, var;
-    zsqr(double m, double v) : mu(m), var(v) {}
-
+struct zsqr : public thrust::unary_function<double*,double> {
     __device__ __host__
     double operator()(double* chi) {
-        double chi_cent = chi - mu;
-        double logdens_pop = -0.5 * log(var) - 0.5 * chi_cent * chi_cent / var;
-        return logdens_pop;
+    	double chi_sum = 0.0;
+    	for (int j = 0; j < p; ++j) {
+			chi_sum += chi[j];
+		}
+        return chi_sum;
     }
 };
 */

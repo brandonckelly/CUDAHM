@@ -33,44 +33,10 @@ static const int p = 8;
 		exit(1);															\
 	} }
 
-// calculate the logdensity of theta for each chi on the device, needed for updating theta
-__global__
-void g_logdens_pop(double* chi, int ndata, double* logdens_pop)
-{
-	int i = blockDim.x * blockIdx.x + threadIdx.x;
-	if (i < ndata)
-	{
-		double this_chi[p];
-		for (int j=0; j<p; j++) {
-			this_chi[j] = chi[j * ndata + i];
-		}
-		double chi_sum = 0.0;
-		for (int j = 0; j < p; ++j) {
-			chi_sum += this_chi[j];
-		}
-
-		logdens_pop[i] = chi_sum;
-	}
-}
-
-struct zsqr : public thrust::unary_function<double,double> {
-    __device__ __host__
-    double operator()(double* chi) {
-    	double chi_sum = 0.0;
-    	for (int j = 0; j < p; ++j) {
-			chi_sum += chi[j];
-		}
-        return chi_sum;
-    }
-};
 
 int main(void) {
 
-	unsigned int ndata = 100000;
-
-	thrust::host_vector<double> h_chi(ndata * p);
-	thrust::fill(h_chi.begin(), h_chi.end(), 3.4);
-	thrust::device_vector<double> d_chi = h_chi;
+	unsigned int ndata = 10000;
 
     // Cuda grid launch
     dim3 nThreads(256);
@@ -81,19 +47,5 @@ int main(void) {
         std::cerr << "ERROR: Block is too large" << std::endl;
         return 2;
     }
-
-    double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
-    thrust::host_vector<double> h_logdens(ndata * p);
-    thrust::device_vector<double> d_logdens = h_logdens;
-    double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
-    g_logdens_pop<<<nBlocks,nThreads>>>(p_chi, ndata, p_logdens);
-    cudaDeviceSynchronize();
-    double logdens_global = thrust::reduce(d_logdens.begin(), d_logdens.end());
-
-    double logdens_zsqr = 0.0;
-    zsqr zsqr0;
-    logdens_zsqr = thrust::transform_reduce(d_chi.begin(), d_chi.end(), zsqr0, 0.0, thrust::plus<double>);
-
-    std::cout << "logdens_global: " << logdens_global << ", logdens_zsqr: " << logdens_zsqr << std::endl;
 
 }

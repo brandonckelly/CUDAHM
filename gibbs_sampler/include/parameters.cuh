@@ -22,11 +22,16 @@ class PopulationPar; // forward declaration so that DataAugmentation knows about
 
 // Base class for a data augmentation.
 class DataAugmentation {
+
+private:
+	// dimension of characteristics vector. this must be explicitly added by derived classes
+	int pchi = 2;
+
 public:
 	// Constructor when storing the measurements in std::vector
 	DataAugmentation(vecvec& meas, vecvec& meas_unc);
 	// Constructor when storing the measurements in arrays of pointers
-	DataAugmentation(double** meas, double** meas_unc, int ndata, int mfeat);
+	DataAugmentation(double** meas, double** meas_unc, int n, int m);
 
 	// Default Destructor
 	~DataAugmentation();
@@ -59,6 +64,7 @@ public:
 	thrust::host_vector<double> GetLogDensMeas();
 
 protected:
+	void _SetArraySizes(); // set the sizes of the data members
 	// measurements and their uncertainties
 	thrust::host_vector<double> h_meas;
 	thrust::host_vector<double> h_meas_unc;
@@ -69,7 +75,6 @@ protected:
 	// characteristics
 	thrust::host_vector<double> h_chi;
 	thrust::device_vector<double> d_chi;
-	int pchi;
 	// population-level parameters
 	PopulationPar& theta;
 	// logarithm of conditional posterior densities
@@ -84,6 +89,11 @@ protected:
 
 // Base class for a population level parameter
 class PopulationPar {
+
+private:
+	// dimension of the population parameters. this must be explicitly set in derived classes.
+	int dim_theta = 2;
+
 public:
 	// constructor
 	PopulationPar(DataAugmentation& daug);

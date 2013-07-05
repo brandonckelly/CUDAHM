@@ -236,7 +236,7 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         double logdens_pop_prop = logdensity_pop(new_chi, c_theta);
         double logdens_prop = logdens_meas_prop + logdens_pop_prop;
 
-        bool finite_logdens = isfinite(logdens_prop);
+        bool finite_logdens = std::isfinite(logdens_prop);
 
         // Compute the Metropolis ratio
         double logdens_old = logdens_pop[i] + logdens_meas[i];

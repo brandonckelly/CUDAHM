@@ -26,6 +26,14 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
+#define CUDA_CHECK_RETURN(value) {											\
+	cudaError_t _m_cudaStat = value;										\
+	if (_m_cudaStat != cudaSuccess) {										\
+		fprintf(stderr, "Error %s at line %d in file %s\n",					\
+				cudaGetErrorString(_m_cudaStat), __LINE__, __FILE__);		\
+		exit(1);															\
+	} }
+
 typedef std::vector<std::vector<double> > vecvec;
 typedef hvector hvector;
 typedef dvector dvector;
@@ -35,6 +43,14 @@ typedef dvector dvector;
 boost::random::mt19937 rng;
 boost::random::normal_distribution<> snorm(0.0, 1.0); // Standard normal distribution
 boost::random::uniform_real_distribution<> uniform(0.0, 1.0); // Uniform distribution from 0.0 to 1.0
+
+// constant memory contains array sizes and MCMC sampler parameters
+__constant__ int c_ndata; // # of data points
+__constant__ int c_mfeat; // # of measured features per data point
+__constant__ int c_pchi; // # of characteristics per data point
+__constant__ int c_dim_theta; // # dimension of population parameters
+__constant__ double c_target_rate; // MCMC sampler target acceptance rate
+__constant__ double c_decay_rate; // decay rate of robust adaptive metropolis algorithm
 
 // Function to compute the rank-1 Cholesky update/downdate. Note that this is done in place.
 __device__ __host__
@@ -83,57 +99,9 @@ private:
 	int pchi = 2;
 
 public:
-	// Constructor when storing the measurements in std::vector
-	DataAugmentation(vecvec& meas, vecvec& meas_unc, dim3& nB, dim3& nT) : nBlocks(nB), nThreads(nT)
-	{
-		int size1 = meas.size();
-		int size2 = meas[0].size();
-
-		ndata = max(size1,size2); // assume that ndata < mfeat and figure out the values from the size
-		mfeat = min(size1,size2); // of the arrays.
-
-		_SetArraySizes();
-
-		// copy input data to data members
-		for (int j = 0; j < mfeat; ++j) {
-			for (int i = 0; i < ndata; ++i) {
-				if (size1 < size2) {
-					h_meas[ndata * j + i] = meas[j][i];
-					h_meas_unc[ndata * j + i] = meas_unc[j][i];
-				} else {
-					h_meas[ndata * j + i] = meas[i][j];
-					h_meas_unc[ndata * j + i] = meas_unc[i][j];
-				}
-			}
-		}
-		// copy data from host to device
-		d_meas = h_meas;
-		d_meas_unc = h_meas_unc;
-
-		thrust::fill(h_cholfact.begin(), h_cholfact.end(), 0.0);
-		d_cholfact = h_cholfact;
-
-		// grab pointers to the device vector memory locations
-		double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
-		double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
-		double* p_meas_unc = thrust::raw_pointer_cast(&d_meas_unc[0]);
-		double* p_cholfact = thrust::raw_pointer_cast(&d_cholfact[0]);
-		double* p_logdens_meas = thrust::raw_pointer_cast(&d_logdens_meas[0]);
-		double* p_logdens_pop = thrust::raw_pointer_cast(&d_logdens_pop[0]);
-
-		// set initial values for the characteristics. this will launch a CUDA kernel.
-		InitialValue<ChiType><<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens_meas,
-				p_logdens_pop, ndata, mfeat, pchi);
-
-		// copy values from device to host
-		h_chi = d_chi;
-		h_cholfact = d_cholfact;
-		h_logdens_meas = d_logdens_meas;
-		h_logdens_pop = d_logdens_pop;
-	}
-
-	// Constructor when storing the measurements in arrays of pointers
-	DataAugmentation(double** meas, double** meas_unc, int n, int m, dim3& nB, dim3& nT) : nBlocks(nB), nThreads(nT)
+	// Constructor
+	DataAugmentation(double** meas, double** meas_unc, int n, int m, dim3& nB, dim3& nT) :
+		ndata(n), mfeat(m), nBlocks(nB), nThreads(nT)
 	{
 		_SetArraySizes();
 
@@ -148,6 +116,11 @@ public:
 		d_meas = h_meas;
 		d_meas_unc = h_meas_unc;
 
+		// place array sizes constant memory
+        CUDA_CHECK_RETURN(cudaMemcpyToSymbol(&c_ndata, &ndata, sizeof(ndata)));
+        CUDA_CHECK_RETURN(cudaMemcpyToSymbol(&c_mfeat, &mfeat, sizeof(ndata)));
+        CUDA_CHECK_RETURN(cudaMemcpyToSymbol(&c_pchi, &pchi, sizeof(ndata)));
+
 		thrust::fill(h_cholfact.begin(), h_cholfact.end(), 0.0);
 		d_cholfact = h_cholfact;
 
@@ -159,6 +132,14 @@ public:
 		double* p_logdens_meas = thrust::raw_pointer_cast(&d_logdens_meas[0]);
 		double* p_logdens_pop = thrust::raw_pointer_cast(&d_logdens_pop[0]);
 
+		// Allocate memory on GPU for RNG states
+		CUDA_CHECK_RETURN(cudaMalloc((void **)&p_devStates, nThreads.x * nBlocks.x * sizeof(curandState)));
+		// Initialize the random number generator states on the GPU
+		InitializeRNG<<<nBlocks,nThreads>>>(p_devStates);
+
+		// Wait until RNG stuff is done running on the GPU, make sure everything went OK
+		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+
 		// set initial values for the characteristics. this will launch a CUDA kernel.
 		InitialValue<ChiType><<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens_meas,
 				p_logdens_pop, ndata, mfeat, pchi);
@@ -168,6 +149,10 @@ public:
 		h_cholfact = d_cholfact;
 		h_logdens_meas = d_logdens_meas;
 		h_logdens_pop = d_logdens_pop;
+	}
+
+	virtual ~DataAugmentation() {
+		cudaFree(p_devStates);
 	}
 
 	// calculate initial value of characteristics
@@ -192,14 +177,53 @@ public:
 		// calculate initial log-posteriors
 	}
 
+	// Initialize the parallel random number generator state on the device
+	__global__ void InitializeRNG(curandState *state)
+	{
+	    int id = threadIdx.x + blockIdx.x * blockDim.x;
+	    /* Each thread gets same seed, a different sequence
+	     number, no offset */
+	    curand_init(1234, id, 0, &state[id]);
+	}
+
 	// make sure that the data augmentation knows about the population parameters
 	void SetPopulation(PopulationPar& t) {
 		theta = t;
 	}
 
-	__global__
-	void virtual Update()
+	// launch the update kernel on the GPU
+	void Update()
 	{
+		// grab the pointers to the device memory locations
+		double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
+		double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
+		double* p_meas_unc = thrust::raw_pointer_cast(&d_meas_unc[0]);
+		double* p_cholfact = thrust::raw_pointer_cast(&d_cholfact[0]);
+		double* p_logdens_meas = thrust::raw_pointer_cast(&d_logdens_meas[0]);
+		double* p_logdens_pop = thrust::raw_pointer_cast(&d_logdens_pop[0]);
+		int* p_naccept = thrust::raw_pointer_cast(&d_naccept[0]);
+
+		// launch the kernel to update the characteristics on the GPU
+		UpdateKernel<ChiType><<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_cholfact, p_logdens_meas, p_logdens_pop,
+				p_devStates, current_iter, p_naccept);
+
+        CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+        // transfer values back to host
+        h_chi = d_chi;
+        h_logdens_pop = d_logdens_pop;
+        h_logdens_meas = d_logdens_meas;
+        h_naccept = d_naccept;
+
+        current_iter++;
+	}
+
+	// kernel to update the values of the characteristics in parallel on the GPU
+	template <class ChiType> __global__
+	virtual void UpdateKernel(double* meas, double* meas_unc, double* chi, double* cholfact,
+			double* logdens_meas, double* logdens_pop, curandState* devStates, int current_iter, int* naccept)
+	{
+		// TODO: place ndata, pchi, mfeat, target_rate, and decay_rate into constant memory
+
 
 	}
 
@@ -264,9 +288,17 @@ protected:
 	// cholesky factors of Metropolis proposal covariance matrix
 	hvector h_cholfact;
 	dvector d_cholfact;
+	// state of parallel random number generator on the device
+	curandState* p_devStates;
 	// CUDA kernel launch specifications
 	dim3& nBlocks;
 	dim3& nThreads;
+	// MCMC sampler parameters
+	int current_iter;
+	double target_rate;
+	double decay_rate;
+	thrust::host_vector<int> h_naccept;
+	thrust::device_vector<int> d_naccept;
 };
 
 // Base class for a population level parameter
@@ -288,6 +320,9 @@ public:
 		cholfact.resize(dim_cholfact);
 
 		decay_rate = 2.0 / 3.0;
+
+		// place array size constant memory
+        CUDA_CHECK_RETURN(cudaMemcpyToSymbol(&c_dim_theta, &dim_theta, sizeof(dim_theta)));
 
 		InitialValue();
 	}
@@ -407,25 +442,88 @@ protected:
 	int current_iter;
 };
 
+// Base class for an individual data point's characteristic, i.e., chi_i
 class Characteristic {
 public:
+	// constructor
+	__device__ __host__ Characteristic(curandState& localState, int iter, double rate) :
+	state(localState), current_iter(iter), target_rate(rate), decay_rate(0.667);
+	__device__ __host__ virtual ~Characteristic() {}
 
-	// grab the chi, meas, and meas_unc array from global memory for data point index tid.
-	__device__ double* GrabGlobalChi(int tid);
-	__device__ double* GrabGlobalMeas(int tid);
-	__device__ double* GrabGlobalUnc(int tid);
+	// compute the conditional log-posterior density of the measurements given the characteristic
+	__device__ __host__ virtual double logdensity_meas(double* chi, double* meas, double* meas_unc, int pchi, int mfeat)
+	{
+		return 0.0;
+	}
 
-	// methods to compute the conditional log-posterior densities
-	__device__ __host__ virtual double logdensity_meas(double* chi) = 0;
-	__device__ __host__ virtual double logdensity_pop(double* chi) = 0;
+	// compute the conditional log-posterior dentity of the characteristic given the population parameter
+	__device__ __host__ virtual double logdensity_pop(double* chi, double* theta, int pchi, int dim_theta)
+	{
+		return 0.0;
+	}
 
-	// methods used to update the characteristics
-	__device__ __host__ virtual double* Propose();
-	__device__ __host__ virtual void AdaptProp();
+	// propose a new value for the characteristic
+	__device__ __host__ virtual double* Propose(double* chi, double* cholfact, double* snorm_deviate, double* scaled_proposal, int pchi)
+	{
+		// get the unit proposal
+		for (int j=0; j<pchi; j++) {
+			snorm_deviate[j] = curand_normal_double(&state);
+		}
+
+		// propose a new chi value
+		double proposed_chi[pchi];
+		int cholfact_index = 0;
+		for (int j=0; j<pchi; j++) {
+			double scaled_proposal_j = 0.0;
+			for (int k=0; k<(j+1); k++) {
+				// transform the unit proposal to the centered proposal, drawn from a multivariate normal.
+				scaled_proposal_j += cholfact[cholfact_index] * snorm_deviate[k];
+				cholfact_index++;
+			}
+			proposed_chi[j] = chi[j] + scaled_proposal_j;
+			scaled_proposal[j] = scaled_proposal_j;
+		}
+		return proposed_chi;
+	}
+
+	// adapt the covariance matrix of the proposals for the characteristics
+	__device__ __host__ virtual void AdaptProp(double* cholfact, double* snorm_deviate, double* scaled_proposal,
+			double metro_ratio, int pchi)
+	{
+		double unit_norm = 0.0;
+		for (int j=0; j<pchi; j++) {
+			unit_norm += snorm_deviate[j] * snorm_deviate[j];
+		}
+		unit_norm = sqrt(unit_norm);
+		double decay_sequence = 1.0 / pow((double) current_iter, decay_rate);
+		double scaled_coef = sqrt(decay_sequence * fabs(metro_ratio - target_rate)) / unit_norm;
+		for (int j=0; j<pchi; j++) {
+			scaled_proposal[j] *= scaled_coef;
+		}
+		bool downdate = (metro_ratio < target_rate);
+		// do rank-1 cholesky update to update the proposal covariance matrix
+		CholUpdateR1(cholfact, scaled_proposal, pchi, downdate);
+	}
+
+	// decide whether to accept or reject the proposal based on the metropolist-hasting ratio
 	__device__ __host__ bool AcceptProp(double logdens_prop, double logdens_current, double forward_dens,
-			double backward_dens);
+			double backward_dens)
+	{
+		double lograt = logdens_prop - forward_dens - (logdens_current - backward_dens);
+		lograt = min(lograt, 0.0);
+		double ratio = exp(lograt);
+		double unif = curand_uniform_double(&state);
+		bool accept = (unif < ratio) && std::isfinite(ratio);
+		return accept;
+	}
 
-private:
+protected:
+	// random number generator state for this characteristic
+	curandState& state;
+	// MCMC sampler parameters
+	int current_iter;
+	double decay_rate;
+	double target_rate;
 };
 
 #endif /* PARAMETERS_CUH_ */

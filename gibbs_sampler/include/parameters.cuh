@@ -141,8 +141,7 @@ public:
 		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
 		// set initial values for the characteristics. this will launch a CUDA kernel.
-		InitialValue<ChiType><<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens_meas,
-				p_logdens_pop, ndata, mfeat, pchi);
+		InitialValue<ChiType><<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens_meas);
 
 		// copy values from device to host
 		h_chi = d_chi;
@@ -157,24 +156,26 @@ public:
 
 	// calculate initial value of characteristics
 	template <class ChiType> __global__
-	void virtual InitialValue(double* chi, double* meas, double* meas_unc, double* cholfact,
-			double* logdens_meas, double* logdens_pop, int ndata, int mfeat, int pchi)
+	void virtual InitialValue(double* chi, double* meas, double* meas_unc, double* cholfact, double* logdens_meas)
 	{
 		int idata = blockDim.x * blockIdx.x + threadIdx.x;
-		if (idata < ndata)
+		if (idata < c_ndata)
 		{
-			for (int j = 0; j < pchi; ++j) {
-				chi[idata + j * ndata] = 0.0; // initialize chi values to zero
+			for (int j = 0; j < c_pchi; ++j) {
+				chi[idata + j * c_ndata] = 0.0; // initialize chi values to zero
 			}
 
 			// set initial covariance matrix of the chi proposals as the identity matrix
 			int diag_index = 0;
-			for (int j=0; j<pchi; j++) {
-				cholfact[idata + ndata * diag_index] = 1.0;
+			for (int j=0; j<c_pchi; j++) {
+				cholfact[idata + c_ndata * diag_index] = 1.0;
 				diag_index += j + 2;
 			}
 		}
-		// calculate initial log-posteriors
+		// TODO: calculate initial log-posteriors
+		curandState localState;
+		ChiType Chi(&localState, 1);
+		logdens_meas[idata] = Chi.logdensity_meas(chi, meas, meas_unc);
 	}
 
 	// Initialize the parallel random number generator state on the device
@@ -188,7 +189,7 @@ public:
 
 	// make sure that the data augmentation knows about the population parameters
 	void SetPopulation(PopulationPar& t) {
-		theta = t;
+		Theta = t;
 	}
 
 	// launch the update kernel on the GPU
@@ -202,9 +203,10 @@ public:
 		double* p_logdens_meas = thrust::raw_pointer_cast(&d_logdens_meas[0]);
 		double* p_logdens_pop = thrust::raw_pointer_cast(&d_logdens_pop[0]);
 		int* p_naccept = thrust::raw_pointer_cast(&d_naccept[0]);
+		double* p_theta = Theta.GetDevThetaPtr();
 
 		// launch the kernel to update the characteristics on the GPU
-		UpdateKernel<ChiType><<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_cholfact, p_logdens_meas, p_logdens_pop,
+		UpdateKernel<ChiType><<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_theta, p_cholfact, p_logdens_meas, p_logdens_pop,
 				p_devStates, current_iter, p_naccept);
 
         CUDA_CHECK_RETURN(cudaDeviceSynchronize());
@@ -219,10 +221,9 @@ public:
 
 	// kernel to update the values of the characteristics in parallel on the GPU
 	template <class ChiType> __global__
-	virtual void UpdateKernel(double* meas, double* meas_unc, double* chi, double* cholfact,
+	virtual void UpdateKernel(double* meas, double* meas_unc, double* chi, double* theta, double* cholfact,
 			double* logdens_meas, double* logdens_pop, curandState* devStates, int current_iter, int* naccept)
 	{
-		// TODO: place ndata, pchi, mfeat, target_rate, and decay_rate into constant memory
 
 
 	}
@@ -279,7 +280,7 @@ protected:
 	hvector h_chi;
 	dvector d_chi;
 	// population-level parameters
-	PopulationPar<ChiType>& theta;
+	PopulationPar<ChiType>& Theta;
 	// logarithm of conditional posterior densities
 	hvector h_logdens_meas; // probability of meas|chi
 	dvector d_logdens_meas;
@@ -421,9 +422,11 @@ public:
 		h_theta = theta;
 		d_theta = h_theta;
 	}
-	hvector GetTheta() {
-		return h_theta;
-	}
+	hvector GetHostTheta() {return h_theta;}
+	dvector GetDevTheta() {return d_theta;}
+	double* GetDevThetaPtr() {thrust::raw_pointer_cast(&d_theta[0])}
+
+
 
 protected:
 	// the value of the population parameter
@@ -446,34 +449,33 @@ protected:
 class Characteristic {
 public:
 	// constructor
-	__device__ __host__ Characteristic(curandState& localState, int iter, double rate) :
-	state(localState), current_iter(iter), target_rate(rate), decay_rate(0.667);
+	__device__ __host__ Characteristic(curandState& localState, int iter) : state(localState), current_iter(iter);
 	__device__ __host__ virtual ~Characteristic() {}
 
 	// compute the conditional log-posterior density of the measurements given the characteristic
-	__device__ __host__ virtual double logdensity_meas(double* chi, double* meas, double* meas_unc, int pchi, int mfeat)
+	__device__ __host__ virtual double logdensity_meas(double* chi, double* meas, double* meas_unc)
 	{
 		return 0.0;
 	}
 
 	// compute the conditional log-posterior dentity of the characteristic given the population parameter
-	__device__ __host__ virtual double logdensity_pop(double* chi, double* theta, int pchi, int dim_theta)
+	__device__ __host__ virtual double logdensity_pop(double* chi, double* theta)
 	{
 		return 0.0;
 	}
 
 	// propose a new value for the characteristic
-	__device__ __host__ virtual double* Propose(double* chi, double* cholfact, double* snorm_deviate, double* scaled_proposal, int pchi)
+	__device__ __host__ virtual double* Propose(double* chi, double* cholfact, double* snorm_deviate, double* scaled_proposal)
 	{
 		// get the unit proposal
-		for (int j=0; j<pchi; j++) {
+		for (int j=0; j<c_pchi; j++) {
 			snorm_deviate[j] = curand_normal_double(&state);
 		}
 
 		// propose a new chi value
-		double proposed_chi[pchi];
+		double proposed_chi[c_pchi];
 		int cholfact_index = 0;
-		for (int j=0; j<pchi; j++) {
+		for (int j=0; j<c_pchi; j++) {
 			double scaled_proposal_j = 0.0;
 			for (int k=0; k<(j+1); k++) {
 				// transform the unit proposal to the centered proposal, drawn from a multivariate normal.
@@ -488,21 +490,21 @@ public:
 
 	// adapt the covariance matrix of the proposals for the characteristics
 	__device__ __host__ virtual void AdaptProp(double* cholfact, double* snorm_deviate, double* scaled_proposal,
-			double metro_ratio, int pchi)
+			double metro_ratio)
 	{
 		double unit_norm = 0.0;
-		for (int j=0; j<pchi; j++) {
+		for (int j=0; j<c_pchi; j++) {
 			unit_norm += snorm_deviate[j] * snorm_deviate[j];
 		}
 		unit_norm = sqrt(unit_norm);
-		double decay_sequence = 1.0 / pow((double) current_iter, decay_rate);
-		double scaled_coef = sqrt(decay_sequence * fabs(metro_ratio - target_rate)) / unit_norm;
-		for (int j=0; j<pchi; j++) {
+		double decay_sequence = 1.0 / pow((double) current_iter, c_decay_rate);
+		double scaled_coef = sqrt(decay_sequence * fabs(metro_ratio - c_target_rate)) / unit_norm;
+		for (int j=0; j<c_pchi; j++) {
 			scaled_proposal[j] *= scaled_coef;
 		}
-		bool downdate = (metro_ratio < target_rate);
+		bool downdate = (metro_ratio < c_target_rate);
 		// do rank-1 cholesky update to update the proposal covariance matrix
-		CholUpdateR1(cholfact, scaled_proposal, pchi, downdate);
+		CholUpdateR1(cholfact, scaled_proposal, c_pchi, downdate);
 	}
 
 	// decide whether to accept or reject the proposal based on the metropolist-hasting ratio
@@ -522,8 +524,6 @@ protected:
 	curandState& state;
 	// MCMC sampler parameters
 	int current_iter;
-	double decay_rate;
-	double target_rate;
 };
 
 #endif /* PARAMETERS_CUH_ */

@@ -129,8 +129,7 @@ public:
 		double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
 		double* p_meas_unc = thrust::raw_pointer_cast(&d_meas_unc[0]);
 		double* p_cholfact = thrust::raw_pointer_cast(&d_cholfact[0]);
-		double* p_logdens_meas = thrust::raw_pointer_cast(&d_logdens_meas[0]);
-		double* p_logdens_pop = thrust::raw_pointer_cast(&d_logdens_pop[0]);
+		double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
 
 		// Allocate memory on GPU for RNG states
 		CUDA_CHECK_RETURN(cudaMalloc((void **)&p_devStates, nThreads.x * nBlocks.x * sizeof(curandState)));
@@ -141,13 +140,12 @@ public:
 		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
 		// set initial values for the characteristics. this will launch a CUDA kernel.
-		InitialValue<ChiType><<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens_meas);
+		InitialValue<ChiType><<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens);
 
 		// copy values from device to host
 		h_chi = d_chi;
 		h_cholfact = d_cholfact;
-		h_logdens_meas = d_logdens_meas;
-		h_logdens_pop = d_logdens_pop;
+		h_logdens = d_logdens;
 	}
 
 	virtual ~DataAugmentation() {
@@ -156,7 +154,7 @@ public:
 
 	// calculate initial value of characteristics
 	template <class ChiType> __global__
-	void virtual InitialValue(double* chi, double* meas, double* meas_unc, double* cholfact, double* logdens_meas)
+	void virtual InitialValue(double* chi, double* meas, double* meas_unc, double* cholfact, double* logdens)
 	{
 		int idata = blockDim.x * blockIdx.x + threadIdx.x;
 		if (idata < c_ndata)
@@ -172,10 +170,9 @@ public:
 				diag_index += j + 2;
 			}
 		}
-		// TODO: calculate initial log-posteriors
 		curandState localState;
 		ChiType Chi(&localState, 1);
-		logdens_meas[idata] = Chi.logdensity_meas(chi, meas, meas_unc);
+		logdens[idata] = Chi.logdensity_meas(chi, meas, meas_unc);
 	}
 
 	// Initialize the parallel random number generator state on the device
@@ -188,7 +185,7 @@ public:
 	}
 
 	// make sure that the data augmentation knows about the population parameters
-	void SetPopulation(PopulationPar& t) {
+	void SetPopulation(PopulationPar<ChiType>& t) {
 		Theta = t;
 	}
 
@@ -200,10 +197,10 @@ public:
 		double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
 		double* p_meas_unc = thrust::raw_pointer_cast(&d_meas_unc[0]);
 		double* p_cholfact = thrust::raw_pointer_cast(&d_cholfact[0]);
-		double* p_logdens_meas = thrust::raw_pointer_cast(&d_logdens_meas[0]);
-		double* p_logdens_pop = thrust::raw_pointer_cast(&d_logdens_pop[0]);
-		int* p_naccept = thrust::raw_pointer_cast(&d_naccept[0]);
+		double* p_logdens_meas = thrust::raw_pointer_cast(&d_logdens[0]);
+		double* p_logdens_pop = Theta.GetDevLogDensPtr();
 		double* p_theta = Theta.GetDevThetaPtr();
+		int* p_naccept = thrust::raw_pointer_cast(&d_naccept[0]);
 
 		// launch the kernel to update the characteristics on the GPU
 		UpdateKernel<ChiType><<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_theta, p_cholfact, p_logdens_meas, p_logdens_pop,
@@ -212,8 +209,7 @@ public:
         CUDA_CHECK_RETURN(cudaDeviceSynchronize());
         // transfer values back to host
         h_chi = d_chi;
-        h_logdens_pop = d_logdens_pop;
-        h_logdens_meas = d_logdens_meas;
+        h_logdens = d_logdens;
         h_naccept = d_naccept;
 
         current_iter++;
@@ -232,8 +228,16 @@ public:
 
 	}
 
-	// methods to return the values of the characteristics and their log-densities
-	vecvec GetChi()
+	// setters and getters
+	void SetChi(dvector& chi) {
+		d_chi = chi;
+		h_chi = d_chi;
+	}
+	void SetLogDens(dvector& logdens) {
+		d_logdens = logdens;
+		h_logdens = d_logdens;
+	}
+	vecvec GetChi() // return the value of the characteristic in a std::vector of std::vectors for convenience
 	{
 		vecvec chi(ndata);
 		// grab values of characteristics from host vector
@@ -246,12 +250,11 @@ public:
 		}
 		return chi;
 	}
-
-	// access to private data members
-	hvector GetHostLogDensPop() { return h_logdens_pop; }
-	dvector& GetDevLogDensPop() { return d_logdens_pop; }
-	hvector GetHostLogDensMeas() { return h_logdens_meas; }
-	dvector& GetDevLogDensMeas() { return d_logdens_meas; }
+	hvector GetHostLogDens() { return h_logdens; }
+	dvector GetDevLogDens() { return d_logdens; }
+	double* GetDevLogDensPtr() { return thrust::raw_pointer_cast(&d_logdens[0]); }
+	hvector GetHostChi() { return h_chi; }
+	dvector GetDevChi() { return d_chi; }
 	double* GetDevChiPtr() { return thrust::raw_pointer_cast(&d_chi[0]); }
 	int GetNdata() { return ndata; }
 
@@ -263,10 +266,8 @@ protected:
 		d_meas.resize(ndata * mfeat);
 		h_meas_unc.resize(ndata * mfeat);
 		d_meas_unc.resize(ndata * mfeat);
-		h_logdens_meas.resize(ndata);
-		d_logdens_meas.resize(ndata);
-		h_logdens_pop.resize(ndata);
-		d_logdens_pop.resize(ndata);
+		h_logdens.resize(ndata);
+		d_logdens.resize(ndata);
 		h_chi.resize(ndata * pchi);
 		d_chi.resize(ndata * pchi);
 		int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
@@ -287,10 +288,8 @@ protected:
 	// population-level parameters
 	PopulationPar<ChiType>& Theta;
 	// logarithm of conditional posterior densities
-	hvector h_logdens_meas; // probability of meas|chi
-	dvector d_logdens_meas;
-	hvector h_logdens_pop; // probability of chi|theta
-	dvector d_logdens_pop;
+	hvector h_logdens; // probability of meas|chi
+	dvector d_logdens;
 	// cholesky factors of Metropolis proposal covariance matrix
 	hvector h_cholfact;
 	dvector d_cholfact;
@@ -355,8 +354,8 @@ public:
 		// get initial value of conditional log-posterior for theta|chi
 		double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
 		double* p_chi = Daug.GetDevChiPtr(); // grab pointer to Daug.d_chi
-		double* p_logdens_pop = Daug.GetDevLogDensPopPtr();
-		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens_pop);
+		double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
+		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
 		// reset the number of MCMC iterations
@@ -436,6 +435,7 @@ public:
 		// get current conditional log-posterior of population
 		dvector d_logdensity = Daug.GetDevLogDensPop();
 		double logdens_current = thrust::reduce(d_logdensity.begin(), d_logdensity.end());
+		logdens_current += LogPrior(h_theta);
 
 		// propose new value of population parameter
 		hvector h_proposed_theta = Propose();
@@ -448,6 +448,8 @@ public:
 		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_proposed_theta, Daug.GetDevChiPtr(), p_proposed_logdens);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 		double logdens_prop = thrust::reduce(d_proposed_logdens.begin(), d_proposed_logdens.end());
+
+		logdens_prop += LogPrior(h_proposed_theta);
 
 		// accept the proposed value?
 		double metro_ratio = 0.0;

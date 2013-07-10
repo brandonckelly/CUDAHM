@@ -5,8 +5,8 @@
  *      Author: brandonkelly
  */
 
-#ifndef PARAMETERS_CUH_
-#define PARAMETERS_CUH_
+#ifndef DATA_AUGMENTATION_CU__
+#define DATA_AUGMENTATION_CU__
 
 // Cuda Includes
 #include "cuda_runtime.h"
@@ -206,11 +206,6 @@ public:
 				p_devStates, current_iter, p_naccept);
 
         CUDA_CHECK_RETURN(cudaDeviceSynchronize());
-        // transfer values back to host
-        h_chi = d_chi;
-        h_logdens = d_logdens;
-        h_naccept = d_naccept;
-
         current_iter++;
 	}
 
@@ -228,8 +223,8 @@ public:
 			Chi.SetState(localState);
 
 			// propose a new value of chi
-			double snorm_deviate[c_pchi], scaled_proposal[c_pchi];
-			double* proposed_chi = Chi.Propose(chi, cholfact, snorm_deviate, scaled_proposal);
+			double snorm_deviate[c_pchi], scaled_proposal[c_pchi], proposed_chi[c_pchi];
+			Chi.Propose(chi, cholfact, proposed_chi, snorm_deviate, scaled_proposal);
 
 			// get value of log-posterior for proposed chi value
 			double logdens_pop_prop, logdens_meas_prop;
@@ -256,7 +251,7 @@ public:
 				}
 				logdens_meas[idata] = logdens_meas_prop;
 				logdens_pop[idata] = logdens_pop_prop;
-				naccept[idata] += 1
+				naccept[idata] += 1;
 			}
 		}
 
@@ -574,7 +569,8 @@ public:
 	}
 
 	// propose a new value for the characteristic
-	__device__ __host__ virtual double* Propose(double* chi, double* cholfact, double* snorm_deviate, double* scaled_proposal)
+	__device__ __host__ virtual double* Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_deviate,
+			double* scaled_proposal)
 	{
 		// get the unit proposal
 		for (int j=0; j<c_pchi; j++) {
@@ -582,13 +578,12 @@ public:
 		}
 
 		// propose a new chi value
-		double proposed_chi[c_pchi];
 		int cholfact_index = 0;
 		for (int j=0; j<c_pchi; j++) {
 			double scaled_proposal_j = 0.0;
 			for (int k=0; k<(j+1); k++) {
 				// transform the unit proposal to the centered proposal, drawn from a multivariate normal.
-				scaled_proposal_j += cholfact[cholfact_index] * snorm_deviate[k];
+				scaled_proposal_j += cholfact[c_ndata * cholfact_index + idata] * snorm_deviate[k];
 				cholfact_index++;
 			}
 			proposed_chi[j] = chi[c_ndata * j + idata] + scaled_proposal_j;
@@ -637,4 +632,4 @@ protected:
 	int current_iter;
 };
 
-#endif /* PARAMETERS_CUH_ */
+#endif /* DATA_AUGMENTATION_CU__ */

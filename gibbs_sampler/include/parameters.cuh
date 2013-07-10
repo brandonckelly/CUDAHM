@@ -170,8 +170,7 @@ public:
 				diag_index += j + 2;
 			}
 		}
-		curandState localState;
-		ChiType Chi(&localState, 1);
+		ChiType Chi(1, idata);
 		logdens[idata] = Chi.logdensity_meas(chi, meas, meas_unc);
 	}
 
@@ -222,7 +221,11 @@ public:
 	{
 		int idata = blockDim.x * blockIdx.x + threadIdx.x;
 		if (idata < c_ndata) {
-			curandState localState = devStates;
+			curandState localState = devStates[idata]; // grab state of this random number generator
+
+			// instantiate the characteristic object
+			ChiType Chi(current_iter, idata);
+			Chi.SetState(localState);
 
 		}
 
@@ -317,7 +320,7 @@ private:
 public:
 	// constructor
 	PopulationPar(double rate, DataAugmentation<ChiType>& D, dim3& nB, dim3& nT) :
-		target_rate(rate), daug(D), nBlocks(nB), nThreads(nT)
+		target_rate(rate), Daug(D), nBlocks(nB), nThreads(nT)
 	{
 		h_theta.resize(dim_theta);
 		d_theta = h_theta;
@@ -358,6 +361,9 @@ public:
 		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
+        // copy initial values of logdensity to host
+        h_logdens = d_logdens;
+
 		// reset the number of MCMC iterations
 		current_iter = 1;
 		naccept = 0;
@@ -370,8 +376,14 @@ public:
 
 	// compute the conditional log-posterior density of the characteristics given the population parameter
 	template<class ChiType> __global__
-	virtual void logdensity_pop(double* theta, double* chi, double* p_logdens_pop) {
-		return 0.0;
+	void logdensity_pop(double* theta, double* chi, double* logdens)
+	{
+		int idata = blockDim.x * blockIdx.x + threadIdx.x;
+		if (idata < c_ndata)
+		{
+			ChiType Chi(1, idata);
+			logdens[idata] = Chi.logdensity_pop(chi, theta);
+		}
 	}
 
 	// propose a new value of the population parameters
@@ -512,8 +524,11 @@ protected:
 class Characteristic {
 public:
 	// constructor
-	__device__ __host__ Characteristic(curandState& localState, int iter, int id) : state(localState), current_iter(iter), idata(id);
+	__device__ __host__ Characteristic(int iter, int id) : current_iter(iter), idata(id);
 	__device__ __host__ virtual ~Characteristic() {}
+
+	// set the state of the random number generator
+	void SetState(curandState& localState) { state = localState; }
 
 	// compute the conditional log-posterior density of the measurements given the characteristic
 	__device__ __host__ virtual double logdensity_meas(double* chi, double* meas, double* meas_unc)

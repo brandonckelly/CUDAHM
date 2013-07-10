@@ -227,6 +227,37 @@ public:
 			ChiType Chi(current_iter, idata);
 			Chi.SetState(localState);
 
+			// propose a new value of chi
+			double snorm_deviate[c_pchi], scaled_proposal[c_pchi];
+			double* proposed_chi = Chi.Propose(chi, cholfact, snorm_deviate, scaled_proposal);
+
+			// get value of log-posterior for proposed chi value
+			double logdens_pop_prop, logdens_meas_prop;
+			logdens_meas_prop = Chi.logdensity_meas(chi, meas, meas_unc);
+			logdens_pop_prop = Chi.logdensity_pop(chi, theta);
+			double logpost_prop = logdens_meas_prop + logdens_pop_prop;
+
+			// accept the proposed value of the characteristic?
+			double logpost_current = logdens_meas[idata] + logdens_pop[idata];
+			double metro_ratio = 0.0;
+			bool accept = Chi.AcceptProp(logpost_prop, logpost_current, 0.0, 0.0, metro_ratio);
+
+			// adapt the covariance matrix of the characteristic proposal distribution
+			Chi.AdaptProp(cholfact, snorm_deviate, scaled_proposal, metro_ratio);
+			current_iter++;
+
+			// copy local RNG state back to global memory
+			devStates[idata] = localState;
+
+			if (accept) {
+				// accepted this proposal, so save new value of chi and log-densities
+				for (int j=0; j<c_pchi; j++) {
+					chi[c_ndata * j + idata] = proposed_chi[j];
+				}
+				logdens_meas[idata] = logdens_meas_prop;
+				logdens_pop[idata] = logdens_pop_prop;
+				naccept[idata] += 1
+			}
 		}
 
 	}
@@ -587,7 +618,7 @@ public:
 
 	// decide whether to accept or reject the proposal based on the metropolist-hasting ratio
 	__device__ __host__ bool AcceptProp(double logdens_prop, double logdens_current, double forward_dens,
-			double backward_dens)
+			double backward_dens, double& ratio)
 	{
 		double lograt = logdens_prop - forward_dens - (logdens_current - backward_dens);
 		lograt = min(lograt, 0.0);

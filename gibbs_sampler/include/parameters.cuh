@@ -224,7 +224,11 @@ public:
 	virtual void UpdateKernel(double* meas, double* meas_unc, double* chi, double* theta, double* cholfact,
 			double* logdens_meas, double* logdens_pop, curandState* devStates, int current_iter, int* naccept)
 	{
+		int idata = blockDim.x * blockIdx.x + threadIdx.x;
+		if (idata < c_ndata) {
+			curandState localState = devStates;
 
+		}
 
 	}
 
@@ -243,12 +247,13 @@ public:
 		return chi;
 	}
 
-	hvector GetLogDensPop() {
-		return h_logdens_pop;
-	}
-	hvector GetLogDensMeas() {
-		return h_logdens_meas;
-	}
+	// access to private data members
+	hvector GetHostLogDensPop() { return h_logdens_pop; }
+	dvector& GetDevLogDensPop() { return d_logdens_pop; }
+	hvector GetHostLogDensMeas() { return h_logdens_meas; }
+	dvector& GetDevLogDensMeas() { return d_logdens_meas; }
+	double* GetDevChiPtr() { return thrust::raw_pointer_cast(&d_chi[0]); }
+	int GetNdata() { return ndata; }
 
 protected:
 	// set the sizes of the data members
@@ -320,6 +325,10 @@ public:
 		int dim_cholfact = dim_theta * dim_theta - ((dim_theta - 1) * dim_theta) / 2;
 		cholfact.resize(dim_cholfact);
 
+		int ndata = Daug.GetNdata();
+		h_logdens.resize(ndata);
+		d_logdens = h_logdens;
+
 		decay_rate = 2.0 / 3.0;
 
 		// place array size constant memory
@@ -344,10 +353,15 @@ public:
 		}
 
 		// get initial value of conditional log-posterior for theta|chi
-
+		double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
+		double* p_chi = Daug.GetDevChiPtr(); // grab pointer to Daug.d_chi
+		double* p_logdens_pop = Daug.GetDevLogDensPopPtr();
+		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens_pop);
+        CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
 		// reset the number of MCMC iterations
 		current_iter = 1;
+		naccept = 0;
 	}
 
 	// return the log-prior of the population parameters
@@ -356,13 +370,13 @@ public:
 	}
 
 	// compute the conditional log-posterior density of the characteristics given the population parameter
-	template<class ChiType>
-	__global__ virtual double logdensity_pop(double* theta) {
+	template<class ChiType> __global__
+	virtual void logdensity_pop(double* theta, double* chi, double* p_logdens_pop) {
 		return 0.0;
 	}
 
 	// propose a new value of the population parameters
-	virtual hvector Propose(hvector& snorm_deviate, hvector& scaled_proposal)
+	virtual hvector Propose()
 	{
         // get the unit proposal
         for (int k=0; k<dim_theta; k++) {
@@ -385,7 +399,7 @@ public:
 	}
 
 	// adapt the covariance matrix (i.e., the cholesky factors) of the theta proposals
-	virtual void AdaptProp(hvector& snorm_deviate, hvector& scaled_proposal, double metro_ratio)
+	virtual void AdaptProp(double metro_ratio)
 	{
 		double unit_norm = 0.0;
 	    for (int j=0; j<dim_theta; j++) {
@@ -405,7 +419,8 @@ public:
         CholUpdateR1(p_cholfact, p_scaled_proposal, dim_theta, downdate);
 	}
 
-	bool AcceptProp(double logdens_prop, double logdens_current, double forward_dens = 0.0, double backward_dens = 0.0)
+	// calculate whether to accept or reject the metropolist-hastings proposal
+	bool AcceptProp(double logdens_prop, double logdens_current, double& ratio, double forward_dens = 0.0, double backward_dens = 0.0)
 	{
         double lograt = logdens_prop - forward_dens - (logdens_current - backward_dens);
         lograt = std::min(lograt, 0.0);
@@ -415,31 +430,77 @@ public:
         return accept;
 	}
 
-	virtual void Update();
+	// update the value of the population parameter value using a robust adaptive metropolis algorithm
+	virtual void Update()
+	{
+		// get current conditional log-posterior of population
+		dvector d_logdensity = Daug.GetDevLogDensPop();
+		double logdens_current = thrust::reduce(d_logdensity.begin(), d_logdensity.end());
 
-	// methods to set and return the value of the population parameter, theta
-	void SetTheta(hvector theta) {
-		h_theta = theta;
-		d_theta = h_theta;
+		// propose new value of population parameter
+		hvector h_proposed_theta = Propose();
+		dvector d_proposed_theta = h_proposed_theta;
+		double* p_proposed_theta = thrust::raw_pointer_cast(&d_proposed_theta[0]);
+
+		// calculate log-posterior of new population parameter in parallel on the device
+		dvector d_proposed_logdens(Daug.GetNdata());
+		double* p_proposed_logdens = thrust::raw_pointer_cast(&d_proposed_logdens[0])
+		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_proposed_theta, Daug.GetDevChiPtr(), p_proposed_logdens);
+        CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+		double logdens_prop = thrust::reduce(d_proposed_logdens.begin(), d_proposed_logdens.end());
+
+		// accept the proposed value?
+		double metro_ratio = 0.0;
+		bool accept = AcceptProp(logdens_prop, logdens_current, metro_ratio);
+		if (accept) {
+			h_theta = h_proposed_theta;
+			d_theta = d_proposed_theta;
+			d_logdens = d_proposed_logdens;
+			h_logdens = d_logdens;
+			naccept++;
+		}
+
+		// adapt the covariance matrix of the proposals
+		AdaptProp(metro_ratio);
+		current_iter++;
 	}
-	hvector GetHostTheta() {return h_theta;}
-	dvector GetDevTheta() {return d_theta;}
-	double* GetDevThetaPtr() {thrust::raw_pointer_cast(&d_theta[0])}
 
+	// setters and getters
+	void SetTheta(dvector& theta) {
+		h_theta = theta;
+		d_theta = theta;
+	}
+	void SetLogDens(dvector& logdens) {
+		h_logdens = logdens;
+		d_logdens = logdens;
+	}
 
+	hvector GetHostTheta() { return h_theta; }
+	dvector GetDevTheta() { return d_theta; }
+	double* GetDevThetaPtr() { return thrust::raw_pointer_cast(&d_theta[0]); }
+	hvector GetHostLogDens() { return h_logdens; }
+	dvector GetDevLogDens() { return d_logdens; }
+	double* GetDevLogDensPtr() { return thrust::raw_pointer_cast(&d_logdens[0]); }
 
 protected:
 	// the value of the population parameter
 	hvector h_theta;
 	dvector d_theta;
+	// log of the value the probability of the characteristics given the population parameter
+	hvector h_logdens;
+	dvector d_logdens;
 	// make sure that the population parameter knows about the characteristics
-	DataAugmentation<ChiType>& daug;
+	DataAugmentation<ChiType>& Daug;
 	// cholesky factors of Metropolis proposal covariance matrix
 	hvector cholfact;
+	// interval variables used in robust adaptive metropolis algorithm
+	hvector snorm_deviate;
+	hvector scaled_proposal;
 	// CUDA kernel launch specifications
 	dim3& nBlocks;
 	dim3& nThreads;
 	// MCMC parameters
+	int naccept;
 	double target_rate; // target acceptance rate for metropolis algorithm
 	double decay_rate; // decay rate for robust metropolis algorithm, gamma in notation of Vihola (2012)
 	int current_iter;
@@ -449,7 +510,7 @@ protected:
 class Characteristic {
 public:
 	// constructor
-	__device__ __host__ Characteristic(curandState& localState, int iter) : state(localState), current_iter(iter);
+	__device__ __host__ Characteristic(curandState& localState, int iter, int id) : state(localState), current_iter(iter), idata(id);
 	__device__ __host__ virtual ~Characteristic() {}
 
 	// compute the conditional log-posterior density of the measurements given the characteristic
@@ -482,7 +543,7 @@ public:
 				scaled_proposal_j += cholfact[cholfact_index] * snorm_deviate[k];
 				cholfact_index++;
 			}
-			proposed_chi[j] = chi[j] + scaled_proposal_j;
+			proposed_chi[j] = chi[c_ndata * j + idata] + scaled_proposal_j;
 			scaled_proposal[j] = scaled_proposal_j;
 		}
 		return proposed_chi;
@@ -520,6 +581,8 @@ public:
 	}
 
 protected:
+	// index of the thread = index of this data point
+	int idata;
 	// random number generator state for this characteristic
 	curandState& state;
 	// MCMC sampler parameters

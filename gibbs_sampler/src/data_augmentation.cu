@@ -176,13 +176,9 @@ public:
 		}
 		ChiType Chi(1);
 		// copy value to registers
-		double this_chi[10], this_meas[10], this_meas_unc[10];
+		double this_chi[10];
 		for (int j = 0; j < c_pchi; ++j) {
 			this_chi[j] = chi[j * c_ndata + idata];
-		}
-		for (int j = 0; j < c_mfeat; ++j) {
-			this_meas[j] = meas[j * c_ndata + idata];
-			this_meas_unc[j] = meas_unc[j * c_ndata + idata];
 		}
 		logdens[idata] = Chi.logdensity_meas(this_chi, meas, meas_unc);
 	}
@@ -237,7 +233,6 @@ public:
 
 			// copy values for this data point to registers for speed
 			double snorm_deviate[10], scaled_proposal[10], proposed_chi[10], local_chi[10], local_cholfact[50];
-			double local_meas[10], local_meas_unc[10];
 			int cholfact_index = 0;
 			for (int j = 0; j < c_pchi; ++j) {
 				local_chi[j] = chi[j * c_ndata + idata];
@@ -246,17 +241,13 @@ public:
 					cholfact_index++;
 				}
 			}
-			for (int j = 0; j < c_mfeat; ++j) {
-				local_meas[j] = meas[j * c_ndata + idata];
-				local_meas_unc[j] = meas_unc[j * c_ndata + idata];
-			}
 
 			// propose a new value of chi
 			Chi.Propose(local_chi, local_cholfact, proposed_chi, snorm_deviate, scaled_proposal);
 
 			// get value of log-posterior for proposed chi value
 			double logdens_pop_prop, logdens_meas_prop;
-			logdens_meas_prop = Chi.logdensity_meas(local_chi, local_meas, local_meas_unc);
+			logdens_meas_prop = Chi.logdensity_meas(local_chi, meas, meas_unc);
 			logdens_pop_prop = Chi.logdensity_pop(local_chi, theta);
 			double logpost_prop = logdens_meas_prop + logdens_pop_prop;
 

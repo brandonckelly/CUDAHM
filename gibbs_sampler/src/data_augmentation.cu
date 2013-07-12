@@ -51,6 +51,7 @@ boost::random::uniform_real_distribution<> uniform(0.0, 1.0); // Uniform distrib
 __constant__ int c_ndata; // # of data points
 __constant__ int c_mfeat; // # of measured features per data point
 __constant__ int c_pchi; // # of characteristics per data point
+__constant__ int c_dim_cholfact; // # size of cholesky factor for characteristic proposal covariance
 __constant__ int c_dim_theta; // # dimension of population parameters
 
 // Function to compute the rank-1 Cholesky update/downdate. Note that this is done in place.
@@ -119,8 +120,10 @@ public:
 
 		// place array sizes constant memory
         CUDA_CHECK_RETURN(cudaMemcpyToSymbol(&c_ndata, &ndata, sizeof(ndata)));
-        CUDA_CHECK_RETURN(cudaMemcpyToSymbol(&c_mfeat, &mfeat, sizeof(ndata)));
-        CUDA_CHECK_RETURN(cudaMemcpyToSymbol(&c_pchi, &pchi, sizeof(ndata)));
+        CUDA_CHECK_RETURN(cudaMemcpyToSymbol(&c_mfeat, &mfeat, sizeof(mfeat)));
+        CUDA_CHECK_RETURN(cudaMemcpyToSymbol(&c_pchi, &pchi, sizeof(pchi)));
+        int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
+        CUDA_CHECK_RETURN(cudaMemcpyToSymbol(&c_dim_cholfact, &dim_cholfact, sizeof(dim_cholfact)));
 
 		thrust::fill(h_cholfact.begin(), h_cholfact.end(), 0.0);
 		d_cholfact = h_cholfact;
@@ -171,8 +174,17 @@ public:
 				diag_index += j + 2;
 			}
 		}
-		ChiType Chi(1, idata);
-		logdens[idata] = Chi.logdensity_meas(chi, meas, meas_unc);
+		ChiType Chi(1);
+		// copy value to registers
+		double this_chi[10], this_meas[10], this_meas_unc[10];
+		for (int j = 0; j < c_pchi; ++j) {
+			this_chi[j] = chi[j * c_ndata + idata];
+		}
+		for (int j = 0; j < c_mfeat; ++j) {
+			this_meas[j] = meas[j * c_ndata + idata];
+			this_meas_unc[j] = meas_unc[j * c_ndata + idata];
+		}
+		logdens[idata] = Chi.logdensity_meas(this_chi, meas, meas_unc);
 	}
 
 	// Initialize the parallel random number generator state on the device
@@ -223,14 +235,29 @@ public:
 			ChiType Chi(current_iter, idata);
 			Chi.SetState(localState);
 
+			// copy values for this data point to registers for speed
+			double snorm_deviate[10], scaled_proposal[10], proposed_chi[10], local_chi[10], local_cholfact[50];
+			double local_meas[10], local_meas_unc[10];
+			int cholfact_index = 0;
+			for (int j = 0; j < c_pchi; ++j) {
+				local_chi[j] = chi[j * c_ndata + idata];
+				for (int k = 0; k < (j+1); ++k) {
+					local_cholfact[cholfact_index] = cholfact[cholfact_index * c_ndata + idata];
+					cholfact_index++;
+				}
+			}
+			for (int j = 0; j < c_mfeat; ++j) {
+				local_meas[j] = meas[j * c_ndata + idata];
+				local_meas_unc[j] = meas_unc[j * c_ndata + idata];
+			}
+
 			// propose a new value of chi
-			double snorm_deviate[c_pchi], scaled_proposal[c_pchi], proposed_chi[c_pchi];
-			Chi.Propose(chi, cholfact, proposed_chi, snorm_deviate, scaled_proposal);
+			Chi.Propose(local_chi, local_cholfact, proposed_chi, snorm_deviate, scaled_proposal);
 
 			// get value of log-posterior for proposed chi value
 			double logdens_pop_prop, logdens_meas_prop;
-			logdens_meas_prop = Chi.logdensity_meas(chi, meas, meas_unc);
-			logdens_pop_prop = Chi.logdensity_pop(chi, theta);
+			logdens_meas_prop = Chi.logdensity_meas(local_chi, local_meas, local_meas_unc);
+			logdens_pop_prop = Chi.logdensity_pop(local_chi, theta);
 			double logpost_prop = logdens_meas_prop + logdens_pop_prop;
 
 			// accept the proposed value of the characteristic?
@@ -239,7 +266,11 @@ public:
 			bool accept = Chi.AcceptProp(logpost_prop, logpost_current, 0.0, 0.0, metro_ratio);
 
 			// adapt the covariance matrix of the characteristic proposal distribution
-			Chi.AdaptProp(cholfact, snorm_deviate, scaled_proposal, metro_ratio);
+			Chi.AdaptProp(local_cholfact, snorm_deviate, scaled_proposal, metro_ratio);
+			for (int j = 0; j < c_dim_cholfact; ++j) {
+				// copy value of this adapted cholesky factor back to global memory
+				cholfact[j * c_ndata + idata] = local_cholfact[j];
+			}
 			current_iter++;
 
 			// copy local RNG state back to global memory
@@ -404,8 +435,9 @@ public:
 		int idata = blockDim.x * blockIdx.x + threadIdx.x;
 		if (idata < c_ndata)
 		{
-			ChiType Chi(1, idata);
-			logdens[idata] = Chi.logdensity_pop(chi, theta);
+			ChiType Chi(1);
+			double chi_i[10]
+			logdens[idata] = Chi.logdensity_pop(chi_i, theta);
 		}
 	}
 
@@ -545,7 +577,7 @@ protected:
 class Characteristic {
 public:
 	// constructor
-	__device__ __host__ Characteristic(int iter, int id) : current_iter(iter), idata(id);
+	__device__ __host__ Characteristic(int iter) : current_iter(iter);
 	__device__ __host__ virtual ~Characteristic() {}
 
 	// set the state of the random number generator
@@ -578,10 +610,10 @@ public:
 			double scaled_proposal_j = 0.0;
 			for (int k=0; k<(j+1); k++) {
 				// transform the unit proposal to the centered proposal, drawn from a multivariate normal.
-				scaled_proposal_j += cholfact[c_ndata * cholfact_index + idata] * snorm_deviate[k];
+				scaled_proposal_j += cholfact[cholfact_index] * snorm_deviate[k];
 				cholfact_index++;
 			}
-			proposed_chi[j] = chi[c_ndata * j + idata] + scaled_proposal_j;
+			proposed_chi[j] = chi[j] + scaled_proposal_j;
 			scaled_proposal[j] = scaled_proposal_j;
 		}
 		return proposed_chi;
@@ -619,8 +651,6 @@ public:
 	}
 
 protected:
-	// index of the thread = index of this data point
-	int idata;
 	// random number generator state for this characteristic
 	curandState& state;
 	// MCMC sampler parameters

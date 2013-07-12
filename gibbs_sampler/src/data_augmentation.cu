@@ -34,6 +34,9 @@
 		exit(1);															\
 	} }
 
+#define target_rate 0.4 // MCMC sampler target acceptance rate
+#define decay_rate = 0.667 // decay rate of robust adaptive metropolis algorithm
+
 typedef std::vector<std::vector<double> > vecvec;
 typedef hvector hvector;
 typedef dvector dvector;
@@ -49,8 +52,6 @@ __constant__ int c_ndata; // # of data points
 __constant__ int c_mfeat; // # of measured features per data point
 __constant__ int c_pchi; // # of characteristics per data point
 __constant__ int c_dim_theta; // # dimension of population parameters
-__constant__ double c_target_rate; // MCMC sampler target acceptance rate
-__constant__ double c_decay_rate; // decay rate of robust adaptive metropolis algorithm
 
 // Function to compute the rank-1 Cholesky update/downdate. Note that this is done in place.
 __device__ __host__
@@ -329,8 +330,6 @@ protected:
 	dim3& nThreads;
 	// MCMC sampler parameters
 	int current_iter;
-	double target_rate;
-	double decay_rate;
 	thrust::host_vector<int> h_naccept;
 	thrust::device_vector<int> d_naccept;
 };
@@ -345,8 +344,8 @@ private:
 
 public:
 	// constructor
-	PopulationPar(double rate, DataAugmentation<ChiType>& D, dim3& nB, dim3& nT) :
-		target_rate(rate), Daug(D), nBlocks(nB), nThreads(nT)
+	PopulationPar(DataAugmentation<ChiType>& D, dim3& nB, dim3& nT) :
+		Daug(D), nBlocks(nB), nThreads(nT)
 	{
 		h_theta.resize(dim_theta);
 		d_theta = h_theta;
@@ -356,8 +355,6 @@ public:
 		int ndata = Daug.GetNdata();
 		h_logdens.resize(ndata);
 		d_logdens = h_logdens;
-
-		decay_rate = 2.0 / 3.0;
 
 		// place array size constant memory
         CUDA_CHECK_RETURN(cudaMemcpyToSymbol(&c_dim_theta, &dim_theta, sizeof(dim_theta)));
@@ -541,8 +538,6 @@ protected:
 	dim3& nThreads;
 	// MCMC parameters
 	int naccept;
-	double target_rate; // target acceptance rate for metropolis algorithm
-	double decay_rate; // decay rate for robust metropolis algorithm, gamma in notation of Vihola (2012)
 	int current_iter;
 };
 
@@ -601,12 +596,12 @@ public:
 			unit_norm += snorm_deviate[j] * snorm_deviate[j];
 		}
 		unit_norm = sqrt(unit_norm);
-		double decay_sequence = 1.0 / pow((double) current_iter, c_decay_rate);
-		double scaled_coef = sqrt(decay_sequence * fabs(metro_ratio - c_target_rate)) / unit_norm;
+		double decay_sequence = 1.0 / pow((double) current_iter, decay_rate);
+		double scaled_coef = sqrt(decay_sequence * fabs(metro_ratio - target_rate)) / unit_norm;
 		for (int j=0; j<c_pchi; j++) {
 			scaled_proposal[j] *= scaled_coef;
 		}
-		bool downdate = (metro_ratio < c_target_rate);
+		bool downdate = (metro_ratio < target_rate);
 		// do rank-1 cholesky update to update the proposal covariance matrix
 		CholUpdateR1(cholfact, scaled_proposal, c_pchi, downdate);
 	}

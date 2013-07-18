@@ -9,6 +9,7 @@
 #include <iostream>
 // local includes
 #include "data_augmentation.cuh"
+#include "UnitTests.cuh"
 
 /* list of unit tests:
  *
@@ -43,31 +44,38 @@ int main(int argc, char** argv)
     if (nBlocks.x > 65535)
     {
         std::cerr << "ERROR: Block is too large" << std::endl;
+        return 2;
     }
 
-    double** meas;
-    double** meas_unc;
-    meas = new double* [ndata];
-    meas_unc = new double* [ndata];
+    double** meas_temp;
+    double** meas_unc_temp;
+	// fill data arrays
+    meas_temp = new double* [ndata];
+    meas_unc_temp = new double* [ndata];
     for (int i = 0; i < ndata; ++i) {
-		meas[i] = new double [mfeat];
-		meas_unc[i] = new double [mfeat];
+		meas_temp[i] = new double [mfeat];
+		meas_unc_temp[i] = new double [mfeat];
 		for (int j = 0; j < mfeat; ++j) {
-			meas[i][j] = 0.0;
-			meas_unc[i][j] = 0.0;
+			meas_temp[i][j] = 0.0;
+			meas_unc_temp[i][j] = 0.0;
 		}
 	}
 
-	Characteristic Chi(pchi, mfeat, dtheta, 1);
-	DataAugmentation<Characteristic> Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
-	PopulationPar<Characteristic> Theta(dtheta, Daug, nBlocks, nThreads);
+    //DataAugmentation<Characteristic> Daug(meas_temp, meas_unc_temp, ndata, mfeat, pchi, nBlocks, nThreads);
+    //PopulationPar<Characteristic> Theta(dtheta, Daug, nBlocks, nThreads);
+    //Characteristic Chi(pchi, mfeat, dtheta, 1);
+
+    UnitTests Tests(ndata, mfeat, pchi, dtheta, nBlocks, nThreads);
+
+    Tests.R1CholUpdate();
+    Tests.Finish();
 
 	for (int i = 0; i < ndata; ++i) {
-		delete [] meas[i];
-		delete [] meas_unc[i];
+		delete [] meas_temp[i];
+		delete [] meas_unc_temp[i];
 	}
-	delete meas;
-	delete meas_unc;
+	delete meas_temp;
+	delete meas_unc_temp;
 
 	std::cout << "Success!!" << std::endl;
 }

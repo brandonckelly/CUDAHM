@@ -433,6 +433,7 @@ public:
         int cholfact_index = 0;
         for (int j=0; j<dim_theta; j++) {
             for (int k=0; k<(j+1); k++) {
+            	// cholfact is lower-diagonal matrix stored as a 1-d array
                 scaled_proposal[j] += cholfact[cholfact_index] * snorm_deviate[k];
                 cholfact_index++;
             }

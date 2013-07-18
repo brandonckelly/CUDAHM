@@ -458,7 +458,7 @@ void test_CholUpdateR1() {
 	std::cout << "Maximum fractional difference for rank-1 downdat: " << fracdiff_down << std::endl;
 }
 
-int main(void)
+int main(int argc, char** argv)
 {
     /* TODO: Add command line options */
 

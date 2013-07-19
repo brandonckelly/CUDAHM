@@ -31,7 +31,6 @@
 
 int main(int argc, char** argv)
 {
-
 	int ndata = 10000;
 	int mfeat = 4;
 	int pchi = 3;
@@ -69,6 +68,7 @@ int main(int argc, char** argv)
 
     Tests.R1CholUpdate();
     Tests.ChiPropose();
+    Tests.ChiAcceptSame();
     Tests.Finish();
 
 	for (int i = 0; i < ndata; ++i) {

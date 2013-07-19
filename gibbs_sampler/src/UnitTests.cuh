@@ -64,8 +64,6 @@ public:
 	void ChiPropose();
 	// check that Chi::Accept always accepts when the proposal and the current values are the same
 	void ChiAcceptSame();
-	// make sure we accept and save a Chi value with a much higher posterior
-	void ChiAcceptBetter();
 	// test Chi::Adapt acceptance rate and covariance by running a simple MCMC sampler
 	void ChiAdapt();
 	// check that PopulationPar::Propose follow a multivariate normal distribution

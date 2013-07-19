@@ -216,12 +216,30 @@ void UnitTests::ChiPropose() {
 
 // check that Chi::Accept always accepts when the proposal and the current values are the same
 void UnitTests::ChiAcceptSame() {
+	double chi[3] = {1.2, 0.4, -0.7};
+	int p = 3, ntrials = 100000;
+	int m = 1, dt = 1, current_iter = 1;
 
-}
+	Characteristic Chi(p, m, dt, current_iter);
+	Chi.SetRNG(&rng);
 
-// make sure we accept and save a Chi value with a much higher posterior
-void UnitTests::ChiAcceptBetter() {
+	bool accept;
+	int naccept = 0;
+	double logdens = -1.32456;
+	double ratio = 0.0;
+	for (int i = 0; i < ntrials; ++i) {
+		accept = Chi.AcceptProp(logdens, logdens, 0.0, 0.0, ratio);
+		if (abs(ratio - 1.0) < epsilon) {
+			naccept++;
+		}
+	}
 
+	if (naccept == ntrials) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Chi::Accept failed: Failes to always accept when the log-posteriors are the same." << std::endl;
+	}
+	nperformed++;
 }
 
 // test Chi::Adapt acceptance rate and covariance by running a simple MCMC sampler

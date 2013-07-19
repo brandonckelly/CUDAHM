@@ -68,6 +68,7 @@ int main(int argc, char** argv)
     UnitTests Tests(ndata, mfeat, pchi, dtheta, nBlocks, nThreads);
 
     Tests.R1CholUpdate();
+    Tests.ChiPropose();
     Tests.Finish();
 
 	for (int i = 0; i < ndata; ++i) {

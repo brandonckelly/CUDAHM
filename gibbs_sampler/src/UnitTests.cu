@@ -18,6 +18,42 @@ extern boost::random::mt19937 rng;
 extern boost::random::normal_distribution<> snorm; // Standard normal distribution
 extern boost::random::uniform_real_distribution<> uniform; // Uniform distribution from 0.0 to 1.0
 
+// calculate transpose(x) * covar_inv * x for an nx-element vector x and an (nx,nx)-element matrix covar_inv
+double mahalanobis_distance(double** covar_inv, double* x, int nx) {
+	double distance = 0.0;
+	double* x_temp;
+	x_temp = new double [nx];
+	for (int i = 0; i < nx; ++i) {
+		x_temp[i] = 0.0;
+		for (int j = 0; j < nx; ++j) {
+			x_temp[i] += covar_inv[i][j] * x[j];
+		}
+	}
+	for (int i = 0; i < nx; ++i) {
+		distance += x_temp[i] * x[i];
+	}
+	delete x_temp;
+	return distance;
+}
+
+double mean(double* x, int nx) {
+	double mu = 0.0;
+	for (int i = 0; i < nx; ++i) {
+		mu += x[i] / nx;
+	}
+	return mu;
+}
+
+double variance(double* x, int nx) {
+	double sigsqr = 0.0;
+	double mu = mean(x, nx);
+	for (int i = 0; i < nx; ++i) {
+		sigsqr += (x[i] - mu) * (x[i] - mu);
+	}
+	sigsqr /= nx;
+	return sigsqr;
+}
+
 // destructor
 UnitTests::~UnitTests() {
 	// free memory used by data arrays
@@ -31,6 +67,7 @@ UnitTests::~UnitTests() {
 
 // test rank-1 cholesky update
 void UnitTests::R1CholUpdate() {
+	std::cout << "Testing rank-1 Cholesky Update..." << std::endl;
 	double covar[3][3] =
 	{
 			{5.29, 0.3105, -15.41},
@@ -78,7 +115,103 @@ void UnitTests::R1CholUpdate() {
 
 // check that Chi::Propose follows a multivariate normal distribution
 void UnitTests::ChiPropose() {
+	std::cout << "Testing Chi::Propose..." << std::endl;
+	double covar[3][3] =
+	{
+			{5.29, 0.3105, -15.41},
+			{0.3105, 0.2025, 3.2562},
+			{-15.41, 3.2562, 179.56}
+	};
+	double covar_inv0[3][3] =
+	{
+			{0.64880351, -2.66823952, 0.10406763},
+			{-2.66823952, 17.94430089, -0.55439855},
+			{0.10406763, -0.55439855, 0.02455399}
+	};
+	double** covar_inv;
+	covar_inv = new double* [3];
+	for (int i = 0; i < 3; ++i) {
+		covar_inv[i] = new double [3];
+	}
+	for (int i = 0; i < 3; ++i) {
+		for (int j = 0; j < 3; ++j) {
+			covar_inv[i][j] = covar_inv0[i][j];
+		}
+	}
 
+	double cholfact[6] = {2.3, 0.135, 0.42927264, -6.7, 9.6924416, 6.38173768};
+
+	int p = 3, ntrials = 100000;
+	int m = 1, dt = 1, current_iter = 1;
+
+	Characteristic Chi(p, m, dt, current_iter);
+	Chi.SetRNG(&rng);
+
+	double snorm_deviate[p];
+	double scaled_proposal[p];
+	double proposed_chi[p];
+	double chi[3] = {1.2, 0.4, -0.7};
+	double chisqr[ntrials];
+
+	for (int i = 0; i < ntrials; ++i) {
+		// get the ntrials proposals
+		Chi.Propose(chi, cholfact, proposed_chi, snorm_deviate, scaled_proposal);
+		for (int j = 0; j < p; ++j) {
+			proposed_chi[j] -= chi[j]; // center the proposals
+		}
+		chisqr[i] = mahalanobis_distance(covar_inv, proposed_chi, p);
+	}
+	/*
+	 * check that the values of chisqr are consistent with being drawn from a chi-square distribution
+	 * with p = 3 degrees of freedom.
+	*/
+
+	// first compare the average with the known value
+	double true_mean = p;
+	double true_var = 2.0 * p;
+	double mu_sigma = sqrt(true_var / ntrials); // standard deviation in the average
+	double mean_chisqr = mean(chisqr, ntrials);
+
+	double zdiff_mean = abs(mean_chisqr - true_mean) / mu_sigma;
+	if (zdiff_mean < 3.0) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Chi::Propose failed: average chi-square value more than 3-sigma away from true value" << std::endl;
+	}
+	nperformed++;
+
+	// compare empirical quantiles with known ones
+	double chi2_low = 0.3, chi2_high = 8.0;
+	int nlow_low = 3800, nlow_high = 4200; // # of chisqr < chi2_low should fall within this interval
+	int nhigh_low = 95200, nhigh_high = 95600; // # of chisqr < chi2_high should fall within this interval
+	int count_low = 0, count_high = 0;
+	for (int i = 0; i < ntrials; ++i) {
+		// count the number of elements of chisqr that are below the 4.0 and 95.4 percentiles
+		if (chisqr[i] < chi2_low) {
+			count_low++;
+		}
+		if (chisqr[i] < chi2_high) {
+			count_high++;
+		}
+	}
+	if ((count_low > nlow_low) && (count_low < nlow_high)) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Chi::Propose failed: empirical 4.0 percentile inconsistent with true value" << std::endl;
+	}
+	nperformed++;
+	if ((count_high > nhigh_low) && (count_high < nhigh_high)) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Chi::Propose failed: empirical 95.4 percentile inconsistent with true value" << std::endl;
+	}
+	nperformed++;
+
+	// free memory
+	for (int i = 0; i < 3; ++i) {
+		delete [] covar_inv[i];
+	}
+	delete covar_inv;
 }
 
 // check that Chi::Accept always accepts when the proposal and the current values are the same

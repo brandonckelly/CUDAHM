@@ -583,7 +583,7 @@ public:
 	}
 
 	// propose a new value for the characteristic
-	__device__ __host__ virtual double* Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_deviate,
+	__device__ __host__ virtual void Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_deviate,
 			double* scaled_proposal)
 	{
 		// get the unit proposal
@@ -607,7 +607,6 @@ public:
 			proposed_chi[j] = chi[j] + scaled_proposal_j;
 			scaled_proposal[j] = scaled_proposal_j;
 		}
-		return proposed_chi;
 	}
 
 	// adapt the covariance matrix of the proposals for the characteristics

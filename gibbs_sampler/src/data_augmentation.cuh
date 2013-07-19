@@ -583,7 +583,7 @@ public:
 	}
 
 	// propose a new value for the characteristic
-	__device__ __host__ virtual void Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_deviate,
+	__device__ __host__ void Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_deviate,
 			double* scaled_proposal)
 	{
 		// get the unit proposal
@@ -610,7 +610,7 @@ public:
 	}
 
 	// adapt the covariance matrix of the proposals for the characteristics
-	__device__ __host__ virtual void AdaptProp(double* cholfact, double* snorm_deviate, double* scaled_proposal,
+	__device__ __host__ void AdaptProp(double* cholfact, double* snorm_deviate, double* scaled_proposal,
 			double metro_ratio)
 	{
 		double unit_norm = 0.0;

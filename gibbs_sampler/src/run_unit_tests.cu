@@ -26,6 +26,8 @@
  *	- Test DataAugmentation::GetChi
  *	- make sure DataAugmentation::Update always accepts when the proposed and current chi values are the same
  *	- make sure we accept and save a Chi value when the posterior is much higher
+ *	- make sure we get the correct acceptance rate and covariance of the characteristics by keeping the population
+ *	parameter fixed
  *
  */
 

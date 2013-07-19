@@ -54,6 +54,55 @@ double variance(double* x, int nx) {
 	return sigsqr;
 }
 
+// characteristic class for a simple p-dimensional gaussian distribution with known mean and covariance
+class NormalVariate : public Characteristic {
+public:
+	__device__ __host__
+	NormalVariate(int p, int m, int dimt, int iter) : Characteristic(p, m, dimt, iter) {}
+
+	// compute the conditional log-posterior density of the measurements given the characteristic
+	__device__ __host__ double logdensity_meas(double* chi, double* meas, double* meas_unc)
+	{
+		double** covar_inv;
+		covar_inv = new double* [pchi];
+		for (int i = 0; i < pchi; ++i) {
+			covar_inv[i] = new double [pchi];
+		}
+		int index = 0;
+		for (int i = 0; i < pchi; ++i) {
+			for (int j = 0; j < pchi; ++j) {
+				// input meas_unc contains the values of the inverse-covariance matrix
+				covar_inv[i][j] = meas_unc[index];
+				index++;
+			}
+		}
+		double* chi_cent = new double [pchi];
+		for (int i = 0; i < pchi; ++i) {
+			// meas is the p-dimensional mean vector
+			chi_cent[i] = chi[i] - meas[i];
+		}
+		double logdens = mahalanobis_distance(covar_inv, chi_cent, pchi);
+
+		// delete memory
+		for (int i = 0; i < pchi; ++i) {
+			delete [] covar_inv[i];
+		}
+		delete covar_inv;
+		delete chi_cent;
+
+		return logdens;
+	}
+
+	// compute the conditional log-posterior dentity of the characteristic given the population parameter
+	__device__ __host__ double logdensity_pop(double* chi, double* theta)
+	{
+		return 0.0;
+	}
+
+
+private:
+};
+
 // destructor
 UnitTests::~UnitTests() {
 	// free memory used by data arrays

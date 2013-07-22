@@ -34,9 +34,9 @@
 int main(int argc, char** argv)
 {
 	int ndata = 10000;
-	int mfeat = 4;
+	int mfeat = 3;
 	int pchi = 3;
-	int dtheta = 2;
+	int dtheta = 3;
 
 	// Cuda grid launch
     dim3 nThreads(256);
@@ -48,6 +48,7 @@ int main(int argc, char** argv)
         return 2;
     }
 
+    /*
     double** meas_temp;
     double** meas_unc_temp;
 	// fill data arrays
@@ -62,9 +63,11 @@ int main(int argc, char** argv)
 		}
 	}
 
-    //DataAugmentation<Characteristic> Daug(meas_temp, meas_unc_temp, ndata, mfeat, pchi, nBlocks, nThreads);
-    //PopulationPar<Characteristic> Theta(dtheta, Daug, nBlocks, nThreads);
-    //Characteristic Chi(pchi, mfeat, dtheta, 1);
+    DataAugmentation<Characteristic> Daug(meas_temp, meas_unc_temp, ndata, mfeat, pchi, nBlocks, nThreads);
+    PopulationPar<Characteristic> Theta(dtheta, Daug, nBlocks, nThreads);
+    Characteristic Chi(pchi, mfeat, dtheta, 1);
+
+	*/
 
     UnitTests Tests(ndata, mfeat, pchi, dtheta, nBlocks, nThreads);
 
@@ -76,15 +79,20 @@ int main(int argc, char** argv)
     Tests.ChiAcceptSame();
     Tests.ChiAdapt();
 
+    // tests for population parameter class
+    Tests.ThetaPropose();
+
     // print results
     Tests.Finish();
 
+    /*
 	for (int i = 0; i < ndata; ++i) {
 		delete [] meas_temp[i];
 		delete [] meas_unc_temp[i];
 	}
 	delete meas_temp;
 	delete meas_unc_temp;
+     */
 
 	std::cout << "Success!!" << std::endl;
 }

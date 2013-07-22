@@ -364,24 +364,49 @@ template <class ChiType>
 class PopulationPar {
 
 public:
-	// constructor
-	PopulationPar(int dtheta, DataAugmentation<ChiType>& D, dim3& nB, dim3& nT) :
+	// constructors
+	PopulationPar(int dtheta, dim3& nB, dim3& nT) : dim_theta(dtheta), nBlocks(nB), nThreads(nT)
+	{
+		// don't do anything with the GPU for this constructor
+		h_theta.resize(dim_theta);
+		snorm_deviate.resize(dim_theta);
+		scaled_proposal.resize(dim_theta);
+		int dim_cholfact = dim_theta * dim_theta - ((dim_theta - 1) * dim_theta) / 2;
+		cholfact.resize(dim_cholfact);
+		// set initial value of theta to zero
+		thrust::fill(h_theta.begin(), h_theta.end(), 0.0);
+
+		// set initial covariance matrix of the theta proposals as the identity matrix
+		thrust::fill(cholfact.begin(), cholfact.end(), 0.0);
+		int diag_index = 0;
+		for (int k=0; k<dim_theta; k++) {
+			cholfact[diag_index] = 1.0;
+			diag_index += k + 2;
+		}
+		// reset the number of MCMC iterations
+		current_iter = 1;
+		naccept = 0;
+	}
+
+	PopulationPar(int dtheta, DataAugmentation<ChiType>* D, dim3& nB, dim3& nT) :
 		dim_theta(dtheta), Daug(D), nBlocks(nB), nThreads(nT)
 	{
 		h_theta.resize(dim_theta);
 		d_theta = h_theta;
+		snorm_deviate.resize(dim_theta);
+		scaled_proposal.resize(dim_theta);
 		int dim_cholfact = dim_theta * dim_theta - ((dim_theta - 1) * dim_theta) / 2;
 		cholfact.resize(dim_cholfact);
 
-		int ndata = Daug.GetDataDim();
-		pchi = Daug.GetChiDim();
+		int ndata = Daug->GetDataDim();
+		pchi = Daug->GetChiDim();
 		h_logdens.resize(ndata);
 		d_logdens = h_logdens;
 
 		InitialValue();
 
 		// make sure that the data augmentation object knows about the population parameter object
-		Daug.SetPopulationPtr(this);
+		Daug->SetPopulationPtr(this);
 	}
 
 	// calculate the initial value of the population parameters
@@ -401,9 +426,9 @@ public:
 
 		// get initial value of conditional log-posterior for theta|chi
 		double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
-		double* p_chi = Daug.GetDevChiPtr(); // grab pointer to Daug.d_chi
+		double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
 		double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
-		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, Daug.GetDataDim(), pchi, dim_theta);
+		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, Daug->GetDataDim(), pchi, dim_theta);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
         // copy initial values of logdensity to host
@@ -428,7 +453,7 @@ public:
         }
 
         // transform unit proposal so that is has a multivariate normal distribution
-        hvector proposed_theta;
+        hvector proposed_theta(dim_theta);
         thrust::fill(scaled_proposal.begin(), scaled_proposal.end(), 0.0);
         int cholfact_index = 0;
         for (int j=0; j<dim_theta; j++) {
@@ -488,10 +513,10 @@ public:
 		double* p_proposed_theta = thrust::raw_pointer_cast(&d_proposed_theta[0]);
 
 		// calculate log-posterior of new population parameter in parallel on the device
-		int ndata = Daug.GetDataDim();
+		int ndata = Daug->GetDataDim();
 		dvector d_proposed_logdens(ndata);
 		double* p_proposed_logdens = thrust::raw_pointer_cast(&d_proposed_logdens[0]);
-		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_proposed_theta, Daug.GetDevChiPtr(), p_proposed_logdens, ndata,
+		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_proposed_theta, Daug->GetDevChiPtr(), p_proposed_logdens, ndata,
 				pchi, dim_theta);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 		double logdens_prop = thrust::reduce(d_proposed_logdens.begin(), d_proposed_logdens.end());
@@ -515,6 +540,8 @@ public:
 	}
 
 	// setters and getters
+	void SetDataAugPtr(DataAugmentation<ChiType>* DataAug) { Daug = DataAug; }
+
 	void SetTheta(dvector& theta) {
 		h_theta = theta;
 		d_theta = theta;
@@ -523,6 +550,7 @@ public:
 		h_logdens = logdens;
 		d_logdens = logdens;
 	}
+	void SetCholFact(hvector cholfact_new) { cholfact = cholfact_new; }
 
 	hvector GetHostTheta() { return h_theta; }
 	dvector GetDevTheta() { return d_theta; }
@@ -542,7 +570,7 @@ protected:
 	hvector h_logdens;
 	dvector d_logdens;
 	// make sure that the population parameter knows about the characteristics
-	DataAugmentation<ChiType>& Daug;
+	DataAugmentation<ChiType>* Daug;
 	// cholesky factors of Metropolis proposal covariance matrix
 	hvector cholfact;
 	// interval variables used in robust adaptive metropolis algorithm

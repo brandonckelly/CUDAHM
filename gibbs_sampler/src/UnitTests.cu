@@ -339,8 +339,8 @@ void UnitTests::ChiAdapt() {
 	logdens_pop = Chi.LogDensityPop(chi, theta);
 	int naccept = 0, start_counting = 10000;
 
-	std::ofstream output("/users/brandonkelly/chi.dat");
-	output << chi[0] << " " << chi[1] << " " << chi[2] << " " << logdens_meas << std::endl;
+//	std::ofstream output("/users/brandonkelly/chi.dat");
+//	output << chi[0] << " " << chi[1] << " " << chi[2] << " " << logdens_meas << std::endl;
 
 	for (int i = 0; i < niter; ++i) {
 		// propose a new value of chi
@@ -375,9 +375,9 @@ void UnitTests::ChiAdapt() {
 		}
 		current_iter++;
 		Chi.SetCurrentIter(current_iter);
-		output << chi[0] << " " << chi[1] << " " << chi[2] << " " << logdens_meas << std::endl;
+//		output << chi[0] << " " << chi[1] << " " << chi[2] << " " << logdens_meas << std::endl;
 	}
-	output.close();
+//	output.close();
 	double accept_rate = double(naccept) / double(niter - start_counting);
 	double frac_diff = abs(accept_rate - target_rate) / target_rate;
 	// make sure acceptance rate is within 5% of the target rate
@@ -392,7 +392,111 @@ void UnitTests::ChiAdapt() {
 
 // check that PopulationPar::Propose follow a multivariate normal distribution
 void UnitTests::ThetaPropose() {
+	double covar[3][3] =
+	{
+			{5.29, 0.3105, -15.41},
+			{0.3105, 0.2025, 3.2562},
+			{-15.41, 3.2562, 179.56}
+	};
+	double covar_inv0[3][3] =
+	{
+			{0.64880351, -2.66823952, 0.10406763},
+			{-2.66823952, 17.94430089, -0.55439855},
+			{0.10406763, -0.55439855, 0.02455399}
+	};
+	double** covar_inv;
+	covar_inv = new double* [3];
+	for (int i = 0; i < 3; ++i) {
+		covar_inv[i] = new double [3];
+	}
+	for (int i = 0; i < 3; ++i) {
+		for (int j = 0; j < 3; ++j) {
+			covar_inv[i][j] = covar_inv0[i][j];
+		}
+	}
 
+	hvector cholfact(6);
+	cholfact[0] = 2.3;
+	cholfact[1] = 0.135;
+	cholfact[2] = 0.42927264;
+	cholfact[3] = -6.7;
+	cholfact[4] = 9.6924416;
+	cholfact[5] = 6.38173768;
+
+	int ntrials = 100000;
+	int current_iter = 1;
+    PopulationPar<Characteristic> Theta(dim_theta, nBlocks, nThreads);
+
+    hvector h_theta(3);
+    h_theta[0] = 1.2;
+    h_theta[1] = 0.4;
+    h_theta[2] = -0.7;
+    dvector d_theta = h_theta;
+    Theta.SetTheta(d_theta);
+    Theta.SetCholFact(cholfact);
+
+	double chisqr[ntrials];
+	for (int i = 0; i < ntrials; ++i) {
+		// get the ntrials proposals
+		hvector theta_prop = Theta.Propose();
+		for (int j = 0; j < dim_theta; ++j) {
+			theta_prop[j] -= h_theta[j]; // center the proposals
+		}
+		double* p_theta = thrust::raw_pointer_cast(&theta_prop[0]);
+		chisqr[i] = mahalanobis_distance(covar_inv, p_theta, dim_theta);
+	}
+
+	/*
+	 * check that the values of chisqr are consistent with being drawn from a chi-square distribution
+	 * with dt = 3 degrees of freedom.
+	*/
+
+	// first compare the average with the known value
+	double true_mean = dim_theta;
+	double true_var = 2.0 * dim_theta;
+	double mu_sigma = sqrt(true_var / ntrials); // standard deviation in the average
+	double mean_chisqr = mean(chisqr, ntrials);
+
+	double zdiff_mean = abs(mean_chisqr - true_mean) / mu_sigma;
+	if (zdiff_mean < 3.0) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Theta::Propose failed: average chi-square value more than 3-sigma away from true value" << std::endl;
+	}
+	nperformed++;
+
+	// compare empirical quantiles with known ones
+	double chi2_low = 0.3, chi2_high = 8.0;
+	int nlow_low = 3800, nlow_high = 4200; // # of chisqr < chi2_low should fall within this interval
+	int nhigh_low = 95200, nhigh_high = 95600; // # of chisqr < chi2_high should fall within this interval
+	int count_low = 0, count_high = 0;
+	for (int i = 0; i < ntrials; ++i) {
+		// count the number of elements of chisqr that are below the 4.0 and 95.4 percentiles
+		if (chisqr[i] < chi2_low) {
+			count_low++;
+		}
+		if (chisqr[i] < chi2_high) {
+			count_high++;
+		}
+	}
+	if ((count_low > nlow_low) && (count_low < nlow_high)) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Theta::Propose failed: empirical 4.0 percentile inconsistent with true value" << std::endl;
+	}
+	nperformed++;
+	if ((count_high > nhigh_low) && (count_high < nhigh_high)) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Theta::Propose failed: empirical 95.4 percentile inconsistent with true value" << std::endl;
+	}
+	nperformed++;
+
+	// free memory
+	for (int i = 0; i < 3; ++i) {
+		delete [] covar_inv[i];
+	}
+	delete covar_inv;
 }
 
 // check that PopulationPar::Accept always accepts when the logdensities are the same

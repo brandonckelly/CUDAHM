@@ -501,12 +501,26 @@ void UnitTests::ThetaPropose() {
 
 // check that PopulationPar::Accept always accepts when the logdensities are the same
 void UnitTests::ThetaAcceptSame() {
+	int ntrials = 100000;
+    PopulationPar<Characteristic> Theta(dim_theta, nBlocks, nThreads);
 
-}
+	bool accept;
+	int naccept = 0;
+	double logdens = -1.32456;
+	double ratio = 0.0;
+	for (int i = 0; i < ntrials; ++i) {
+		accept = Theta.AcceptProp(logdens, logdens, ratio);
+		if (abs(ratio - 1.0) < epsilon) {
+			naccept++;
+		}
+	}
 
-// make sure we accept and save a population parameter value with a much higher posterior
-void UnitTests::ThetaAcceptBetter() {
-
+	if (naccept == ntrials) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Theta::Accept failed: Failed to always accept when the log-posteriors are the same." << std::endl;
+	}
+	nperformed++;
 }
 
 // test PopulationPar::Adapt acceptance rate and covariance by running a simple MCMC sampler

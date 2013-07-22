@@ -70,8 +70,6 @@ public:
 	void ThetaPropose();
 	// check that PopulationPar::Accept always accepts when the logdensities are the same
 	void ThetaAcceptSame();
-	// make sure we accept and save a population parameter value with a much higher posterior
-	void ThetaAcceptBetter();
 	// test PopulationPar::Adapt acceptance rate and covariance by running a simple MCMC sampler
 	void ThetaAdapt();
 	// check that constructor for population parameter correctly set the pointer data member of DataAugmentation

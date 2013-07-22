@@ -82,6 +82,7 @@ int main(int argc, char** argv)
     // tests for population parameter class
     Tests.ThetaPropose();
     Tests.ThetaAcceptSame();
+    Tests.ThetaAdapt();
 
     // print results
     Tests.Finish();

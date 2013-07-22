@@ -551,6 +551,7 @@ public:
 		d_logdens = logdens;
 	}
 	void SetCholFact(hvector cholfact_new) { cholfact = cholfact_new; }
+	void SetCurrentIter(int iter) { current_iter = iter; }
 
 	hvector GetHostTheta() { return h_theta; }
 	dvector GetDevTheta() { return d_theta; }
@@ -559,6 +560,7 @@ public:
 	dvector GetDevLogDens() { return d_logdens; }
 	double* GetDevLogDensPtr() { return thrust::raw_pointer_cast(&d_logdens[0]); }
 	int GetDim() { return dim_theta; }
+	hvector GetCholFactor() { return cholfact; }
 
 protected:
 	int dim_theta;

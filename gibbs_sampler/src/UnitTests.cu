@@ -525,7 +525,80 @@ void UnitTests::ThetaAcceptSame() {
 
 // test PopulationPar::Adapt acceptance rate and covariance by running a simple MCMC sampler
 void UnitTests::ThetaAdapt() {
+	double covar[3][3] =
+	{
+			{5.29, 0.3105, -15.41},
+			{0.3105, 0.2025, 3.2562},
+			{-15.41, 3.2562, 179.56}
+	};
+	// store in a 1-d array since that is what Chi::Propose expects for the measurement uncertainties
+	double covar_inv[9] =
+	{
+			0.64880351, -2.66823952, 0.10406763,
+			-2.66823952, 17.94430089, -0.55439855,
+			0.10406763, -0.55439855, 0.02455399
+	};
+	double mu[3] = {1.2, 0.4, -0.7};
 
+	NormalVariate NormDist(pchi, mfeat, dim_theta, 1);
+	NormDist.SetRNG(&rng);
+	PopulationPar<NormalVariate> Theta(dim_theta, nBlocks, nThreads);
+
+	hvector h_theta = Theta.GetHostTheta();
+	dvector d_theta = h_theta;
+	double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
+
+	// run the MCMC sampler
+	double logdens_current = NormDist.LogDensityMeas(p_theta, mu, covar_inv);
+	int naccept = 0, start_counting = 10000;
+	int niter = 200000, current_iter = 1;
+	double target_rate = 0.4; // MCMC sampler target acceptance rate
+
+	//std::ofstream output("/users/brandonkelly/theta.dat");
+	//output << h_theta[0] << " " << h_theta[1] << " " << h_theta[2] << " " << logdens_current << std::endl;
+
+	for (int i = 0; i < niter; ++i) {
+		// propose a new value of theta
+		hvector theta_prop(dim_theta);
+		theta_prop = Theta.Propose();
+		double* p_theta_prop = thrust::raw_pointer_cast(&theta_prop[0]);
+		// get value of log-posterior for proposed theta value
+		double logdens_prop;
+		logdens_prop = NormDist.LogDensityMeas(p_theta_prop, mu, covar_inv);
+
+		// accept the proposed value of the characteristic?
+		double metro_ratio = 0.0;
+		bool accept = Theta.AcceptProp(logdens_prop, logdens_current, metro_ratio);
+
+		// adapt the covariance matrix of the characteristic proposal distribution
+		Theta.AdaptProp(metro_ratio);
+
+		if (accept) {
+			// accepted this proposal, so save new value of chi and log-densities
+			d_theta = theta_prop;
+			h_theta = theta_prop;
+			Theta.SetTheta(d_theta);
+			logdens_current = logdens_prop;
+			if (current_iter >= start_counting) {
+				// don't start counting # of accepted proposals until we've down start_counting iterations
+				naccept++;
+			}
+		}
+		current_iter++;
+		Theta.SetCurrentIter(current_iter);
+		//output << h_theta[0] << " " << h_theta[1] << " " << h_theta[2] << " " << logdens_current << std::endl;
+	}
+	//output.close();
+	double accept_rate = double(naccept) / double(niter - start_counting);
+	double frac_diff = abs(accept_rate - target_rate) / target_rate;
+	// make sure acceptance rate is within 5% of the target rate
+	if (frac_diff < 0.05) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Chi::Adapt failed: Acceptance rate is not within 5% of the target rate." << std::endl;
+		std::cout << accept_rate << ", " << target_rate << std::endl;
+	}
+	nperformed++;
 }
 
 // check that constructor for population parameter correctly set the pointer data member of DataAugmentation

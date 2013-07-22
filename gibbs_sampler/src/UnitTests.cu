@@ -7,6 +7,7 @@
 
 // standard includes
 #include <iostream>
+#include <fstream>
 
 // local includes
 #include "UnitTests.cuh"
@@ -19,6 +20,7 @@ extern boost::random::normal_distribution<> snorm; // Standard normal distributi
 extern boost::random::uniform_real_distribution<> uniform; // Uniform distribution from 0.0 to 1.0
 
 // calculate transpose(x) * covar_inv * x for an nx-element vector x and an (nx,nx)-element matrix covar_inv
+__host__ __device__
 double mahalanobis_distance(double** covar_inv, double* x, int nx) {
 	double distance = 0.0;
 	double* x_temp;
@@ -61,7 +63,7 @@ public:
 	NormalVariate(int p, int m, int dimt, int iter) : Characteristic(p, m, dimt, iter) {}
 
 	// compute the conditional log-posterior density of the measurements given the characteristic
-	__device__ __host__ double logdensity_meas(double* chi, double* meas, double* meas_unc)
+	__device__ __host__ double LogDensityMeas(double* chi, double* meas, double* meas_unc)
 	{
 		double** covar_inv;
 		covar_inv = new double* [pchi];
@@ -81,7 +83,7 @@ public:
 			// meas is the p-dimensional mean vector
 			chi_cent[i] = chi[i] - meas[i];
 		}
-		double logdens = mahalanobis_distance(covar_inv, chi_cent, pchi);
+		double logdens = -0.5 * mahalanobis_distance(covar_inv, chi_cent, pchi);
 
 		// delete memory
 		for (int i = 0; i < pchi; ++i) {
@@ -94,11 +96,14 @@ public:
 	}
 
 	// compute the conditional log-posterior dentity of the characteristic given the population parameter
-	__device__ __host__ double logdensity_pop(double* chi, double* theta)
+	__device__ __host__ double LogDensityPop(double* chi, double* theta)
 	{
 		return 0.0;
 	}
 
+	__device__ __host__ void SetCurrentIter(int iter) {
+		current_iter = iter;
+	}
 
 private:
 };
@@ -116,7 +121,6 @@ UnitTests::~UnitTests() {
 
 // test rank-1 cholesky update
 void UnitTests::R1CholUpdate() {
-	std::cout << "Testing rank-1 Cholesky Update..." << std::endl;
 	double covar[3][3] =
 	{
 			{5.29, 0.3105, -15.41},
@@ -164,7 +168,6 @@ void UnitTests::R1CholUpdate() {
 
 // check that Chi::Propose follows a multivariate normal distribution
 void UnitTests::ChiPropose() {
-	std::cout << "Testing Chi::Propose..." << std::endl;
 	double covar[3][3] =
 	{
 			{5.29, 0.3105, -15.41},
@@ -286,14 +289,105 @@ void UnitTests::ChiAcceptSame() {
 	if (naccept == ntrials) {
 		npassed++;
 	} else {
-		std::cerr << "Test for Chi::Accept failed: Failes to always accept when the log-posteriors are the same." << std::endl;
+		std::cerr << "Test for Chi::Accept failed: Failed to always accept when the log-posteriors are the same." << std::endl;
 	}
 	nperformed++;
 }
 
-// test Chi::Adapt acceptance rate and covariance by running a simple MCMC sampler
+// test Chi::Adapt acceptance rate and covariance by running a simple MCMC sampler for a 3-dimensional normal distribution
 void UnitTests::ChiAdapt() {
+	double covar[3][3] =
+	{
+			{5.29, 0.3105, -15.41},
+			{0.3105, 0.2025, 3.2562},
+			{-15.41, 3.2562, 179.56}
+	};
+	// store in a 1-d array since that is what Chi::Propose expects for the measurement uncertainties
+	double covar_inv[9] =
+	{
+			0.64880351, -2.66823952, 0.10406763,
+			-2.66823952, 17.94430089, -0.55439855,
+			0.10406763, -0.55439855, 0.02455399
+	};
+	double meas[3] = {1.2, 0.4, -0.7};
 
+	int p = 3, niter = 200000;
+	int m = 3, dt = 2, current_iter = 1;
+	double target_rate = 0.4; // MCMC sampler target acceptance rate
+
+	NormalVariate Chi(p, m, dt, current_iter);
+	Chi.SetRNG(&rng);
+
+	double chi[3];
+	for (int j = 0; j < p; ++j) {
+		chi[j] = 0.0; // initialize chi values to zero
+	}
+
+	// set initial covariance matrix of the chi proposals as the identity matrix
+	int diag_index = 0;
+	double cholfact[6];
+	for (int j=0; j<p; j++) {
+		cholfact[diag_index] = 1.0;
+		diag_index += j + 2;
+	}
+
+	// run the MCMC sampler
+	double theta[2] = {0.0, 0.0};
+	double snorm_deviate[p], scaled_proposal[p], proposed_chi[p];
+	double logdens_meas, logdens_pop;
+	logdens_meas = Chi.LogDensityMeas(chi, meas, covar_inv);
+	logdens_pop = Chi.LogDensityPop(chi, theta);
+	int naccept = 0, start_counting = 10000;
+
+	std::ofstream output("/users/brandonkelly/chi.dat");
+	output << chi[0] << " " << chi[1] << " " << chi[2] << " " << logdens_meas << std::endl;
+
+	for (int i = 0; i < niter; ++i) {
+		// propose a new value of chi
+		Chi.Propose(chi, cholfact, proposed_chi, snorm_deviate, scaled_proposal);
+
+		// get value of log-posterior for proposed chi value
+		double logdens_pop_prop, logdens_meas_prop;
+		logdens_meas_prop = Chi.LogDensityMeas(proposed_chi, meas, covar_inv);
+		logdens_pop_prop = Chi.LogDensityPop(proposed_chi, theta);
+		double logpost_prop = logdens_meas_prop + logdens_pop_prop;
+
+		// accept the proposed value of the characteristic?
+		double logpost_current = logdens_meas + logdens_pop;
+		double metro_ratio = 0.0;
+		bool accept = Chi.AcceptProp(logpost_prop, logpost_current, 0.0, 0.0, metro_ratio);
+
+		// adapt the covariance matrix of the characteristic proposal distribution
+		Chi.AdaptProp(cholfact, snorm_deviate, scaled_proposal, metro_ratio);
+		int dim_cholfact = p * p - ((p - 1) * p) / 2;
+
+		if (accept) {
+			// accepted this proposal, so save new value of chi and log-densities
+			for (int j=0; j<p; j++) {
+				chi[j] = proposed_chi[j];
+			}
+			logdens_meas = logdens_meas_prop;
+			logdens_pop = logdens_pop_prop;
+			if (current_iter >= start_counting) {
+				// don't start counting # of accepted proposals until we've down start_counting iterations
+				naccept++;
+			}
+		}
+		current_iter++;
+		Chi.SetCurrentIter(current_iter);
+		output << chi[0] << " " << chi[1] << " " << chi[2] << " " << logdens_meas << std::endl;
+	}
+	output.close();
+	double accept_rate = double(naccept) / double(niter - start_counting);
+	double frac_diff = abs(accept_rate - target_rate) / target_rate;
+	// make sure acceptance rate is within 5% of the target rate
+	if (frac_diff < 0.05) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Chi::Adapt failed: Acceptance rate is not within 5% of the target rate." << std::endl;
+		std::cout << accept_rate << ", " << target_rate << std::endl;
+	}
+	nperformed++;
 }
 
 // check that PopulationPar::Propose follow a multivariate normal distribution

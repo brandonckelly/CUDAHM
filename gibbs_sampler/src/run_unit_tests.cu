@@ -68,9 +68,15 @@ int main(int argc, char** argv)
 
     UnitTests Tests(ndata, mfeat, pchi, dtheta, nBlocks, nThreads);
 
+    // test the rank-1 cholesky update
     Tests.R1CholUpdate();
+
+    // tests for the characteristic class
     Tests.ChiPropose();
     Tests.ChiAcceptSame();
+    Tests.ChiAdapt();
+
+    // print results
     Tests.Finish();
 
 	for (int i = 0; i < ndata; ++i) {

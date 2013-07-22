@@ -114,7 +114,7 @@ void initial_chi_value(double* chi, double* meas, double* meas_unc, double* chol
 	for (int j = 0; j < pchi; ++j) {
 		this_chi[j] = chi[j * ndata + idata];
 	}
-	logdens[idata] = Chi.logdensity_meas(this_chi, meas, meas_unc);
+	logdens[idata] = Chi.LogDensityMeas(this_chi, meas, meas_unc);
 }
 
 // kernel to update the values of the characteristics in parallel on the GPU
@@ -147,8 +147,8 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 
 		// get value of log-posterior for proposed chi value
 		double logdens_pop_prop, logdens_meas_prop;
-		logdens_meas_prop = Chi.logdensity_meas(local_chi, meas, meas_unc);
-		logdens_pop_prop = Chi.logdensity_pop(local_chi, theta);
+		logdens_meas_prop = Chi.LogDensityMeas(local_chi, meas, meas_unc);
+		logdens_pop_prop = Chi.LogDensityPop(local_chi, theta);
 		double logpost_prop = logdens_meas_prop + logdens_pop_prop;
 
 		// accept the proposed value of the characteristic?
@@ -190,7 +190,7 @@ void logdensity_pop(double* theta, double* chi, double* logdens, int ndata, int 
 	{
 		ChiType Chi(pchi, 1, dim_theta, 1);
 		double chi_i[10];
-		logdens[idata] = Chi.logdensity_pop(chi_i, theta);
+		logdens[idata] = Chi.LogDensityPop(chi_i, theta);
 	}
 }
 
@@ -571,13 +571,13 @@ public:
 	void SetRNG(boost::random::mt19937* p_rng_in) { p_rng = p_rng_in; }
 
 	// compute the conditional log-posterior density of the measurements given the characteristic
-	__device__ __host__ virtual double logdensity_meas(double* chi, double* meas, double* meas_unc)
+	__device__ __host__ virtual double LogDensityMeas(double* chi, double* meas, double* meas_unc)
 	{
 		return 0.0;
 	}
 
 	// compute the conditional log-posterior dentity of the characteristic given the population parameter
-	__device__ __host__ virtual double logdensity_pop(double* chi, double* theta)
+	__device__ __host__ virtual double LogDensityPop(double* chi, double* theta)
 	{
 		return 0.0;
 	}

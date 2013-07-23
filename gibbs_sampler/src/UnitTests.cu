@@ -8,6 +8,7 @@
 // standard includes
 #include <iostream>
 #include <fstream>
+#include <cassert>
 
 // local includes
 #include "UnitTests.cuh"
@@ -620,6 +621,46 @@ void UnitTests::DaugPopPtr() {
 // test DataAugmentation::GetChi
 void UnitTests::DaugGetChi() {
 
+	DataAugmentation<Characteristic> Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
+	hvector h_chi = Daug.GetHostChi();
+
+	assert(h_chi.size() == ndata * pchi);
+
+	// generate some chi-values
+	double** chi2d;
+    chi2d = new double* [ndata];
+    for (int i = 0; i < ndata; ++i) {
+		chi2d[i] = new double [pchi];
+		for (int j = 0; j < pchi; ++j) {
+			chi2d[i][j] = snorm(rng);
+			h_chi[ndata * j + i] = chi2d[i][j];
+		}
+	}
+
+    dvector d_chi = h_chi;
+    Daug.SetChi(d_chi);
+
+    // return chi-values as a std::vector of std::vectors
+    vecvec vchi = Daug.GetChi();
+    int nequal = 0;
+    for (int i = 0; i < ndata; ++i) {
+		for (int j = 0; j < pchi; ++j) {
+			if (vchi[i][j] == chi2d[i][j]) {
+				nequal++;
+			}
+		}
+	}
+    if (nequal == ndata * pchi) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Daug::GetChi failed: Values returned do not match the input values." << std::endl;
+	}
+
+    for (int i = 0; i < ndata; ++i) {
+		delete [] chi2d[i];
+	}
+    delete chi2d;
+    nperformed++;
 }
 
 // check that DataAugmentation::Update always accepts when the proposed and current chi values are the same

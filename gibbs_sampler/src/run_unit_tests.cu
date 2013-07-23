@@ -86,6 +86,7 @@ int main(int argc, char** argv)
 
     // tests for the data augmentation class
     Tests.DaugPopPtr();
+    Tests.DaugGetChi();
 
     // print results
     Tests.Finish();

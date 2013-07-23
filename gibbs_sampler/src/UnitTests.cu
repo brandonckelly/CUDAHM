@@ -603,7 +603,18 @@ void UnitTests::ThetaAdapt() {
 
 // check that constructor for population parameter correctly set the pointer data member of DataAugmentation
 void UnitTests::DaugPopPtr() {
+	DataAugmentation<Characteristic> Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
+	PopulationPar<Characteristic> Theta(dim_theta, &Daug, nBlocks, nThreads);
 
+	PopulationPar<Characteristic>* p_Theta = Daug.GetPopulationPtr();
+
+	if (p_Theta == &Theta) {
+		npassed++;
+	} else {
+		std::cerr << "Test for PopulationPar constructor failed: Pointer to DataAugmentation member not correctly initialized."
+				<< std::endl;
+	}
+	nperformed++;
 }
 
 // test DataAugmentation::GetChi

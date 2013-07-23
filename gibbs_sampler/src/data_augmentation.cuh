@@ -311,6 +311,7 @@ public:
 	double* GetDevChiPtr() { return thrust::raw_pointer_cast(&d_chi[0]); }
 	int GetDataDim() { return ndata; }
 	int GetChiDim() { return pchi; }
+	PopulationPar<ChiType>* GetPopulationPtr() { return p_Theta; }
 
 protected:
 	// set the sizes of the data members

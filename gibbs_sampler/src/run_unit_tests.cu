@@ -64,7 +64,7 @@ int main(int argc, char** argv)
 	}
 
     DataAugmentation<Characteristic> Daug(meas_temp, meas_unc_temp, ndata, mfeat, pchi, nBlocks, nThreads);
-    PopulationPar<Characteristic> Theta(dtheta, Daug, nBlocks, nThreads);
+    PopulationPar<Characteristic> Theta(dtheta, &Daug, nBlocks, nThreads);
     Characteristic Chi(pchi, mfeat, dtheta, 1);
 
 	*/
@@ -83,6 +83,9 @@ int main(int argc, char** argv)
     Tests.ThetaPropose();
     Tests.ThetaAcceptSame();
     Tests.ThetaAdapt();
+
+    // tests for the data augmentation class
+    Tests.DaugPopPtr();
 
     // print results
     Tests.Finish();

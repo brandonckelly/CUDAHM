@@ -183,6 +183,22 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 
 // compute the conditional log-posterior density of the characteristics given the population parameter
 template<class ChiType> __global__
+void logdensity_meas(double* meas, double* meas_unc, double* chi, double* logdens, int ndata, int mfeat, int pchi)
+{
+	int idata = blockDim.x * blockIdx.x + threadIdx.x;
+	if (idata < ndata)
+	{
+		ChiType Chi(pchi, mfeat, 1, 1);
+		double chi_i[10];
+		for (int j = 0; j < pchi; ++j) {
+			chi_i[j] = chi[j * ndata + idata];
+		}
+		logdens[idata] = Chi.LogDensityMeas(chi_i, meas, meas_unc);
+	}
+}
+
+// compute the conditional log-posterior density of the characteristics given the population parameter
+template<class ChiType> __global__
 void logdensity_pop(double* theta, double* chi, double* logdens, int ndata, int pchi, int dim_theta)
 {
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
@@ -190,6 +206,9 @@ void logdensity_pop(double* theta, double* chi, double* logdens, int ndata, int 
 	{
 		ChiType Chi(pchi, 1, dim_theta, 1);
 		double chi_i[10];
+		for (int j = 0; j < pchi; ++j) {
+			chi_i[j] = chi[j * ndata + idata];
+		}
 		logdens[idata] = Chi.LogDensityPop(chi_i, theta);
 	}
 }
@@ -272,24 +291,39 @@ public:
 		double* p_logdens_pop = p_Theta->GetDevLogDensPtr();
 		double* p_devtheta = p_Theta->GetDevThetaPtr();
 		int* p_naccept = thrust::raw_pointer_cast(&d_naccept[0]);
+		int dim_theta = p_Theta->GetDim();
 
 		// launch the kernel to update the characteristics on the GPU
-		update_characteristic<ChiType><<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_devtheta, p_cholfact, p_logdens_meas, p_logdens_pop,
-				p_devStates, current_iter, p_naccept, ndata, mfeat, pchi, p_Theta->GetDim);
+		update_characteristic<ChiType><<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_devtheta, p_cholfact, p_logdens_meas,
+				p_logdens_pop, p_devStates, current_iter, p_naccept, ndata, mfeat, pchi, dim_theta);
 
         CUDA_CHECK_RETURN(cudaDeviceSynchronize());
         current_iter++;
 	}
 
 	// setters and getters
-	void SetChi(dvector& chi) {
+	void SetChi(dvector& chi, bool update_logdens = true) {
 		d_chi = chi;
 		h_chi = d_chi;
+		if (update_logdens) {
+			// update the posteriors for the new values of the characteristics
+			double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
+			double* p_meas_unc = thrust::raw_pointer_cast(&d_meas[0]);
+			double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
+			double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
+			logdensity_meas<ChiType><<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_logdens, ndata, mfeat, pchi);
+		}
 	}
+
 	void SetLogDens(dvector& logdens) {
 		d_logdens = logdens;
 		h_logdens = d_logdens;
 	}
+	void SetCholFact(dvector& cholfact) {
+		d_cholfact = cholfact;
+		h_cholfact = d_cholfact;
+	}
+
 	vecvec GetChi() // return the value of the characteristic in a std::vector of std::vectors for convenience
 	{
 		vecvec chi(ndata);
@@ -312,6 +346,10 @@ public:
 	int GetDataDim() { return ndata; }
 	int GetChiDim() { return pchi; }
 	PopulationPar<ChiType>* GetPopulationPtr() { return p_Theta; }
+	thrust::host_vector<int> GetNaccept() {
+		h_naccept = d_naccept;
+		return h_naccept;
+	}
 
 protected:
 	// set the sizes of the data members
@@ -328,6 +366,8 @@ protected:
 		int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
 		h_cholfact.resize(ndata * dim_cholfact);
 		d_cholfact.resize(ndata * dim_cholfact);
+		h_naccept.resize(ndata);
+		d_naccept.resize(ndata);
 	}
 
 	// measurements and their uncertainties
@@ -543,9 +583,16 @@ public:
 	// setters and getters
 	void SetDataAugPtr(DataAugmentation<ChiType>* DataAug) { Daug = DataAug; }
 
-	void SetTheta(dvector& theta) {
+	void SetTheta(dvector& theta, bool update_logdens = true) {
 		h_theta = theta;
 		d_theta = theta;
+		if (update_logdens) {
+			// update value of conditional log-posterior for theta|chi
+			double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
+			double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
+			double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
+			logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, Daug->GetDataDim(), pchi, dim_theta);
+		}
 	}
 	void SetLogDens(dvector& logdens) {
 		h_logdens = logdens;
@@ -562,6 +609,7 @@ public:
 	double* GetDevLogDensPtr() { return thrust::raw_pointer_cast(&d_logdens[0]); }
 	int GetDim() { return dim_theta; }
 	hvector GetCholFactor() { return cholfact; }
+	int GetNaccept() { return naccept; }
 
 protected:
 	int dim_theta;
@@ -596,7 +644,7 @@ public:
 	__device__ __host__ virtual ~Characteristic() {}
 
 	// set the state of the random number generator on the device
-	void SetState(curandState* p_localState) { p_state = p_localState; }
+	__device__ void SetState(curandState* p_localState) { p_state = p_localState; }
 
 	// set the state of the random number generator on the host
 	void SetRNG(boost::random::mt19937* p_rng_in) { p_rng = p_rng_in; }

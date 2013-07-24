@@ -88,6 +88,7 @@ int main(int argc, char** argv)
     Tests.DaugPopPtr();
     Tests.DaugGetChi();
     Tests.DaugAcceptSame();
+    Tests.DaugAcceptBetter();
 
     // print results
     Tests.Finish();

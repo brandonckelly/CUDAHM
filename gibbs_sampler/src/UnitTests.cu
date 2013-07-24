@@ -780,7 +780,8 @@ void UnitTests::DaugAcceptSame()
 	if (naccept == ndata) {
 		npassed++;
 	} else {
-		std::cerr << "Test for Daug::AcceptSame() failed: Did not accept all of the proposed characteristics." << std::endl;
+		std::cerr << "Test for Daug::Accept() failed: Did not accept all of the proposed characteristics "
+				<< "when they are the same." << std::endl;
 	}
 	nperformed++;
 
@@ -806,15 +807,136 @@ void UnitTests::DaugAcceptSame()
 	if (naccept == ntrials) {
 		npassed++;
 	} else {
-		std::cerr << "Test for Daug::AcceptSame() failed: Did not accept all of the proposed population values." << std::endl;
-		std::cerr << "Accepted " << naccept << " out of " << ntrials << " trials." << std::endl;
+		std::cerr << "Test for PopulationPar::Accept() failed: Did not accept all of the proposed population "
+				<< "values when they are the same." << std::endl;
 	}
 	nperformed++;
 }
 
 // make sure that DataAugmentation::Update() accepts and saves Chi values when the posterior is much higher
 void UnitTests::DaugAcceptBetter() {
+	DataAugmentation<NormalVariate3d> Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
+	PopulationPar<NormalVariate3d> Theta(dim_theta, &Daug, nBlocks, nThreads);
 
+	// generate some chi values from a standard normal
+	hvector h_chi(ndata * pchi);
+	for (int i = 0; i < h_chi.size(); ++i) {
+		h_chi[i] = snorm(rng);
+	}
+	dvector d_chi = h_chi;
+	Daug.SetChi(d_chi);
+
+	// artificially set the conditional log-posteriors to a really low value to make sure we accept the proposal
+	hvector h_logdens_meas(ndata);
+	thrust::fill(h_logdens_meas.begin(), h_logdens_meas.end(), -1e10);
+	dvector d_logdens_meas = h_logdens_meas;
+	Daug.SetLogDens(d_logdens_meas);
+
+	Daug.Update();
+	thrust::host_vector<int> h_naccept = Daug.GetNaccept();
+
+	// make sure all of the proposals are accepted, since the proposed chi values are the same as the current ones
+	int naccept = 0;
+	for (int i = 0; i < h_naccept.size(); ++i) {
+		naccept += h_naccept[i];
+	}
+	if (naccept == ndata) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Daug::Accept() failed: Did not accept all of the proposed characteristics when "
+				<< "the posterior is improved." << std::endl;
+	}
+	nperformed++;
+
+	// make sure that the proposed values and new posteriors are saved
+	hvector h_new_chi = Daug.GetDevChi();
+	int ndiff_chi = 0;
+	for (int i = 0; i < h_chi.size(); ++i) {
+		if (h_new_chi[i] != h_chi[i]) {
+			ndiff_chi++;
+		}
+	}
+	if (ndiff_chi == h_chi.size()) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Daug::Accept() failed: Did not update the characteristics when the "
+				<< "proposals are accepted." << std::endl;
+	}
+	nperformed++;
+	hvector h_new_logdens = Daug.GetDevLogDens();
+	int ndiff_logdens = 0;
+	for (int i = 0; i < h_new_logdens.size(); ++i) {
+		if (h_new_logdens[i] != h_logdens_meas[i]) {
+			ndiff_logdens++;
+		}
+	}
+	if (ndiff_logdens == h_logdens_meas.size()) {
+		npassed++;
+	} else {
+		std::cerr << "Test for Daug::Accept() failed: Did not update the posteriors when the "
+				<< "proposals are accepted." << std::endl;
+	}
+	nperformed++;
+
+	/*
+	 * Now do the same thing, but for the population parameters.
+	 */
+
+	hvector h_theta(dim_theta);
+	for (int i = 0; i < h_theta.size(); ++i) {
+		h_theta[i] = snorm(rng);
+	}
+	dvector d_theta = h_theta;
+	Theta.SetTheta(d_theta);
+
+	hvector h_logdens_pop(ndata);
+	thrust::fill(h_logdens_pop.begin(), h_logdens_pop.end(), -1e10);
+	dvector d_logdens_pop = h_logdens_pop;
+	Theta.SetLogDens(d_logdens_pop);
+
+	Theta.Update();
+
+	// make sure we accepted the proposal
+	naccept = Theta.GetNaccept();
+	if (naccept == 1) {
+		npassed++;
+	} else {
+		std::cerr << "Test for PopulationPar::Accept() failed: Did not accept the proposed population "
+				<< "values when the posterior is improved" << std::endl;
+	}
+	nperformed++;
+
+	// make sure that the proposed values and new posteriors are saved
+	hvector h_new_theta = Theta.GetHostTheta();
+	int ndiff_theta = 0;
+	for (int i = 0; i < h_new_theta.size(); ++i) {
+		if (h_new_theta[i] != h_theta[i]) {
+			ndiff_theta++;
+		}
+	}
+	if (ndiff_theta == h_new_theta.size()) {
+		// did we save the accepted theta?
+		npassed++;
+	} else {
+		std::cerr << "Test for PopulationPar::Accept() failed: Did not update the population parameter value when the "
+				<< "proposal is accepted." << std::endl;
+	}
+	nperformed++;
+	h_new_logdens = Theta.GetHostLogDens();
+	ndiff_logdens = 0;
+	for (int i = 0; i < h_new_logdens.size(); ++i) {
+		if (h_new_logdens[i] != h_logdens_meas[i]) {
+			ndiff_logdens++;
+		}
+	}
+	if (ndiff_logdens == h_logdens_meas.size()) {
+		// did we update the posterior?
+		npassed++;
+	} else {
+		std::cerr << "Test for PopulationPar::Accept() failed: Did not update the posteriors when the "
+				<< "proposals are accepted." << std::endl;
+	}
+	nperformed++;
 }
 
 // print out summary of test results

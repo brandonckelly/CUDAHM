@@ -571,7 +571,6 @@ public:
 			h_theta = h_proposed_theta;
 			d_theta = d_proposed_theta;
 			d_logdens = d_proposed_logdens;
-			h_logdens = d_logdens;
 			naccept++;
 		}
 
@@ -603,8 +602,16 @@ public:
 
 	hvector GetHostTheta() { return h_theta; }
 	dvector GetDevTheta() { return d_theta; }
+	std::vector<double> GetTheta() { // return the current value of theta as a std::vector
+		std::vector<double> std_theta(h_theta.size());
+		thrust::copy(h_theta.begin(), h_theta.end(), std_theta.begin());
+		return std_theta;
+	}
 	double* GetDevThetaPtr() { return thrust::raw_pointer_cast(&d_theta[0]); }
-	hvector GetHostLogDens() { return h_logdens; }
+	hvector GetLogDens() {
+		h_logdens = d_logdens;
+		return h_logdens;
+	}
 	dvector GetDevLogDens() { return d_logdens; }
 	double* GetDevLogDensPtr() { return thrust::raw_pointer_cast(&d_logdens[0]); }
 	int GetDim() { return dim_theta; }

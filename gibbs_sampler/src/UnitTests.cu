@@ -922,7 +922,7 @@ void UnitTests::DaugAcceptBetter() {
 				<< "proposal is accepted." << std::endl;
 	}
 	nperformed++;
-	h_new_logdens = Theta.GetHostLogDens();
+	h_new_logdens = Theta.GetLogDens();
 	ndiff_logdens = 0;
 	for (int i = 0; i < h_new_logdens.size(); ++i) {
 		if (h_new_logdens[i] != h_logdens_meas[i]) {

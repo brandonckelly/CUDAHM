@@ -10,6 +10,7 @@
 // local includes
 #include "data_augmentation.cuh"
 #include "UnitTests.cuh"
+#include "GibbsSampler.cuh"
 
 /* list of unit tests:
  *
@@ -48,7 +49,6 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    /*
     double** meas_temp;
     double** meas_unc_temp;
 	// fill data arrays
@@ -65,9 +65,10 @@ int main(int argc, char** argv)
 
     DataAugmentation<Characteristic> Daug(meas_temp, meas_unc_temp, ndata, mfeat, pchi, nBlocks, nThreads);
     PopulationPar<Characteristic> Theta(dtheta, &Daug, nBlocks, nThreads);
-    Characteristic Chi(pchi, mfeat, dtheta, 1);
+    // Characteristic Chi(pchi, mfeat, dtheta, 1);
 
-	*/
+    int niter(10000), nburnin(2500);
+    GibbsSampler<Characteristic> Sampler(Daug, Theta, niter, nburnin);
 
     UnitTests Tests(ndata, mfeat, pchi, dtheta, nBlocks, nThreads);
 

@@ -8,6 +8,15 @@
 #ifndef _DATA_AUGMENTATION_HPP__
 #define _DATA_AUGMENTATION_HPP__
 
+// macro for checking for CUDA errors
+#define CUDA_CHECK_RETURN(value) {											\
+	cudaError_t _m_cudaStat = value;										\
+	if (_m_cudaStat != cudaSuccess) {										\
+		fprintf(stderr, "Error %s at line %d in file %s\n",					\
+				cudaGetErrorString(_m_cudaStat), __LINE__, __FILE__);		\
+		exit(1);															\
+	} }
+
 // Cuda Includes
 #include "cuda_runtime.h"
 #include "cuda_runtime_api.h"
@@ -30,23 +39,14 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
-// Global random number generator and distributions for generating random numbers on the host. The random number generator used
-// is the Mersenne Twister mt19937 from the BOOST library. These are instantiated in data_augmentation.cu.
-extern boost::random::mt19937 rng;
-extern boost::random::normal_distribution<> snorm; // Standard normal distribution
-extern boost::random::uniform_real_distribution<> uniform; // Uniform distribution from 0.0 to 1.0
-
-const double target_rate = 0.4; // MCMC sampler target acceptance rate
-const double decay_rate = 0.667; // decay rate of robust adaptive metropolis algorithm
-
+// convenient typedefs
 typedef std::vector<std::vector<double> > vecvec;
 typedef thrust::host_vector<double> hvector;
 typedef thrust::device_vector<double> dvector;
 
 // pointers to functions that must be supplied by the user
 typedef double (*pLogDensMeas)(double*, double*, double*, int, int);
-
-class PopulationPar; // forward declaration so that DataAugmentation knows about PopulationPar
+typedef double (*pLogDensPop)(double*, double*, int, int);
 
 // class for a data augmentation.
 class DataAugmentation
@@ -117,6 +117,8 @@ protected:
 	// CUDA kernel launch specifications
 	dim3& nBlocks;
 	dim3& nThreads;
+	// pointer to device-side function that compute the conditional log-posterior of measurements|characteristics
+	pLogDensMeas p_logdens_function;
 	// MCMC sampler parameters
 	int current_iter;
 	thrust::host_vector<int> h_naccept;
@@ -196,6 +198,8 @@ protected:
 	// CUDA kernel launch specifications
 	dim3& nBlocks;
 	dim3& nThreads;
+	// pointer to device-side function that compute the conditional log-posterior of characteristics|population
+	pLogDensPop p_logdens_function;
 	// MCMC parameters
 	int naccept;
 	int current_iter;

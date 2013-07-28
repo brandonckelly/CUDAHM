@@ -1,10 +1,10 @@
 #include "kernels.cuh"
 
 // Global random number generator and distributions for generating random numbers on the host. The random number generator used
-// is the Mersenne Twister mt19937 from the BOOST library.
-boost::random::mt19937 rng;
-boost::random::normal_distribution<> snorm(0.0, 1.0); // Standard normal distribution
-boost::random::uniform_real_distribution<> uniform(0.0, 1.0); // Uniform distribution from 0.0 to 1.0
+// is the Mersenne Twister mt19937 from the BOOST library. These are instantiated in data_augmentation.cu.
+extern boost::random::mt19937 rng;
+extern boost::random::normal_distribution<> snorm; // Standard normal distribution
+extern boost::random::uniform_real_distribution<> uniform; // Uniform distribution from 0.0 to 1.0
 
 // Function to compute the rank-1 Cholesky update/downdate. Note that this is done in place.
 __device__ __host__
@@ -44,7 +44,7 @@ void chol_update_r1(double* cholfactor, double* v, int dim_v, bool downdate) {
 // compute the conditional log-posterior density of the measurements given the characteristic
 //__device__ double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, int pchi) { return 0.0; }
 
-// compute the conditional log-posterior dentity of the characteristic given the population parameter
+// compute the conditional log-posterior density of the characteristic given the population parameter
 //__device__ double LogDensityPop(double* chi, double* theta, int pchi, int dim_theta) { return 0.0; }
 
 // propose a new value for the characteristic
@@ -54,8 +54,12 @@ void Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_
 {
 	// get the unit proposal
 	for (int j=0; j<pchi; j++) {
+#ifdef __CUDA_ARCH__
 		snorm_deviate[j] = curand_normal_double(p_state);
+#else
+		snorm_deviate[j] = snorm(rng);
 	}
+#endif
 
 	// propose a new chi value
 	int cholfact_index = 0;
@@ -81,9 +85,9 @@ void AdaptProp(double* cholfact, double* snorm_deviate, double* scaled_proposal,
 		unit_norm += snorm_deviate[j] * snorm_deviate[j];
 	}
 	unit_norm = sqrt(unit_norm);
-	double gamma = 0.667;
+	double decay_rate = 0.667;
 	double target_rate = 0.4;
-	double decay_sequence = 1.0 / pow(current_iter, gamma);
+	double decay_sequence = 1.0 / pow(current_iter, decay_rate);
 	double scaled_coef = sqrt(decay_sequence * fabs(metro_ratio - target_rate)) / unit_norm;
 	for (int j=0; j<pchi; j++) {
 		scaled_proposal[j] *= scaled_coef;
@@ -101,7 +105,11 @@ bool AcceptProp(double logdens_prop, double logdens_current, double forward_dens
 	double lograt = logdens_prop - forward_dens - (logdens_current - backward_dens);
 	lograt = min(lograt, 0.0);
 	ratio = exp(lograt);
+#ifdef __CUDA_ARCH__
 	double unif = curand_uniform_double(p_state);
+#else
+	double unif = uniform(rng);
+#endif
 	bool accept = (unif < ratio) && isfinite(ratio);
 	return accept;
 }
@@ -170,7 +178,7 @@ __global__ void initialize_rng(curandState *state)
 // calculate initial value of characteristics
 __global__
 void initial_chi_value(double* chi, double* meas, double* meas_unc, double* cholfact, double* logdens,
-		int ndata, int mfeat, int pchi)
+		int ndata, int mfeat, int pchi, pLogDensMeas LogDensityMeas)
 {
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
 	if (idata < ndata)
@@ -197,8 +205,8 @@ void initial_chi_value(double* chi, double* meas, double* meas_unc, double* chol
 // kernel to update the values of the characteristics in parallel on the GPU
 __global__
 void update_characteristic(double* meas, double* meas_unc, double* chi, double* theta, double* cholfact,
-		double* logdens_meas, double* logdens_pop, curandState* devStates, int current_iter, int* naccept,
-		int ndata, int mfeat, int pchi, int dim_theta)
+		double* logdens_meas, double* logdens_pop, curandState* devStates, pLogDensMeas LogDensityMeas,
+		pLogDensPop LogDensityPop, int current_iter, int* naccept, int ndata, int mfeat, int pchi, int dim_theta)
 {
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
 	if (idata < ndata)
@@ -206,6 +214,7 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 		curandState localState = devStates[idata]; // grab state of this random number generator
 
 		// copy values for this data point to registers for speed
+		// TODO: convert these arrays to shared memory
 		double snorm_deviate[3], scaled_proposal[3], proposed_chi[3], local_chi[3], local_cholfact[6];
 		int cholfact_index = 0;
 		for (int j = 0; j < pchi; ++j) {
@@ -257,7 +266,8 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 
 // compute the conditional log-posterior density of the characteristics given the population parameter
 __global__
-void logdensity_meas(double* meas, double* meas_unc, double* chi, double* logdens, int ndata, int mfeat, int pchi)
+void logdensity_meas(double* meas, double* meas_unc, double* chi, double* logdens, pLogDensMeas LogDensityMeas,
+		int ndata, int mfeat, int pchi)
 {
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
 	if (idata < ndata)
@@ -272,7 +282,8 @@ void logdensity_meas(double* meas, double* meas_unc, double* chi, double* logden
 
 // compute the conditional log-posterior density of the characteristics given the population parameter
 __global__
-void logdensity_pop(double* theta, double* chi, double* logdens, int ndata, int pchi, int dim_theta)
+void logdensity_pop(double* theta, double* chi, double* logdens, pLogDensPop LogDensityPop, int ndata,
+		int pchi, int dim_theta)
 {
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
 	if (idata < ndata)

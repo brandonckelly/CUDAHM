@@ -7,12 +7,24 @@
 
 // local includes
 #include "parameters.hpp"
+#include "kernels.cuh"
+
+/*
+ * POINTERS TO FUNCTIONS THAT ARE NEEDED TO COMPUTE THE CONDITIONAL LOG-POSTERIORS. THESE MUST BE DEFINED ELSEWHERE TO
+ * POINT TO THE USER-SUPPLIED FUNCTIONS FOR COMPUTING THE LOG-POSTERIORS.
+ */
+extern __constant__ pLogDensMeas c_logdens_meas;
+extern __constant__ pLogDensPop c_logdens_pop;
 
 // Global random number generator and distributions for generating random numbers on the host. The random number generator used
 // is the Mersenne Twister mt19937 from the BOOST library.
 boost::random::mt19937 rng;
 boost::random::normal_distribution<> snorm(0.0, 1.0); // Standard normal distribution
 boost::random::uniform_real_distribution<> uniform(0.0, 1.0); // Uniform distribution from 0.0 to 1.0
+
+// Global constants for MCMC sampler
+const double target_rate = 0.4; // MCMC sampler target acceptance rate
+const double decay_rate = 0.667; // decay rate of robust adaptive metropolis algorithm
 
 DataAugmentation::DataAugmentation(double** meas, double** meas_unc, int n, int m, int p, dim3& nB, dim3& nT) :
 ndata(n), mfeat(m), pchi(p), nBlocks(nB), nThreads(nT)
@@ -40,6 +52,10 @@ ndata(n), mfeat(m), pchi(p), nBlocks(nB), nThreads(nT)
 	CUDA_CHECK_RETURN(cudaPeekAtLastError());
 	// Wait until RNG stuff is done running on the GPU, make sure everything went OK
 	CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+
+	// grab pointer to function that compute the log-density of measurements|characteristics from device
+	// __constant__ memory
+    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_logdens_meas, sizeof(c_logdens_meas)));
 
 	// grab pointers to the device vector memory locations
 	double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
@@ -150,6 +166,10 @@ PopulationPar::PopulationPar(int dtheta, dim3& nB, dim3& nT) : dim_theta(dtheta)
 	// set initial value of theta to zero
 	thrust::fill(h_theta.begin(), h_theta.end(), 0.0);
 
+	// grab pointer to function that compute the log-density of measurements|characteristics from device
+	// __constant__ memory
+    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_logdens_meas, sizeof(p_test_function)));
+
 	// set initial covariance matrix of the theta proposals as the identity matrix
 	thrust::fill(cholfact.begin(), cholfact.end(), 0.0);
 	int diag_index = 0;
@@ -171,6 +191,10 @@ PopulationPar::PopulationPar(int dtheta, DataAugmentation* D, dim3& nB, dim3& nT
 	scaled_proposal.resize(dim_theta);
 	int dim_cholfact = dim_theta * dim_theta - ((dim_theta - 1) * dim_theta) / 2;
 	cholfact.resize(dim_cholfact);
+
+	// grab pointer to function that compute the log-density of measurements|characteristics from device
+	// __constant__ memory
+    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_logdens_pop, sizeof(c_logdens_pop)));
 
 	int ndata = Daug->GetDataDim();
 	pchi = Daug->GetChiDim();

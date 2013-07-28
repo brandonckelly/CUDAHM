@@ -46,7 +46,7 @@ __global__ void test_function_pointer(int ndata, double* x, pLogDensMeas logdens
         double x2[2];
         double x3[2];
         int  p = 2, m = 3;
-        double result = test_function(x1, x2, x3, p, m);
+        double result = logdens_meas(x1, x2, x3, p, m);
         x[id] = result;
 	}
 }

@@ -10,6 +10,7 @@
 
 // Cuda Includes
 #include "cuda_runtime.h"
+#include "cuda_runtime_api.h"
 #include "device_launch_parameters.h"
 #include <cuda.h>
 #include <curand.h>
@@ -18,6 +19,7 @@
 // Standard includes
 #include <cmath>
 #include <vector>
+#include <stdio.h>
 // Boost includes
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/normal_distribution.hpp>
@@ -47,40 +49,11 @@ typedef std::vector<std::vector<double> > vecvec;
 typedef thrust::host_vector<double> hvector;
 typedef thrust::device_vector<double> dvector;
 
-// Function to compute the rank-1 Cholesky update/downdate. Note that this is done in place.
-inline __device__ __host__
-void chol_update_r1(double* cholfactor, double* v, int dim_v, bool downdate) {
+// pointers to functions that must be supplied by the user
+typedef double (*pLogDensMeas)(double*, double*, double*, int, int);
 
-    double sign = 1.0;
-	if (downdate) {
-		// Perform the downdate instead
-		sign = -1.0;
-	}
-    int diag_index = 0;  // index of the diagonal of the cholesky factor
-	for (int i=0; i<dim_v; i++) {
-        // loop over the columns of the Cholesky factor
-        double L_ii = cholfactor[diag_index];
-        double v_i = v[i];
-        double r = sqrt( L_ii * L_ii + sign * v_i * v_i);
-		double c = r / L_ii;
-		double s = v_i / L_ii;
-		cholfactor[diag_index] = r;
-        int index_ji = diag_index; // index of the cholesky factor array that points to L[j,i]
-        // update the rest of the rows of the Cholesky factor for this column
-        for (int j=i+1; j<dim_v; j++) {
-            // loop over the rows of the i^th column of the Cholesky factor
-            index_ji += j;
-            cholfactor[index_ji] = (cholfactor[index_ji] + sign * s * v[j]) / c;
-        }
-        // update the elements of the vector v[i+1:dim_v-1]
-        index_ji = diag_index;
-        for (int j=i+1; j<dim_v; j++) {
-            index_ji += j;
-            v[j] = c * v[j] - s * cholfactor[index_ji];
-        }
-        diag_index += i + 2;
-    }
-}
+// __global__ void test_function_pointer(double* data, int ndata); //, pLogDensMeas logdens_meas);
+__device__ __host__ void chol_update_r1(double* cholfactor, double* v, int dim_v, bool downdate);
 
 /*
  * CUDA Kernels called by the classes defined below.
@@ -88,6 +61,17 @@ void chol_update_r1(double* cholfactor, double* v, int dim_v, bool downdate) {
 
 // Initialize the parallel random number generator state on the device
 __global__ void initialize_rng(curandState *state);
+
+__device__ double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, int pchi);
+__device__ double LogDensityPop(double* chi, double* theta, int pchi, int dim_theta);
+__device__ void Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_deviate,
+		double* scaled_proposal, int pchi, curandState* p_state);
+__device__ void AdaptProp(double* cholfact, double* snorm_deviate, double* scaled_proposal,
+		double metro_ratio, int pchi, int current_iter);
+__device__ bool AcceptProp(double logdens_prop, double logdens_current, double forward_dens,
+		double backward_dens, double& ratio, curandState* p_state);
+
+__device__ double ChiSqr(double* x, double* covar_inv, int nx);
 
 // calculate initial value of characteristics
 template <class ChiType> __global__
@@ -107,14 +91,15 @@ void initial_chi_value(double* chi, double* meas, double* meas_unc, double* chol
 			cholfact[idata + ndata * diag_index] = 1.0;
 			diag_index += j + 2;
 		}
+		// ChiType Chi(pchi, mfeat, 1, 1);
+		// copy value to registers
+		double this_chi[3];
+		for (int j = 0; j < pchi; ++j) {
+			this_chi[j] = chi[j * ndata + idata];
+		}
+		logdens[idata] = LogDensityMeas(this_chi, meas, meas_unc, pchi, mfeat);
+		//logdens[idata] = 0.0;
 	}
-	ChiType Chi(pchi, mfeat, 1, 1);
-	// copy value to registers
-	double this_chi[10];
-	for (int j = 0; j < pchi; ++j) {
-		this_chi[j] = chi[j * ndata + idata];
-	}
-	logdens[idata] = Chi.LogDensityMeas(this_chi, meas, meas_unc);
 }
 
 // kernel to update the values of the characteristics in parallel on the GPU
@@ -124,15 +109,16 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 		int ndata, int mfeat, int pchi, int dim_theta)
 {
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
-	if (idata < ndata) {
+	if (idata < ndata)
+	{
 		curandState localState = devStates[idata]; // grab state of this random number generator
 
 		// instantiate the characteristic object
-		ChiType Chi(pchi, mfeat, dim_theta, current_iter);
-		Chi.SetState(&localState);
+		//ChiType Chi(pchi, mfeat, dim_theta, current_iter);
+		//Chi.SetState(&localState);
 
 		// copy values for this data point to registers for speed
-		double snorm_deviate[10], scaled_proposal[10], proposed_chi[10], local_chi[10], local_cholfact[50];
+		double snorm_deviate[3], scaled_proposal[3], proposed_chi[3], local_chi[3], local_cholfact[6];
 		int cholfact_index = 0;
 		for (int j = 0; j < pchi; ++j) {
 			local_chi[j] = chi[j * ndata + idata];
@@ -143,21 +129,26 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 		}
 
 		// propose a new value of chi
-		Chi.Propose(local_chi, local_cholfact, proposed_chi, snorm_deviate, scaled_proposal);
+		Propose(local_chi, local_cholfact, proposed_chi, snorm_deviate, scaled_proposal, pchi, &localState);
+		//Chi.Propose(local_chi, local_cholfact, proposed_chi, snorm_deviate, scaled_proposal);
 
 		// get value of log-posterior for proposed chi value
-		double logdens_pop_prop, logdens_meas_prop;
-		logdens_meas_prop = Chi.LogDensityMeas(local_chi, meas, meas_unc);
-		logdens_pop_prop = Chi.LogDensityPop(local_chi, theta);
+		double logdens_meas_prop = LogDensityMeas(proposed_chi, meas, meas_unc, mfeat, pchi);
+		double logdens_pop_prop = LogDensityPop(proposed_chi, theta, pchi, dim_theta);
+		//logdens_pop_prop = Chi.LogDensityPop(proposed_chi, theta);
+		//logdens_meas_prop = Chi.LogDensityMeas(proposed_chi, meas, meas_unc);
 		double logpost_prop = logdens_meas_prop + logdens_pop_prop;
 
 		// accept the proposed value of the characteristic?
 		double logpost_current = logdens_meas[idata] + logdens_pop[idata];
 		double metro_ratio = 0.0;
-		bool accept = Chi.AcceptProp(logpost_prop, logpost_current, 0.0, 0.0, metro_ratio);
+		bool accept = AcceptProp(logpost_prop, logpost_current, 0.0, 0.0, metro_ratio, &localState);
+		//bool accept = Chi.AcceptProp(logpost_prop, logpost_current, 0.0, 0.0, metro_ratio);
 
 		// adapt the covariance matrix of the characteristic proposal distribution
-		Chi.AdaptProp(local_cholfact, snorm_deviate, scaled_proposal, metro_ratio);
+		AdaptProp(local_cholfact, snorm_deviate, scaled_proposal, metro_ratio, pchi, current_iter);
+		//Chi.AdaptProp(local_cholfact, snorm_deviate, scaled_proposal, metro_ratio);
+
 		int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
 		for (int j = 0; j < dim_cholfact; ++j) {
 			// copy value of this adapted cholesky factor back to global memory
@@ -188,12 +179,13 @@ void logdensity_meas(double* meas, double* meas_unc, double* chi, double* logden
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
 	if (idata < ndata)
 	{
-		ChiType Chi(pchi, mfeat, 1, 1);
-		double chi_i[10];
+		//ChiType Chi(pchi, mfeat, 4, 4);
+		double chi_i[3];
 		for (int j = 0; j < pchi; ++j) {
 			chi_i[j] = chi[j * ndata + idata];
 		}
-		logdens[idata] = Chi.LogDensityMeas(chi_i, meas, meas_unc);
+		logdens[idata] = LogDensityMeas(chi_i, meas, meas_unc, mfeat, pchi);
+		//logdens[idata] = Chi.LogDensityMeas(chi_i, meas, meas_unc);
 	}
 }
 
@@ -204,12 +196,15 @@ void logdensity_pop(double* theta, double* chi, double* logdens, int ndata, int 
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
 	if (idata < ndata)
 	{
-		ChiType Chi(pchi, 1, dim_theta, 1);
-		double chi_i[10];
+		//ChiType Chi(pchi, 4, dim_theta, 4);
+		double chi_i[3];
 		for (int j = 0; j < pchi; ++j) {
 			chi_i[j] = chi[j * ndata + idata];
 		}
-		logdens[idata] = Chi.LogDensityPop(chi_i, theta);
+		//double logdens_i = LogDensityPop(chi_i, theta, pchi, dim_theta);
+		//logdens_i = Chi.LogDensityPop(chi_i, theta);
+		logdens[idata] = LogDensityPop(chi_i, theta, pchi, dim_theta);
+		// logdens[idata] = Chi.LogDensityPop(chi_i, theta);
 	}
 }
 
@@ -245,6 +240,14 @@ public:
 		thrust::fill(h_cholfact.begin(), h_cholfact.end(), 0.0);
 		d_cholfact = h_cholfact;
 
+		// Allocate memory on GPU for RNG states
+		CUDA_CHECK_RETURN(cudaMalloc((void **)&p_devStates, nThreads.x * nBlocks.x * sizeof(curandState)));
+		// Initialize the random number generator states on the GPU
+		initialize_rng<<<nBlocks,nThreads>>>(p_devStates);
+		CUDA_CHECK_RETURN(cudaPeekAtLastError());
+		// Wait until RNG stuff is done running on the GPU, make sure everything went OK
+		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+
 		// grab pointers to the device vector memory locations
 		double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
 		double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
@@ -252,22 +255,68 @@ public:
 		double* p_cholfact = thrust::raw_pointer_cast(&d_cholfact[0]);
 		double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
 
-		// Allocate memory on GPU for RNG states
-		CUDA_CHECK_RETURN(cudaMalloc((void **)&p_devStates, nThreads.x * nBlocks.x * sizeof(curandState)));
-		// Initialize the random number generator states on the GPU
-		initialize_rng<<<nBlocks,nThreads>>>(p_devStates);
-
-		// Wait until RNG stuff is done running on the GPU, make sure everything went OK
-		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
-
+		/*
+		std::cout << "d_chi: ";
+		for (int i = 0; i < d_chi.size(); ++i) {
+			std::cout << d_chi[i] << " ";
+		}
+		std::cout << std::endl;
+		std::cout << "d_cholfact: ";
+		for (int i = 0; i < d_cholfact.size(); ++i) {
+			std::cout << d_cholfact[i] << " ";
+		}
+		std::cout << std::endl;
+		std::cout << "d_logdens: ";
+		for (int i = 0; i < d_logdens.size(); ++i) {
+			std::cout << d_logdens[i] << " ";
+		}
+		std::cout << std::endl;
+		for (int i = 0; i < 5; ++i) {
+			std::cout << std::endl;
+		}
+		 */
 		// set initial values for the characteristics. this will launch a CUDA kernel.
 		initial_chi_value<ChiType><<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens, ndata,
 				mfeat, pchi);
+		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
+		/*
+		std::cout << "d_chi: ";
+		for (int i = 0; i < d_chi.size(); ++i) {
+			std::cout << d_chi[i] << " ";
+		}
+		std::cout << std::endl;
+		std::cout << "d_cholfact: ";
+		for (int i = 0; i < d_cholfact.size(); ++i) {
+			std::cout << d_cholfact[i] << " ";
+		}
+		std::cout << std::endl;
+		std::cout << "d_logdens: ";
+		for (int i = 0; i < d_logdens.size(); ++i) {
+			std::cout << d_logdens[i] << " ";
+		}
+		std::cout << std::endl;
+		for (int i = 0; i < 5; ++i) {
+			std::cout << std::endl;
+		}
+		 */
 		// copy values from device to host
 		h_chi = d_chi;
+
+		/*
+		std::cout << "h_chi: ";
+		for (int i = 0; i < h_chi.size(); ++i) {
+			std::cout << h_chi[i] << " ";
+		}
+		std::cout << std::endl;
+		*/
+
 		h_cholfact = d_cholfact;
 		h_logdens = d_logdens;
+
+		thrust::fill(h_naccept.begin(), h_naccept.end(), 0);
+		d_naccept = h_naccept;
+		current_iter = 1;
 	}
 
 	virtual ~DataAugmentation() {
@@ -296,7 +345,7 @@ public:
 		// launch the kernel to update the characteristics on the GPU
 		update_characteristic<ChiType><<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_devtheta, p_cholfact, p_logdens_meas,
 				p_logdens_pop, p_devStates, current_iter, p_naccept, ndata, mfeat, pchi, dim_theta);
-
+		CUDA_CHECK_RETURN(cudaPeekAtLastError());
         CUDA_CHECK_RETURN(cudaDeviceSynchronize());
         current_iter++;
 	}
@@ -308,10 +357,19 @@ public:
 		if (update_logdens) {
 			// update the posteriors for the new values of the characteristics
 			double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
-			double* p_meas_unc = thrust::raw_pointer_cast(&d_meas[0]);
+			double* p_meas_unc = thrust::raw_pointer_cast(&d_meas_unc[0]);
 			double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
-			double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
-			logdensity_meas<ChiType><<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_logdens, ndata, mfeat, pchi);
+			double* p_logdens_meas = thrust::raw_pointer_cast(&d_logdens[0]);
+			// first update the posteriors of measurements | characteristics
+			logdensity_meas<ChiType><<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_logdens_meas, ndata, mfeat, pchi);
+			CUDA_CHECK_RETURN(cudaPeekAtLastError());
+			double* p_theta = p_Theta->GetDevThetaPtr();
+			int dim_theta = p_Theta->GetDim();
+			double* p_logdens_pop = p_Theta->GetDevLogDensPtr();
+			// no update the posteriors of the characteristics | population parameter
+			logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens_pop, ndata, pchi, dim_theta);
+			CUDA_CHECK_RETURN(cudaPeekAtLastError());
+			CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 		}
 	}
 
@@ -469,7 +527,9 @@ public:
 		double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
 		double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
 		double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
-		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, Daug->GetDataDim(), pchi, dim_theta);
+		int ndata = Daug->GetDataDim();
+		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, ndata, pchi, dim_theta);
+		CUDA_CHECK_RETURN(cudaPeekAtLastError());
         CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
         // copy initial values of logdensity to host
@@ -555,10 +615,20 @@ public:
 
 		// calculate log-posterior of new population parameter in parallel on the device
 		int ndata = Daug->GetDataDim();
+		//std::cout << "ndata: " << ndata << std::endl;
 		dvector d_proposed_logdens(ndata);
-		double* p_proposed_logdens = thrust::raw_pointer_cast(&d_proposed_logdens[0]);
-		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_proposed_theta, Daug->GetDevChiPtr(), p_proposed_logdens, ndata,
+		//std::cout << "size of d_proposed_logdens: " << d_proposed_logdens.size() << std::endl;
+		//double* p_logdens_current = thrust::raw_pointer_cast(&d_logdens[0]);
+		double* p_logdens_prop = thrust::raw_pointer_cast(&d_proposed_logdens[0]);
+
+		//size_t free, total;
+		//cudaMemGetInfo(&free, &total);
+		//std::cout << "free: " << free / 1024 << ", total: " << total / 1024 << std::endl;
+
+
+		logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_proposed_theta, Daug->GetDevChiPtr(), p_logdens_prop, ndata,
 				pchi, dim_theta);
+		CUDA_CHECK_RETURN(cudaPeekAtLastError());
         CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 		double logdens_prop = thrust::reduce(d_proposed_logdens.begin(), d_proposed_logdens.end());
 
@@ -583,14 +653,17 @@ public:
 	void SetDataAugPtr(DataAugmentation<ChiType>* DataAug) { Daug = DataAug; }
 
 	void SetTheta(dvector& theta, bool update_logdens = true) {
-		h_theta = theta;
 		d_theta = theta;
+		h_theta = theta;
 		if (update_logdens) {
 			// update value of conditional log-posterior for theta|chi
 			double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
 			double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
 			double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
+			h_logdens = d_logdens;
 			logdensity_pop<ChiType><<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, Daug->GetDataDim(), pchi, dim_theta);
+			CUDA_CHECK_RETURN(cudaPeekAtLastError());
+			h_logdens = d_logdens;
 		}
 	}
 	void SetLogDens(dvector& logdens) {
@@ -648,7 +721,7 @@ public:
 	// constructor
 	__device__ __host__ Characteristic(int p, int m, int dimt, int iter) : pchi(p), mfeat(m),
 		dim_theta(dimt), current_iter(iter) {}
-	__device__ __host__ virtual ~Characteristic() {}
+	//__device__ __host__ virtual ~Characteristic() {}
 
 	// set the state of the random number generator on the device
 	__device__ void SetState(curandState* p_localState) { p_state = p_localState; }

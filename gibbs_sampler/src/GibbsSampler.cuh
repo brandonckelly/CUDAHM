@@ -32,12 +32,18 @@ public:
 		ntheta_samples_ = 0;
 		nchi_samples_ = 0;
 		current_iter_ = 1;
+		fix_poppar = false; // default is to sample both the population parameters and characteristics
+		fix_char = false;
 	}
+
+	// fix the population parameters throughout the sampler?
+	void FixPopPar(bool fix=true) { fix_poppar = fix; }
+	void FixChar(bool fix=true) { fix_char = fix; }
 
 	// perform a single iterations of the Gibbs Sampler
 	virtual void Iterate() {
-		Daug_.Update();
-		PopPar_.Update();
+		if (!fix_char) Daug_.Update();
+		if (!fix_poppar) PopPar_.Update();
 		current_iter_++;
 	}
 
@@ -92,6 +98,7 @@ public:
 protected:
 	int niter_, nburnin_, nthin_chi_, nthin_theta_; // total # of iterations, # of burnin iterations, and thinning amount
 	int current_iter_, ntheta_samples_, nchi_samples_;
+	bool fix_poppar, fix_char; // is set to true, then keep the values fixed throughout the MCMC sampler
 	DataAugmentation<ChiType>& Daug_;
 	PopulationPar<ChiType>& PopPar_;
 	std::vector<vecvec> ChiSamples_;

@@ -32,12 +32,45 @@
  *
  */
 
+// Global random number generator and distributions for generating random numbers on the host. The random number generator used
+// is the Mersenne Twister mt19937 from the BOOST library. These are instantiated in data_augmentation.cu.
+extern boost::random::mt19937 rng;
+
+inline __device__ double test_function(double* x1, double* x2, double* x3, int p, int m) {
+	return x1[0];
+}
+
+__global__ void test_function_pointer(double* data, int ndata) //, pLogDensMeas logdens_meas)
+{
+	printf("I am at line 45.");
+    int id = threadIdx.x + blockIdx.x * blockDim.x;
+    if (id < ndata)
+    {
+    	printf("I am at line 48.");
+    	double x1[3];
+    	double x2[3];
+    	double x3[3];
+    	x1[0] = id;
+    	int pchi = 3;
+    	int mfeat = 3;
+    	double result = 0.0;
+    	//double result = logdens_meas(x1, x2, x3, pchi, mfeat);
+    	data[id] = result;
+    }
+}
+
+__constant__ pLogDensMeas p_test_function = test_function;
+
 int main(int argc, char** argv)
 {
-	int ndata = 10000;
+	int ndata = 10;
 	int mfeat = 3;
 	int pchi = 3;
 	int dtheta = 3;
+
+	size_t free, total;
+	cudaMemGetInfo(&free, &total);
+	std::cout << "free: " << free / 1024 << ", total: " << total / 1024 << std::endl;
 
 	// Cuda grid launch
     dim3 nThreads(256);
@@ -49,6 +82,36 @@ int main(int argc, char** argv)
         return 2;
     }
 
+    /*
+    hvector h_data(ndata, 0.0);
+    dvector d_data = h_data;
+    double* p_data = thrust::raw_pointer_cast(&d_data[0]);
+
+    // Set up parallel random number generators on the GPU
+    curandState* devStates;  // Create state object for random number generators on the GPU
+    // Allocate memory on GPU for RNG states
+    CUDA_CHECK_RETURN(cudaMalloc((void **)&devStates, nThreads.x * nBlocks.x *
+    		sizeof(curandState)));
+     // Initialize the random number generator states on the GPU
+     initialize_rng<<<nBlocks,nThreads>>>(devStates);
+     CUDA_CHECK_RETURN(cudaPeekAtLastError());
+     // Wait until RNG stuff is done running on the GPU, make sure everything went OK
+     CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+
+    pLogDensMeas h_pfunction;
+    std::cout << "transferring function pointer to host...";
+    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&h_pfunction, p_test_function, sizeof(p_test_function)));
+    std::cout << "success" << std::endl;
+
+    std::cout << "launching the kernel..." << std::endl;
+    test_function_pointer<<<nBlocks,nThreads>>>(p_data, ndata); //, h_pfunction);
+    std::cout << "results of test_function_pointer: ";
+    for (int i = 0; i < ndata; ++i) {
+		std::cout << p_data[i] << ", ";
+	}
+    std::cout << std::endl;
+
+    /*
     double** meas_temp;
     double** meas_unc_temp;
 	// fill data arrays
@@ -69,31 +132,38 @@ int main(int argc, char** argv)
 
     int niter(10000), nburnin(2500);
     GibbsSampler<Characteristic> Sampler(Daug, Theta, niter, nburnin);
+	*/
 
-    UnitTests Tests(ndata, mfeat, pchi, dtheta, nBlocks, nThreads);
+    rng.seed(123456);
 
-    // test the rank-1 cholesky update
-    Tests.R1CholUpdate();
 
-    // tests for the characteristic class
-    Tests.ChiPropose();
-    Tests.ChiAcceptSame();
-    Tests.ChiAdapt();
+	{
 
-    // tests for population parameter class
-    Tests.ThetaPropose();
-    Tests.ThetaAcceptSame();
-    Tests.ThetaAdapt();
+		UnitTests Tests(ndata, nBlocks, nThreads);
 
-    // tests for the data augmentation class
-    Tests.DaugPopPtr();
-    Tests.DaugGetChi();
-    Tests.DaugAcceptSame();
-    Tests.DaugAcceptBetter();
+		// test the rank-1 cholesky update
+		// Tests.R1CholUpdate();
 
-    // print results
-    Tests.Finish();
+		// tests for the characteristic class
+		// Tests.ChiPropose();
+		// Tests.ChiAcceptSame();
+		// Tests.ChiAdapt();
 
+		// tests for population parameter class
+		// Tests.ThetaPropose();
+		// Tests.ThetaAcceptSame();
+		// Tests.ThetaAdapt();
+
+		// tests for the data augmentation class
+		//Tests.DaugPopPtr();
+		//Tests.DaugGetChi();
+		Tests.DaugAcceptSame();
+		Tests.DaugAcceptBetter();
+
+		// print results
+		Tests.Finish();
+
+	}
     /*
 	for (int i = 0; i < ndata; ++i) {
 		delete [] meas_temp[i];
@@ -103,5 +173,10 @@ int main(int argc, char** argv)
 	delete meas_unc_temp;
      */
 
-	std::cout << "Success!!" << std::endl;
+	std::cout << "...... Finished ......." << std::endl;
+
+	CUDA_CHECK_RETURN(cudaDeviceReset());
+	cudaMemGetInfo(&free, &total);
+	std::cout << "free: " << free / 1024 << ", total: " << total / 1024 << std::endl;
+
 }

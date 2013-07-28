@@ -236,7 +236,7 @@ void update_chi(double* chi, double* meas, double* meas_unc, int n, double* logd
         double logdens_pop_prop = logdensity_pop(new_chi, c_theta);
         double logdens_prop = logdens_meas_prop + logdens_pop_prop;
 
-        bool finite_logdens = std::isfinite(logdens_prop);
+        bool finite_logdens = isfinite(logdens_prop);
 
         // Compute the Metropolis ratio
         double logdens_old = logdens_pop[i] + logdens_meas[i];
@@ -334,6 +334,7 @@ void g_logdens_pop(double* chi, int ndata, double* logdens_pop)
 	}
 }
 
+/*
 struct zsqr : public thrust::unary_function<double*,double> {
     __device__ __host__
     double operator()(double* chi) {
@@ -475,6 +476,10 @@ int main(int argc, char** argv)
      collection of the mean and variances of the normal distributions.
     */
 
+	size_t free, total;
+	cudaMemGetInfo(&free, &total);
+	std::cout << "free: " << free / 1024 << ", total: " << total / 1024 << std::endl;
+
     int ndata = 1000; // # of data points
 
     double mu_norm = 8.5 * log(10.0);  // Average value of the natural logarithm of the SED normalization
@@ -555,7 +560,7 @@ int main(int argc, char** argv)
     //std::ofstream chifile("chis.dat");
     std::ofstream thetafile("thetas.dat");
     std::ofstream chifile("chi0.dat");
-    int mcmc_iter = 50000;
+    int mcmc_iter = 10000;
     int naccept_theta = 0;
     std::cout << "Running MCMC Sampler...." << std::endl;
 
@@ -742,6 +747,9 @@ int main(int argc, char** argv)
     for (int k=0; k<mfeat; k++) {
     	std::cout << nu[k] << " " << h_meas[k * ndata] << " " << h_meas_unc[k * ndata] << std::endl;
     }
+
+	cudaMemGetInfo(&free, &total);
+	std::cout << "free: " << free / 1024 << ", total: " << total / 1024 << std::endl;
 
 	return 0;
 }

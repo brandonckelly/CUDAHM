@@ -13,6 +13,7 @@
 // local includes
 #include "UnitTests.cuh"
 #include "data_augmentation.cuh"
+#include "GibbsSampler.cuh"
 
 // Global random number generator and distributions for generating random numbers on the host. The random number generator used
 // is the Mersenne Twister mt19937 from the BOOST library. These are instantiated in data_augmentation.cu.
@@ -58,10 +59,12 @@ double variance(double* x, int nx) {
 }
 
 // characteristic class for a simple p-dimensional gaussian distribution with known mean and inverse-covariance matrix
+
 class SimpleNormalVariate : public Characteristic {
 public:
 	__device__ __host__
 	SimpleNormalVariate(int p, int m, int dimt, int iter) : Characteristic(p, m, dimt, iter) {}
+	__device__ __host__ ~SimpleNormalVariate() {}
 
 	// compute the conditional log-posterior density of the measurements given the characteristic
 	__device__ __host__ double LogDensityMeas(double* chi, double* meas, double* meas_unc)
@@ -115,6 +118,8 @@ public:
 	__device__ __host__
 	NormalVariate3d(int p, int m, int dimt, int iter) : Characteristic(3, 3, 3, iter) {}
 
+	__device__ __host__ ~NormalVariate3d() {}
+
 	// invert a 3-dimensional covariance matrix
 	__device__ __host__ void InvertCovar(double* covar, double* covar_inv)
 	{
@@ -158,23 +163,19 @@ public:
 	// compute the conditional log-posterior density of the measurements given the characteristic
 	__device__ __host__ double LogDensityMeas(double* chi, double* meas, double* meas_unc)
 	{
-		double chi_cent[3];
+		double logdens = 0.0;
 		for (int i = 0; i < 3; ++i) {
-			// meas is the p-dimensional mean vector
-			chi_cent[i] = chi[i] - meas[i];
+			double chi_std = (meas[i] - chi[i]) / meas_unc[i];
+			logdens += -0.5 * chi_std * chi_std;
 		}
 
-		double meas_unc_inv[9];
-		InvertCovar(meas_unc, meas_unc_inv);
-
-		double logdens = -0.5 * ChiSqr(chi_cent, meas_unc_inv, 3);
 		return logdens;
 	}
 
 	// compute the conditional log-posterior density of the characteristic given the population mean
 	__device__ __host__ double LogDensityPop(double* chi, double* theta)
 	{
-		// known inverse covariance matrix at the characteristic population level
+		// known inverse covariance matrix of the characteristics
 		double covar_inv[9] =
 		{
 				0.64880351, -2.66823952, 0.10406763,
@@ -194,7 +195,6 @@ public:
 private:
 };
 
-
 // destructor
 UnitTests::~UnitTests() {
 	// free memory used by data arrays
@@ -208,13 +208,7 @@ UnitTests::~UnitTests() {
 
 // test rank-1 cholesky update
 void UnitTests::R1CholUpdate() {
-	double covar[3][3] =
-	{
-			{5.29, 0.3105, -15.41},
-			{0.3105, 0.2025, 3.2562},
-			{-15.41, 3.2562, 179.56}
-	};
-	double cholfact0[6] = {2.3, 0.135, 0.42927264, -6.7, 9.6924416, 6.38173768};
+
 	double v[3] = {-0.39108095, -0.0668706, -0.30427621};
 	// cholesky factor for update (covar + v * transpose(v)), computed from python
 	double Lup0[6] = {2.33301185, 0.14429923, 0.43145036, -6.55419017, 9.78632116,  6.39711602};
@@ -242,7 +236,7 @@ void UnitTests::R1CholUpdate() {
 		max_frac_diff_down = max(frac_diff, max_frac_diff_down);
 	}
 
-	if ((max_frac_diff_down < epsilon) && (max_frac_diff_up < epsilon)) {
+	if ((max_frac_diff_down < 1e-6) && (max_frac_diff_up < 1e-6)) {
 		// cholesky factors agree, so test passed
 		npassed++;
 	} else {
@@ -255,30 +249,17 @@ void UnitTests::R1CholUpdate() {
 
 // check that Chi::Propose follows a multivariate normal distribution
 void UnitTests::ChiPropose() {
-	double covar[3][3] =
-	{
-			{5.29, 0.3105, -15.41},
-			{0.3105, 0.2025, 3.2562},
-			{-15.41, 3.2562, 179.56}
-	};
-	double covar_inv0[3][3] =
-	{
-			{0.64880351, -2.66823952, 0.10406763},
-			{-2.66823952, 17.94430089, -0.55439855},
-			{0.10406763, -0.55439855, 0.02455399}
-	};
-	double** covar_inv;
-	covar_inv = new double* [3];
+
+	double** covar_inv_local;
+	covar_inv_local = new double* [3];
 	for (int i = 0; i < 3; ++i) {
-		covar_inv[i] = new double [3];
+		covar_inv_local[i] = new double [3];
 	}
 	for (int i = 0; i < 3; ++i) {
 		for (int j = 0; j < 3; ++j) {
-			covar_inv[i][j] = covar_inv0[i][j];
+			covar_inv_local[i][j] = covar_inv[j * 3 + i];
 		}
 	}
-
-	double cholfact[6] = {2.3, 0.135, 0.42927264, -6.7, 9.6924416, 6.38173768};
 
 	int p = 3, ntrials = 100000;
 	int m = 1, dt = 1, current_iter = 1;
@@ -298,7 +279,7 @@ void UnitTests::ChiPropose() {
 		for (int j = 0; j < p; ++j) {
 			proposed_chi[j] -= chi[j]; // center the proposals
 		}
-		chisqr[i] = mahalanobis_distance(covar_inv, proposed_chi, p);
+		chisqr[i] = mahalanobis_distance(covar_inv_local, proposed_chi, p);
 	}
 	/*
 	 * check that the values of chisqr are consistent with being drawn from a chi-square distribution
@@ -348,14 +329,13 @@ void UnitTests::ChiPropose() {
 
 	// free memory
 	for (int i = 0; i < 3; ++i) {
-		delete [] covar_inv[i];
+		delete [] covar_inv_local[i];
 	}
-	delete covar_inv;
+	delete covar_inv_local;
 }
 
 // check that Chi::Accept always accepts when the proposal and the current values are the same
 void UnitTests::ChiAcceptSame() {
-	double chi[3] = {1.2, 0.4, -0.7};
 	int p = 3, ntrials = 100000;
 	int m = 1, dt = 1, current_iter = 1;
 
@@ -368,7 +348,7 @@ void UnitTests::ChiAcceptSame() {
 	double ratio = 0.0;
 	for (int i = 0; i < ntrials; ++i) {
 		accept = Chi.AcceptProp(logdens, logdens, 0.0, 0.0, ratio);
-		if (abs(ratio - 1.0) < epsilon) {
+		if (abs(ratio - 1.0) < 1e-6) {
 			naccept++;
 		}
 	}
@@ -383,22 +363,10 @@ void UnitTests::ChiAcceptSame() {
 
 // test Chi::Adapt acceptance rate and covariance by running a simple MCMC sampler for a 3-dimensional normal distribution
 void UnitTests::ChiAdapt() {
-	double covar[3][3] =
-	{
-			{5.29, 0.3105, -15.41},
-			{0.3105, 0.2025, 3.2562},
-			{-15.41, 3.2562, 179.56}
-	};
-	// store in a 1-d array since that is what Chi::Propose expects for the measurement uncertainties
-	double covar_inv[9] =
-	{
-			0.64880351, -2.66823952, 0.10406763,
-			-2.66823952, 17.94430089, -0.55439855,
-			0.10406763, -0.55439855, 0.02455399
-	};
-	double meas[3] = {1.2, 0.4, -0.7};
 
-	int p = 3, niter = 200000;
+	double meas_local[3] = {1.2, 0.4, -0.7};
+
+	int p = 3, niter = 300000;
 	int m = 3, dt = 2, current_iter = 1;
 	double target_rate = 0.4; // MCMC sampler target acceptance rate
 
@@ -422,12 +390,9 @@ void UnitTests::ChiAdapt() {
 	double theta[2] = {0.0, 0.0};
 	double snorm_deviate[p], scaled_proposal[p], proposed_chi[p];
 	double logdens_meas, logdens_pop;
-	logdens_meas = Chi.LogDensityMeas(chi, meas, covar_inv);
+	logdens_meas = Chi.LogDensityMeas(chi, meas_local, covar_inv);
 	logdens_pop = Chi.LogDensityPop(chi, theta);
 	int naccept = 0, start_counting = 10000;
-
-//	std::ofstream output("/users/brandonkelly/chi.dat");
-//	output << chi[0] << " " << chi[1] << " " << chi[2] << " " << logdens_meas << std::endl;
 
 	for (int i = 0; i < niter; ++i) {
 		// propose a new value of chi
@@ -435,7 +400,7 @@ void UnitTests::ChiAdapt() {
 
 		// get value of log-posterior for proposed chi value
 		double logdens_pop_prop, logdens_meas_prop;
-		logdens_meas_prop = Chi.LogDensityMeas(proposed_chi, meas, covar_inv);
+		logdens_meas_prop = Chi.LogDensityMeas(proposed_chi, meas_local, covar_inv);
 		logdens_pop_prop = Chi.LogDensityPop(proposed_chi, theta);
 		double logpost_prop = logdens_meas_prop + logdens_pop_prop;
 
@@ -462,9 +427,7 @@ void UnitTests::ChiAdapt() {
 		}
 		current_iter++;
 		Chi.SetCurrentIter(current_iter);
-//		output << chi[0] << " " << chi[1] << " " << chi[2] << " " << logdens_meas << std::endl;
 	}
-//	output.close();
 	double accept_rate = double(naccept) / double(niter - start_counting);
 	double frac_diff = abs(accept_rate - target_rate) / target_rate;
 	// make sure acceptance rate is within 5% of the target rate
@@ -479,26 +442,14 @@ void UnitTests::ChiAdapt() {
 
 // check that PopulationPar::Propose follow a multivariate normal distribution
 void UnitTests::ThetaPropose() {
-	double covar[3][3] =
-	{
-			{5.29, 0.3105, -15.41},
-			{0.3105, 0.2025, 3.2562},
-			{-15.41, 3.2562, 179.56}
-	};
-	double covar_inv0[3][3] =
-	{
-			{0.64880351, -2.66823952, 0.10406763},
-			{-2.66823952, 17.94430089, -0.55439855},
-			{0.10406763, -0.55439855, 0.02455399}
-	};
-	double** covar_inv;
-	covar_inv = new double* [3];
+	double** covar_inv_local;
+	covar_inv_local = new double* [3];
 	for (int i = 0; i < 3; ++i) {
-		covar_inv[i] = new double [3];
+		covar_inv_local[i] = new double [3];
 	}
 	for (int i = 0; i < 3; ++i) {
 		for (int j = 0; j < 3; ++j) {
-			covar_inv[i][j] = covar_inv0[i][j];
+			covar_inv_local[i][j] = covar_inv[i + 3*j];
 		}
 	}
 
@@ -530,7 +481,7 @@ void UnitTests::ThetaPropose() {
 			theta_prop[j] -= h_theta[j]; // center the proposals
 		}
 		double* p_theta = thrust::raw_pointer_cast(&theta_prop[0]);
-		chisqr[i] = mahalanobis_distance(covar_inv, p_theta, dim_theta);
+		chisqr[i] = mahalanobis_distance(covar_inv_local, p_theta, dim_theta);
 	}
 
 	/*
@@ -581,9 +532,9 @@ void UnitTests::ThetaPropose() {
 
 	// free memory
 	for (int i = 0; i < 3; ++i) {
-		delete [] covar_inv[i];
+		delete [] covar_inv_local[i];
 	}
-	delete covar_inv;
+	delete covar_inv_local;
 }
 
 // check that PopulationPar::Accept always accepts when the logdensities are the same
@@ -597,7 +548,7 @@ void UnitTests::ThetaAcceptSame() {
 	double ratio = 0.0;
 	for (int i = 0; i < ntrials; ++i) {
 		accept = Theta.AcceptProp(logdens, logdens, ratio);
-		if (abs(ratio - 1.0) < epsilon) {
+		if (abs(ratio - 1.0) < 1e-6) {
 			naccept++;
 		}
 	}
@@ -612,19 +563,7 @@ void UnitTests::ThetaAcceptSame() {
 
 // test PopulationPar::Adapt acceptance rate and covariance by running a simple MCMC sampler
 void UnitTests::ThetaAdapt() {
-	double covar[3][3] =
-	{
-			{5.29, 0.3105, -15.41},
-			{0.3105, 0.2025, 3.2562},
-			{-15.41, 3.2562, 179.56}
-	};
-	// store in a 1-d array since that is what Chi::Propose expects for the measurement uncertainties
-	double covar_inv[9] =
-	{
-			0.64880351, -2.66823952, 0.10406763,
-			-2.66823952, 17.94430089, -0.55439855,
-			0.10406763, -0.55439855, 0.02455399
-	};
+
 	double mu[3] = {1.2, 0.4, -0.7};
 
 	SimpleNormalVariate NormDist(pchi, mfeat, dim_theta, 1);
@@ -638,11 +577,8 @@ void UnitTests::ThetaAdapt() {
 	// run the MCMC sampler
 	double logdens_current = NormDist.LogDensityMeas(p_theta, mu, covar_inv);
 	int naccept = 0, start_counting = 10000;
-	int niter = 200000, current_iter = 1;
+	int niter = 300000, current_iter = 1;
 	double target_rate = 0.4; // MCMC sampler target acceptance rate
-
-	//std::ofstream output("/users/brandonkelly/theta.dat");
-	//output << h_theta[0] << " " << h_theta[1] << " " << h_theta[2] << " " << logdens_current << std::endl;
 
 	for (int i = 0; i < niter; ++i) {
 		// propose a new value of theta
@@ -673,9 +609,7 @@ void UnitTests::ThetaAdapt() {
 		}
 		current_iter++;
 		Theta.SetCurrentIter(current_iter);
-		//output << h_theta[0] << " " << h_theta[1] << " " << h_theta[2] << " " << logdens_current << std::endl;
 	}
-	//output.close();
 	double accept_rate = double(naccept) / double(niter - start_counting);
 	double frac_diff = abs(accept_rate - target_rate) / target_rate;
 	// make sure acceptance rate is within 5% of the target rate
@@ -752,16 +686,80 @@ void UnitTests::DaugGetChi() {
 // check that DataAugmentation::Update always accepts when the proposed and current chi values are the same
 void UnitTests::DaugAcceptSame()
 {
-	DataAugmentation<NormalVariate3d> Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
-	PopulationPar<NormalVariate3d> Theta(dim_theta, &Daug, nBlocks, nThreads);
+	std::cout << "Testing DaugAcceptSame...." << std::endl;
+	DataAugmentation<Characteristic> Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
+	PopulationPar<Characteristic> Theta(dim_theta, &Daug, nBlocks, nThreads);
 
-	// generate some chi values from a standard normal
-	hvector h_chi(ndata * pchi);
+	Daug.SetChi(d_true_chi);
+	Theta.SetTheta(d_true_theta);
+
+	// PopulationPar<Characteristic> Theta(dim_theta, &Daug, nBlocks, nThreads);
+	//Theta.SetTheta(d_true_theta);
+	//Daug.SetChi(d_true_chi);
+
+	/*
+	hvector h_chi = Daug.GetHostChi();
+	std::cout << "Daug chi: ";
 	for (int i = 0; i < h_chi.size(); ++i) {
-		h_chi[i] = snorm(rng);
+		std::cout << h_chi[i] << " ";
 	}
-	dvector d_chi = h_chi;
-	Daug.SetChi(d_chi);
+	std::cout << std::endl;
+
+	std::cout << "true chi: ";
+	for (int i = 0; i < d_true_chi.size(); ++i) {
+		std::cout << d_true_chi[i] << " ";
+	}
+	std::cout << std::endl;
+
+	dvector d_logdens_meas = Daug.GetDevLogDens();
+	hvector h_logdens_meas = Daug.GetHostLogDens();
+	dvector d_logdens_pop = Theta.GetDevLogDens();
+	hvector h_logdens_pop= Theta.GetLogDens();
+
+	std::cout << "logdens_meas: ";
+	for (int i = 0; i < 10; ++i) {
+		std::cout << d_logdens_meas[i] << " ";
+	}
+	std::cout << std::endl;
+
+	std::cout << "logdens_pop: ";
+	double logdens = 0.0;
+	for (int i = 0; i < 10; ++i) {
+		logdens += d_logdens_pop[i];
+		std::cout << d_logdens_pop[i] << " ";
+	}
+	std::cout << std::endl;
+	std::cout << "total logdens_pop: " << logdens << std::endl;
+	double logdens_meas = 0.0;
+	logdens_meas = thrust::reduce(d_logdens_meas.begin(), d_logdens_meas.end(), 0.0, thrust::plus<double>());
+	double logdens_pop = 0.0;
+	logdens_pop = thrust::reduce(d_logdens_pop.begin(), d_logdens_pop.begin(), 0.0, thrust::plus<double>());
+	std::cout << "on device logdens_meas, logdens_pop: " << logdens_meas << ", " << logdens_pop << std::endl;
+
+	// make sure posteriors saved in Daug and PopulationPar match those computed manually
+	NormalVariate3d Chi(pchi, mfeat, dim_theta, 1);
+	Chi.SetRNG(&rng);
+	logdens_meas = 0.0;
+	logdens_pop = 0.0;
+
+	h_chi = Daug.GetDevChi();
+	hvector h_theta = Theta.GetDevTheta();
+
+	for (int i = 0; i < ndata; ++i) {
+		double local_meas[10], local_chi[10], local_meas_unc[10];
+		for (int j = 0; j < mfeat; ++j) {
+			local_meas[j] = meas[i][j];
+			local_meas_unc[j] = meas_unc[i][j];
+		}
+		for (int j = 0; j < pchi; ++j) {
+			local_chi[j] = h_chi[j * ndata + i];
+		}
+		logdens_meas += Chi.LogDensityMeas(local_chi, local_meas, local_meas_unc);
+		double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
+		logdens_pop += Chi.LogDensityPop(local_chi, p_theta);
+	}
+	std::cout << "manual logdens_meas, logdens_pop: " << logdens_meas << ", " << logdens_pop << std::endl;
+	*/
 
 	// set the cholesky factors to zero so that NormalVariate.Propose() just returns the same chi value
 	int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
@@ -771,6 +769,7 @@ void UnitTests::DaugAcceptSame()
 	Daug.SetCholFact(d_cholfact);
 
 	Daug.Update();
+
 	thrust::host_vector<int> h_naccept = Daug.GetNaccept();
 	// make sure all of the proposals are accepted, since the proposed chi values are the same as the current ones
 	int naccept = 0;
@@ -782,6 +781,7 @@ void UnitTests::DaugAcceptSame()
 	} else {
 		std::cerr << "Test for Daug::Accept() failed: Did not accept all of the proposed characteristics "
 				<< "when they are the same." << std::endl;
+		std::cerr <<"naccept = " << naccept << std::endl;
 	}
 	nperformed++;
 
@@ -790,13 +790,6 @@ void UnitTests::DaugAcceptSame()
 	h_cholfact.resize(dim_cholfact);
 	thrust::fill(h_cholfact.begin(), h_cholfact.end(), 0.0);
 	d_cholfact = h_cholfact;
-
-	hvector h_theta(dim_theta);
-	for (int i = 0; i < h_theta.size(); ++i) {
-		h_theta[i] = snorm(rng);
-	}
-	dvector d_theta = h_theta;
-	Theta.SetTheta(d_theta);
 
 	int ntrials = 1000;
 	for (int i = 0; i < ntrials; ++i) {
@@ -815,16 +808,12 @@ void UnitTests::DaugAcceptSame()
 
 // make sure that DataAugmentation::Update() accepts and saves Chi values when the posterior is much higher
 void UnitTests::DaugAcceptBetter() {
+	std::cout << "Testing DaugAcceptBetter...." << std::endl;
 	DataAugmentation<NormalVariate3d> Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
 	PopulationPar<NormalVariate3d> Theta(dim_theta, &Daug, nBlocks, nThreads);
 
-	// generate some chi values from a standard normal
-	hvector h_chi(ndata * pchi);
-	for (int i = 0; i < h_chi.size(); ++i) {
-		h_chi[i] = snorm(rng);
-	}
-	dvector d_chi = h_chi;
-	Daug.SetChi(d_chi);
+	Daug.SetChi(d_true_chi);
+	Theta.SetTheta(d_true_theta);
 
 	// artificially set the conditional log-posteriors to a really low value to make sure we accept the proposal
 	hvector h_logdens_meas(ndata);
@@ -835,7 +824,7 @@ void UnitTests::DaugAcceptBetter() {
 	Daug.Update();
 	thrust::host_vector<int> h_naccept = Daug.GetNaccept();
 
-	// make sure all of the proposals are accepted, since the proposed chi values are the same as the current ones
+	// make sure all of the proposals are accepted
 	int naccept = 0;
 	for (int i = 0; i < h_naccept.size(); ++i) {
 		naccept += h_naccept[i];
@@ -851,12 +840,12 @@ void UnitTests::DaugAcceptBetter() {
 	// make sure that the proposed values and new posteriors are saved
 	hvector h_new_chi = Daug.GetDevChi();
 	int ndiff_chi = 0;
-	for (int i = 0; i < h_chi.size(); ++i) {
-		if (h_new_chi[i] != h_chi[i]) {
+	for (int i = 0; i < h_true_chi.size(); ++i) {
+		if (h_new_chi[i] != h_true_chi[i]) {
 			ndiff_chi++;
 		}
 	}
-	if (ndiff_chi == h_chi.size()) {
+	if (ndiff_chi == h_true_chi.size()) {
 		npassed++;
 	} else {
 		std::cerr << "Test for Daug::Accept() failed: Did not update the characteristics when the "
@@ -882,13 +871,6 @@ void UnitTests::DaugAcceptBetter() {
 	 * Now do the same thing, but for the population parameters.
 	 */
 
-	hvector h_theta(dim_theta);
-	for (int i = 0; i < h_theta.size(); ++i) {
-		h_theta[i] = snorm(rng);
-	}
-	dvector d_theta = h_theta;
-	Theta.SetTheta(d_theta);
-
 	hvector h_logdens_pop(ndata);
 	thrust::fill(h_logdens_pop.begin(), h_logdens_pop.end(), -1e10);
 	dvector d_logdens_pop = h_logdens_pop;
@@ -910,7 +892,7 @@ void UnitTests::DaugAcceptBetter() {
 	hvector h_new_theta = Theta.GetHostTheta();
 	int ndiff_theta = 0;
 	for (int i = 0; i < h_new_theta.size(); ++i) {
-		if (h_new_theta[i] != h_theta[i]) {
+		if (h_new_theta[i] != h_true_theta[i]) {
 			ndiff_theta++;
 		}
 	}
@@ -937,6 +919,126 @@ void UnitTests::DaugAcceptBetter() {
 				<< "proposals are accepted." << std::endl;
 	}
 	nperformed++;
+}
+
+// test the Gibbs Sampler for a Normal-Normal model keeping the characteristics fixed
+void UnitTests::FixedChar() {
+
+	// create the parameter objects
+	DataAugmentation<NormalVariate3d> Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
+	Daug.SetChi(d_true_chi);
+	PopulationPar<NormalVariate3d> Theta(dim_theta, &Daug, nBlocks, nThreads);
+
+	// setup the Gibbs sampler object
+	int niter(100000), nburn(10000);
+	GibbsSampler<NormalVariate3d> Sampler(Daug, Theta, niter, nburn);
+	Sampler.FixChar(); // keep the characteristics fixed
+
+	// run the MCMC sampler
+	Sampler.Run();
+
+	// check the acceptance rate
+	double target_rate = 0.4;
+	double naccept = Theta.GetNaccept();
+	double arate = naccept / double(niter + nburn);
+	double frac_diff = abs(arate - target_rate) / target_rate;
+	// make sure acceptance rate is within 5% of the target rate
+	if (frac_diff < 0.05) {
+		npassed++;
+	} else {
+		std::cerr << "Test for GibbsSampler with fixed Characteristics failed: Acceptance rate "
+				<< "is not within 5% of the target rate." << std::endl;
+		std::cout << arate << ", " << target_rate << std::endl;
+	}
+	nperformed++;
+
+	// grab the MCMC samples of the population parameter
+	vecvec tsamples = Sampler.GetPopSamples();
+
+	// get the estimated posterior mean of normal mean parameter
+	double theta_mean[3] = {0.0, 0.0, 0.0};
+	for (int i = 0; i < tsamples.size(); ++i) {
+		theta_mean[0] += tsamples[i][0];
+		theta_mean[1] += tsamples[i][1];
+		theta_mean[2] += tsamples[i][2];
+	}
+	for (int j = 0; j < dim_theta; ++j) {
+		theta_mean[j] /= tsamples.size();
+	}
+	// get true value of posterior mean
+	double theta_mean_true[3] = {0.0, 0.0, 0.0};
+	for (int i = 0; i < ndata; ++i) {
+		theta_mean_true[0] += h_true_chi[i];
+		theta_mean_true[1] += h_true_chi[ndata + i];
+		theta_mean_true[2] += h_true_chi[2 * ndata + i];
+	}
+	for (int j = 0; j < dim_theta; ++j) {
+		theta_mean_true[j] /= ndata;
+	}
+
+	// make sure estimated value and true value are within 2% of eachother
+	frac_diff = 0.0;
+	for (int j = 0; j < dim_theta; ++j) {
+		frac_diff += abs(theta_mean[j] - theta_mean_true[j]) / abs(theta_mean_true[j]);
+	}
+	frac_diff /= dim_theta;
+	if (frac_diff < 0.02) {
+		npassed++;
+	} else {
+		std::cerr << "Test for GibbsSampler with fixed Characteristics failed: Average fractional difference "
+				<< "between estimated posterior mean and true value is greater than 2%." << std::endl;
+	}
+	nperformed++;
+
+	// get the estimated posterior covariance of the normal mean parameter
+	double mean_covar[3][3];
+	double mean_covar_true[3][3];
+	for (int j = 0; j < dim_theta; ++j) {
+		for (int k = 0; k < dim_theta; ++k) {
+			// initialize to zero
+			mean_covar[j][k] = 0.0;
+			// calculate true value of posterior covariance of normal mean parameter
+			mean_covar_true[j][k] = covar[j][k] / ndata;
+		}
+	}
+	for (int i = 0; i < tsamples.size(); ++i) {
+		for (int j = 0; j < dim_theta; ++j) {
+			for (int k = 0; k < dim_theta; ++k) {
+				mean_covar[j][k] += (tsamples[i][j] - theta_mean[j]) * (tsamples[i][k] - theta_mean[k]);
+			}
+		}
+	}
+	for (int j = 0; j < dim_theta; ++j) {
+		for (int k = 0; k < dim_theta; ++k) {
+			mean_covar[j][k] /= tsamples.size();
+		}
+	}
+
+	// make sure estimated value and true value are within 2% of eachother
+	frac_diff = 0.0;
+	for (int j = 0; j < dim_theta; ++j) {
+		for (int k = 0; k < dim_theta; ++k) {
+			frac_diff += abs(mean_covar[j][k] - mean_covar_true[j][k]) / abs(mean_covar[j][k]);
+		}
+	}
+	frac_diff /= (dim_theta * dim_theta) ;
+	if (frac_diff < 0.02) {
+		npassed++;
+	} else {
+		std::cerr << "Test for GibbsSampler with fixed Characteristics failed: Average fractional difference "
+				<< "between estimated posterior covariance in mean parameter and the true value is greater than 2%." << std::endl;
+	}
+	nperformed++;
+}
+
+// test the Gibbs Sampler for a Normal-Normal model keeping the population parameter fixed
+void UnitTests::FixedPopPar() {
+
+}
+
+// test the Gibbs Sampler for a Normal-Normal model
+void UnitTests::NormNorm() {
+
 }
 
 // print out summary of test results

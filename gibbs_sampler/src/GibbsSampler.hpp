@@ -13,13 +13,13 @@
 //#include <boost/progress.hpp>
 
 // local includes
-#include "data_augmentation.cuh"
+#include "parameters.hpp"
 
-template<class ChiType>
-class GibbsSampler {
+class GibbsSampler
+{
 public:
 	// constructor
-	GibbsSampler(DataAugmentation<ChiType>& Daug, PopulationPar<ChiType>& PopPar, int niter, int nburnin,
+	GibbsSampler(DataAugmentation& Daug, PopulationPar& PopPar, int niter, int nburnin,
 			int nthin_chi=10, int nthin_theta=1) :
 		Daug_(Daug), PopPar_(PopPar), niter_(niter), nburnin_(nburnin), nthin_theta_(nthin_theta),
 		nthin_chi_(nthin_chi)
@@ -99,8 +99,8 @@ protected:
 	int niter_, nburnin_, nthin_chi_, nthin_theta_; // total # of iterations, # of burnin iterations, and thinning amount
 	int current_iter_, ntheta_samples_, nchi_samples_;
 	bool fix_poppar, fix_char; // is set to true, then keep the values fixed throughout the MCMC sampler
-	DataAugmentation<ChiType>& Daug_;
-	PopulationPar<ChiType>& PopPar_;
+	DataAugmentation& Daug_;
+	PopulationPar& PopPar_;
 	std::vector<vecvec> ChiSamples_;
 	vecvec ThetaSamples_;
 };

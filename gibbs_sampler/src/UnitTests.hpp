@@ -27,7 +27,8 @@
 // standard includes
 #include <vector>
 // local includes
-#include "data_augmentation.cuh"
+#include "parameters.hpp"
+#include "GibbsSampler.hpp"
 
 class UnitTests {
 public:

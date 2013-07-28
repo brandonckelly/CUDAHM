@@ -11,9 +11,8 @@
 #include <cassert>
 
 // local includes
-#include "UnitTests.cuh"
-#include "data_augmentation.cuh"
-#include "GibbsSampler.cuh"
+#include "UnitTests.hpp"
+#include "kernels.cuh"
 
 // Global random number generator and distributions for generating random numbers on the host. The random number generator used
 // is the Mersenne Twister mt19937 from the BOOST library. These are instantiated in data_augmentation.cu.

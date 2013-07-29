@@ -42,10 +42,11 @@ int main(int argc, char** argv)
 	int pchi = 3;
 	int dtheta = 3;
 
+	/*
 	size_t free, total;
 	cudaMemGetInfo(&free, &total);
 	std::cout << "free: " << free / 1024 << ", total: " << total / 1024 << std::endl;
-
+	*/
 	// Cuda grid launch
     dim3 nThreads(256);
     dim3 nBlocks((ndata + nThreads.x-1) / nThreads.x);
@@ -130,26 +131,28 @@ int main(int argc, char** argv)
 		// tests for the data augmentation class
 		//Tests.DaugPopPtr();
 		//Tests.DaugGetChi();
-		Tests.DaugAcceptSame();
-		Tests.DaugAcceptBetter();
+		// Tests.DaugAcceptSame();
+		// Tests.DaugAcceptBetter();
 
 		// print results
 		Tests.Finish();
 
 	}
-    /*
+
 	for (int i = 0; i < ndata; ++i) {
 		delete [] meas_temp[i];
 		delete [] meas_unc_temp[i];
 	}
 	delete meas_temp;
 	delete meas_unc_temp;
-     */
+
 
 	std::cout << "...... Finished ......." << std::endl;
 
+	/*
 	CUDA_CHECK_RETURN(cudaDeviceReset());
 	cudaMemGetInfo(&free, &total);
 	std::cout << "free: " << free / 1024 << ", total: " << total / 1024 << std::endl;
+	*/
 
 }

@@ -8,9 +8,8 @@
 // standard includes
 #include <iostream>
 // local includes
-#include "data_augmentation.cuh"
-#include "UnitTests.cuh"
-#include "GibbsSampler.cuh"
+#include "UnitTests.hpp"
+#include "GibbsSampler.hpp"
 
 /* list of unit tests:
  *
@@ -35,31 +34,6 @@
 // Global random number generator and distributions for generating random numbers on the host. The random number generator used
 // is the Mersenne Twister mt19937 from the BOOST library. These are instantiated in data_augmentation.cu.
 extern boost::random::mt19937 rng;
-
-inline __device__ double test_function(double* x1, double* x2, double* x3, int p, int m) {
-	return x1[0];
-}
-
-__global__ void test_function_pointer(double* data, int ndata) //, pLogDensMeas logdens_meas)
-{
-	printf("I am at line 45.");
-    int id = threadIdx.x + blockIdx.x * blockDim.x;
-    if (id < ndata)
-    {
-    	printf("I am at line 48.");
-    	double x1[3];
-    	double x2[3];
-    	double x3[3];
-    	x1[0] = id;
-    	int pchi = 3;
-    	int mfeat = 3;
-    	double result = 0.0;
-    	//double result = logdens_meas(x1, x2, x3, pchi, mfeat);
-    	data[id] = result;
-    }
-}
-
-__constant__ pLogDensMeas p_test_function = test_function;
 
 int main(int argc, char** argv)
 {
@@ -111,7 +85,8 @@ int main(int argc, char** argv)
 	}
     std::cout << std::endl;
 
-    /*
+	*/
+
     double** meas_temp;
     double** meas_unc_temp;
 	// fill data arrays
@@ -126,16 +101,14 @@ int main(int argc, char** argv)
 		}
 	}
 
-    DataAugmentation<Characteristic> Daug(meas_temp, meas_unc_temp, ndata, mfeat, pchi, nBlocks, nThreads);
-    PopulationPar<Characteristic> Theta(dtheta, &Daug, nBlocks, nThreads);
+    DataAugmentation Daug(meas_temp, meas_unc_temp, ndata, mfeat, pchi, nBlocks, nThreads);
+    PopulationPar Theta(dtheta, &Daug, nBlocks, nThreads);
     // Characteristic Chi(pchi, mfeat, dtheta, 1);
 
     int niter(10000), nburnin(2500);
-    GibbsSampler<Characteristic> Sampler(Daug, Theta, niter, nburnin);
-	*/
+    GibbsSampler Sampler(Daug, Theta, niter, nburnin);
 
     rng.seed(123456);
-
 
 	{
 

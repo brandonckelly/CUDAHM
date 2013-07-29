@@ -58,8 +58,8 @@ void Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_
 		snorm_deviate[j] = curand_normal_double(p_state);
 #else
 		snorm_deviate[j] = snorm(rng);
-	}
 #endif
+	}
 
 	// propose a new chi value
 	int cholfact_index = 0;
@@ -77,8 +77,8 @@ void Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_
 
 // adapt the covariance matrix of the proposals for the characteristics
 __device__ __host__
-void AdaptProp(double* cholfact, double* snorm_deviate, double* scaled_proposal,
-		double metro_ratio, int pchi, int current_iter)
+void AdaptProp(double* cholfact, double* snorm_deviate, double* scaled_proposal, double metro_ratio,
+		int pchi, int current_iter)
 {
 	double unit_norm = 0.0;
 	for (int j=0; j<pchi; j++) {
@@ -112,54 +112,6 @@ bool AcceptProp(double logdens_prop, double logdens_current, double forward_dens
 #endif
 	bool accept = (unif < ratio) && isfinite(ratio);
 	return accept;
-}
-
-
-// calculate transpose(x) * covar_inv * x
-__device__ __host__
-double ChiSqr(double* x, double* covar_inv, int nx)
-{
-	double chisqr = 0.0;
-	for (int i = 0; i < nx; ++i) {
-		for (int j = 0; j < nx; ++j) {
-			chisqr += x[i] * covar_inv[i * nx + j] * x[j];
-		}
-	}
-	return chisqr;
-}
-
-// compute the conditional log-posterior density of the measurements given the characteristic
-__device__ __host__
-double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, int pchi)
-{
-	double logdens = 0.0;
-	for (int i = 0; i < 3; ++i) {
-		double chi_std = (meas[i] - chi[i]) / meas_unc[i];
-		logdens += -0.5 * chi_std * chi_std;
-	}
-
-	return logdens;
-}
-
-// compute the conditional log-posterior density of the characteristic given the population mean
-__device__ __host__
-double LogDensityPop(double* chi, double* theta, int pchi, int dim_theta)
-{
-	// known inverse covariance matrix of the characteristics
-	double covar_inv[9] =
-	{
-			0.64880351, -2.66823952, 0.10406763,
-			-2.66823952, 17.94430089, -0.55439855,
-			0.10406763, -0.55439855, 0.02455399
-	};
-	// subtract off the population mean
-	double chi_cent[3];
-	for (int i = 0; i < 3; ++i) {
-		chi_cent[i] = chi[i] - theta[i];
-	}
-
-	double logdens = -0.5 * ChiSqr(chi_cent, covar_inv, 3);
-	return logdens;
 }
 
 /*

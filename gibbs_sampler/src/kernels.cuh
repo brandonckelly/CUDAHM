@@ -21,21 +21,24 @@
 
 // FUNCTION DEFINITIONS
 
-__device__ __host__ void chol_update_r1(double* cholfactor, double* v, int dim_v, bool downdate);
+__device__ __host__
+void chol_update_r1(double* cholfactor, double* v, int dim_v, bool downdate);
+
+__device__ __host__
+void Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_deviate,
+		double* scaled_proposal, int pchi, curandState* p_state);
+
+__device__ __host__
+void AdaptProp(double* cholfact, double* snorm_deviate, double* scaled_proposal,
+		double metro_ratio, int pchi, int current_iter);
+
+__device__ __host__
+bool AcceptProp(double logdens_prop, double logdens_current, double forward_dens,
+		double backward_dens, double& ratio, curandState* p_state);
+
 
 // Initialize the parallel random number generator state on the device
 __global__ void initialize_rng(curandState *state);
-
-__device__ double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, int pchi);
-__device__ double LogDensityPop(double* chi, double* theta, int pchi, int dim_theta);
-__device__ void Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_deviate,
-		double* scaled_proposal, int pchi, curandState* p_state);
-__device__ void AdaptProp(double* cholfact, double* snorm_deviate, double* scaled_proposal,
-		double metro_ratio, int pchi, int current_iter);
-__device__ bool AcceptProp(double logdens_prop, double logdens_current, double forward_dens,
-		double backward_dens, double& ratio, curandState* p_state);
-
-__device__ double ChiSqr(double* x, double* covar_inv, int nx);
 
 // calculate initial value of characteristics
 __global__

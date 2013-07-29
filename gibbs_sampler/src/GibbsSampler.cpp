@@ -6,6 +6,7 @@
  */
 
 // local includes
+#include "parameters.hpp"
 #include "GibbsSampler.hpp"
 
 GibbsSampler::GibbsSampler(DataAugmentation& Daug, PopulationPar& PopPar, int niter, int nburnin, int nthin_chi,
@@ -24,7 +25,7 @@ GibbsSampler::GibbsSampler(DataAugmentation& Daug, PopulationPar& PopPar, int ni
 	fix_char = false;
 }
 
-virtual void GibbsSampler::Iterate()
+void GibbsSampler::Iterate()
 {
 	if (!fix_char) Daug_.Update();
 	if (!fix_poppar) PopPar_.Update();
@@ -70,7 +71,7 @@ void GibbsSampler::Run()
 	Report();
 }
 
-virtual void GibbsSampler::Report()
+void GibbsSampler::Report()
 {
 	std::cout << "MCMC Report: " << std::endl;
 }

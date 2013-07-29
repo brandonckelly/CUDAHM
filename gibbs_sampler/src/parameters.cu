@@ -13,8 +13,8 @@
  * POINTERS TO FUNCTIONS THAT ARE NEEDED TO COMPUTE THE CONDITIONAL LOG-POSTERIORS. THESE MUST BE DEFINED ELSEWHERE TO
  * POINT TO THE USER-SUPPLIED FUNCTIONS FOR COMPUTING THE LOG-POSTERIORS.
  */
-extern __constant__ pLogDensMeas c_logdens_meas;
-extern __constant__ pLogDensPop c_logdens_pop;
+extern __constant__ pLogDensMeas c_LogDensMeas;
+extern __constant__ pLogDensPop c_LogDensPop;
 
 // Global random number generator and distributions for generating random numbers on the host. The random number generator used
 // is the Mersenne Twister mt19937 from the BOOST library.
@@ -55,7 +55,7 @@ ndata(n), mfeat(m), pchi(p), nBlocks(nB), nThreads(nT)
 
 	// grab pointer to function that compute the log-density of measurements|characteristics from device
 	// __constant__ memory
-    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_logdens_meas, sizeof(c_logdens_meas)));
+    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensMeas, sizeof(c_LogDensMeas)));
 
 	// grab pointers to the device vector memory locations
 	double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
@@ -65,8 +65,8 @@ ndata(n), mfeat(m), pchi(p), nBlocks(nB), nThreads(nT)
 	double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
 
 	// set initial values for the characteristics. this will launch a CUDA kernel.
-	initial_chi_value<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens, ndata,
-			mfeat, pchi);
+	initial_chi_value<<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens,
+			ndata, mfeat, pchi, p_logdens_function);
 	CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
 	// copy values from device to host
@@ -93,9 +93,13 @@ void DataAugmentation::Update()
 	int* p_naccept = thrust::raw_pointer_cast(&d_naccept[0]);
 	int dim_theta = p_Theta->GetDim();
 
+	// grab host-side pointer function that compute the conditional posterior of characteristics|population
+	pLogDensPop p_logdens_pop_function = p_Theta->GetLogDensPtr();
+
 	// launch the kernel to update the characteristics on the GPU
 	update_characteristic<<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_devtheta, p_cholfact, p_logdens_meas,
-			p_logdens_pop, p_devStates, current_iter, p_naccept, ndata, mfeat, pchi, dim_theta);
+			p_logdens_pop, p_devStates, p_logdens_function, p_logdens_pop_function, current_iter, p_naccept, ndata,
+			mfeat, pchi, dim_theta);
 	CUDA_CHECK_RETURN(cudaPeekAtLastError());
     CUDA_CHECK_RETURN(cudaDeviceSynchronize());
     current_iter++;
@@ -112,13 +116,15 @@ void DataAugmentation::SetChi(dvector& chi, bool update_logdens)
 		double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
 		double* p_logdens_meas = thrust::raw_pointer_cast(&d_logdens[0]);
 		// first update the posteriors of measurements | characteristics
-		logdensity_meas<<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_logdens_meas, ndata, mfeat, pchi);
+		logdensity_meas<<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_logdens_meas, p_logdens_function,
+				ndata, mfeat, pchi);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
 		double* p_theta = p_Theta->GetDevThetaPtr();
 		int dim_theta = p_Theta->GetDim();
 		double* p_logdens_pop = p_Theta->GetDevLogDensPtr();
 		// no update the posteriors of the characteristics | population parameter
-		logdensity_pop<<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens_pop, ndata, pchi, dim_theta);
+		pLogDensPop p_LogDensPop = p_Theta->GetLogDensPtr();
+		logdensity_pop<<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens_pop, p_LogDensPop, ndata, pchi, dim_theta);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
 		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 	}
@@ -168,7 +174,7 @@ PopulationPar::PopulationPar(int dtheta, dim3& nB, dim3& nT) : dim_theta(dtheta)
 
 	// grab pointer to function that compute the log-density of measurements|characteristics from device
 	// __constant__ memory
-    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_logdens_meas, sizeof(p_test_function)));
+    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensPop, sizeof(c_LogDensPop)));
 
 	// set initial covariance matrix of the theta proposals as the identity matrix
 	thrust::fill(cholfact.begin(), cholfact.end(), 0.0);
@@ -194,7 +200,7 @@ PopulationPar::PopulationPar(int dtheta, DataAugmentation* D, dim3& nB, dim3& nT
 
 	// grab pointer to function that compute the log-density of measurements|characteristics from device
 	// __constant__ memory
-    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_logdens_pop, sizeof(c_logdens_pop)));
+    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensPop, sizeof(c_LogDensPop)));
 
 	int ndata = Daug->GetDataDim();
 	pchi = Daug->GetChiDim();
@@ -207,7 +213,7 @@ PopulationPar::PopulationPar(int dtheta, DataAugmentation* D, dim3& nB, dim3& nT
 	Daug->SetPopulationPtr(this);
 }
 
-virtual void PopulationPar::InitialValue()
+void PopulationPar::InitialValue()
 {
 	// set initial value of theta to zero
 	thrust::fill(h_theta.begin(), h_theta.end(), 0.0);
@@ -226,7 +232,7 @@ virtual void PopulationPar::InitialValue()
 	double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
 	double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
 	int ndata = Daug->GetDataDim();
-	logdensity_pop<<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, ndata, pchi, dim_theta);
+	logdensity_pop<<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, p_logdens_function, ndata, pchi, dim_theta);
 	CUDA_CHECK_RETURN(cudaPeekAtLastError());
     CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
@@ -238,7 +244,7 @@ virtual void PopulationPar::InitialValue()
 	naccept = 0;
 }
 
-virtual hvector PopulationPar::Propose()
+hvector PopulationPar::Propose()
 {
     // get the unit proposal
     for (int k=0; k<dim_theta; k++) {
@@ -261,7 +267,7 @@ virtual hvector PopulationPar::Propose()
     return proposed_theta;
 }
 
-virtual void PopulationPar::AdaptProp(double metro_ratio)
+void PopulationPar::AdaptProp(double metro_ratio)
 {
 	double unit_norm = 0.0;
     for (int j=0; j<dim_theta; j++) {
@@ -281,7 +287,7 @@ virtual void PopulationPar::AdaptProp(double metro_ratio)
     chol_update_r1(p_cholfact, p_scaled_proposal, dim_theta, downdate);
 }
 
-virtual void PopulationPar::Update()
+void PopulationPar::Update()
 {
 	// get current conditional log-posterior of population
 	double logdens_current = thrust::reduce(d_logdens.begin(), d_logdens.end());
@@ -300,8 +306,8 @@ virtual void PopulationPar::Update()
 	//double* p_logdens_current = thrust::raw_pointer_cast(&d_logdens[0]);
 	double* p_logdens_prop = thrust::raw_pointer_cast(&d_proposed_logdens[0]);
 
-	logdensity_pop<<<nBlocks,nThreads>>>(p_proposed_theta, Daug->GetDevChiPtr(), p_logdens_prop, ndata,
-			pchi, dim_theta);
+	logdensity_pop<<<nBlocks,nThreads>>>(p_proposed_theta, Daug->GetDevChiPtr(), p_logdens_prop, p_logdens_function,
+			ndata, pchi, dim_theta);
 	CUDA_CHECK_RETURN(cudaPeekAtLastError());
     CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 	double logdens_prop = thrust::reduce(d_proposed_logdens.begin(), d_proposed_logdens.end());
@@ -345,7 +351,8 @@ void PopulationPar::SetTheta(dvector& theta, bool update_logdens)
 		double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
 		double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
 		h_logdens = d_logdens;
-		logdensity_pop<<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, Daug->GetDataDim(), pchi, dim_theta);
+		logdensity_pop<<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, p_logdens_function,
+				Daug->GetDataDim(), pchi, dim_theta);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
 		h_logdens = d_logdens;
 	}

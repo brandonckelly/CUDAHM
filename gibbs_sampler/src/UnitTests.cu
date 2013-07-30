@@ -174,6 +174,8 @@ UnitTests::UnitTests(int n, dim3& nB, dim3& nT) : ndata(n), nBlocks(nB), nThread
 	// fill data arrays
     meas = new double* [ndata];
     meas_unc = new double* [ndata];
+    h_meas.resize(ndata * mfeat);
+    h_meas_unc.resize(ndata * mfeat);
     double meas_err[3] = {1.2, 0.4, 0.24};
     for (int i = 0; i < ndata; ++i) {
 		meas[i] = new double [mfeat];
@@ -181,7 +183,9 @@ UnitTests::UnitTests(int n, dim3& nB, dim3& nT) : ndata(n), nBlocks(nB), nThread
 		for (int j = 0; j < mfeat; ++j) {
 			// y_ij|chi_ij ~ N(chi_ij, meas_err_j^2)
 			meas[i][j] = h_true_chi[j * ndata + i] + meas_err[j] * snorm(rng);
+			h_meas[ndata * j + i] = meas[i][j];
 			meas_unc[i][j] = meas_err[j];
+			h_meas_unc[ndata * j + i] = meas_err[j];
 		}
 	}
 
@@ -665,6 +669,39 @@ void UnitTests::DaugGetChi() {
 // with that obtained from the host-side functions
 void UnitTests::DaugLogDensPtr()
 {
+	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
+	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
+
+	// first test that pointer is set to point to LogDensityPop()
+	Theta.SetTheta(d_true_theta);
+	double logdens_from_theta = Theta.GetLogDens()[0];
+	hvector h_chi = Daug.GetHostChi();
+	double* p_chi = thrust::raw_pointer_cast(&h_chi[0]);
+	double* p_theta = thrust::raw_pointer_cast(&h_true_theta[0]);
+	double logdens_from_host = LogDensityPop(p_chi, p_theta, pchi, dim_theta);
+	double frac_diff = abs(logdens_from_theta - logdens_from_host) / abs(logdens_from_host);
+	if (frac_diff < 1e-8) {
+		npassed++;
+	} else {
+		std::cerr << "Test for PopulationPar constructor failed: Pointer to LogDensityPop() not correctly set." << std::cerr;
+	}
+	nperformed++;
+
+	// now test that pointer is set to point to LogDensityMeas()
+	Daug.SetChi(d_true_chi);
+	double logdens_from_daug = Daug.GetDevLogDens()[0];
+	p_chi = thrust::raw_pointer_cast(&h_true_chi[0]);
+	double* p_meas = thrust::raw_pointer_cast(&h_meas[0]);
+	double* p_meas_unc = thrust::raw_pointer_cast(&h_meas_unc[0]);
+	logdens_from_host = LogDensityMeas(p_chi, p_meas, p_meas_unc, mfeat, pchi);
+
+	frac_diff = abs(logdens_from_daug - logdens_from_host) / abs(logdens_from_host);
+	if (frac_diff < 1e-8) {
+		npassed++;
+	} else {
+		std::cerr << "Test for PopulationPar constructor failed: Pointer to LogDensityPop() not correctly set." << std::cerr;
+	}
+	nperformed++;
 
 }
 

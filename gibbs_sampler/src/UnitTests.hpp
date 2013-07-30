@@ -85,7 +85,9 @@ private:
 	int ndata, pchi, mfeat, dim_theta;
 	// data
 	double** meas;
+	hvector h_meas;
 	double** meas_unc;
+	hvector h_meas_unc;
 	// true values of parameters
 	hvector h_true_chi;
 	dvector d_true_chi;

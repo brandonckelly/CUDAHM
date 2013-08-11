@@ -743,75 +743,7 @@ void UnitTests::DaugAcceptSame()
 	Daug.SetChi(d_true_chi);
 	Theta.SetTheta(d_true_theta);
 
-	// PopulationPar<Characteristic> Theta(dim_theta, &Daug, nBlocks, nThreads);
-	//Theta.SetTheta(d_true_theta);
-	//Daug.SetChi(d_true_chi);
-
-	/*
-	hvector h_chi = Daug.GetHostChi();
-	std::cout << "Daug chi: ";
-	for (int i = 0; i < h_chi.size(); ++i) {
-		std::cout << h_chi[i] << " ";
-	}
-	std::cout << std::endl;
-
-	std::cout << "true chi: ";
-	for (int i = 0; i < d_true_chi.size(); ++i) {
-		std::cout << d_true_chi[i] << " ";
-	}
-	std::cout << std::endl;
-
-	dvector d_logdens_meas = Daug.GetDevLogDens();
-	hvector h_logdens_meas = Daug.GetHostLogDens();
-	dvector d_logdens_pop = Theta.GetDevLogDens();
-	hvector h_logdens_pop= Theta.GetLogDens();
-
-	std::cout << "logdens_meas: ";
-	for (int i = 0; i < 10; ++i) {
-		std::cout << d_logdens_meas[i] << " ";
-	}
-	std::cout << std::endl;
-
-	std::cout << "logdens_pop: ";
-	double logdens = 0.0;
-	for (int i = 0; i < 10; ++i) {
-		logdens += d_logdens_pop[i];
-		std::cout << d_logdens_pop[i] << " ";
-	}
-	std::cout << std::endl;
-	std::cout << "total logdens_pop: " << logdens << std::endl;
-	double logdens_meas = 0.0;
-	logdens_meas = thrust::reduce(d_logdens_meas.begin(), d_logdens_meas.end(), 0.0, thrust::plus<double>());
-	double logdens_pop = 0.0;
-	logdens_pop = thrust::reduce(d_logdens_pop.begin(), d_logdens_pop.begin(), 0.0, thrust::plus<double>());
-	std::cout << "on device logdens_meas, logdens_pop: " << logdens_meas << ", " << logdens_pop << std::endl;
-
-	// make sure posteriors saved in Daug and PopulationPar match those computed manually
-	NormalVariate3d Chi(pchi, mfeat, dim_theta, 1);
-	Chi.SetRNG(&rng);
-	logdens_meas = 0.0;
-	logdens_pop = 0.0;
-
-	h_chi = Daug.GetDevChi();
-	hvector h_theta = Theta.GetDevTheta();
-
-	for (int i = 0; i < ndata; ++i) {
-		double local_meas[10], local_chi[10], local_meas_unc[10];
-		for (int j = 0; j < mfeat; ++j) {
-			local_meas[j] = meas[i][j];
-			local_meas_unc[j] = meas_unc[i][j];
-		}
-		for (int j = 0; j < pchi; ++j) {
-			local_chi[j] = h_chi[j * ndata + i];
-		}
-		logdens_meas += Chi.LogDensityMeas(local_chi, local_meas, local_meas_unc);
-		double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
-		logdens_pop += Chi.LogDensityPop(local_chi, p_theta);
-	}
-	std::cout << "manual logdens_meas, logdens_pop: " << logdens_meas << ", " << logdens_pop << std::endl;
-	*/
-
-	// set the cholesky factors to zero so that NormalVariate.Propose() just returns the same chi value
+	// set the cholesky factors to zero so that NormalPropose() just returns the same chi value
 	int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
 	hvector h_cholfact(ndata * dim_cholfact);
 	thrust::fill(h_cholfact.begin(), h_cholfact.end(), 0.0);
@@ -839,11 +771,10 @@ void UnitTests::DaugAcceptSame()
 	dim_cholfact = dim_theta * dim_theta - ((dim_theta - 1) * dim_theta) / 2;
 	h_cholfact.resize(dim_cholfact);
 	thrust::fill(h_cholfact.begin(), h_cholfact.end(), 0.0);
-	d_cholfact = h_cholfact;
 
 	int ntrials = 1000;
 	for (int i = 0; i < ntrials; ++i) {
-		Theta.SetCholFact(d_cholfact);
+		Theta.SetCholFact(h_cholfact);
 		Theta.Update();
 	}
 	naccept = Theta.GetNaccept();

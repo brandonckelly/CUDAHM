@@ -37,7 +37,7 @@ extern boost::random::mt19937 rng;
 
 int main(int argc, char** argv)
 {
-	int ndata = 10;
+	int ndata = 1000;
 	int mfeat = 3;
 	int pchi = 3;
 	int dtheta = 3;
@@ -132,7 +132,7 @@ int main(int argc, char** argv)
 		Tests.DaugPopPtr();
 		Tests.DaugGetChi();
 		Tests.DaugLogDensPtr();
-		// Tests.DaugAcceptSame();
+		Tests.DaugAcceptSame();
 		// Tests.DaugAcceptBetter();
 
 		// print results

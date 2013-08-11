@@ -133,7 +133,7 @@ int main(int argc, char** argv)
 		Tests.DaugGetChi();
 		Tests.DaugLogDensPtr();
 		Tests.DaugAcceptSame();
-		// Tests.DaugAcceptBetter();
+		Tests.DaugAcceptBetter();
 
 		// print results
 		Tests.Finish();

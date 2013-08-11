@@ -86,8 +86,6 @@ int main(int argc, char** argv)
 	}
     std::cout << std::endl;
 
-	*/
-
     double** meas_temp;
     double** meas_unc_temp;
 	// fill data arrays
@@ -109,6 +107,8 @@ int main(int argc, char** argv)
     int niter(10000), nburnin(2500);
     GibbsSampler Sampler(Daug, Theta, niter, nburnin);
 
+	*/
+
     rng.seed(123456);
 
 	{
@@ -116,21 +116,22 @@ int main(int argc, char** argv)
 		UnitTests Tests(ndata, nBlocks, nThreads);
 
 		// test the rank-1 cholesky update
-		// Tests.R1CholUpdate();
+		Tests.R1CholUpdate();
 
 		// tests for the characteristic class
-		// Tests.ChiPropose();
-		// Tests.ChiAcceptSame();
-		// Tests.ChiAdapt();
+		Tests.ChiPropose();
+		Tests.ChiAcceptSame();
+		Tests.ChiAdapt();
 
 		// tests for population parameter class
-		// Tests.ThetaPropose();
-		// Tests.ThetaAcceptSame();
-		// Tests.ThetaAdapt();
+		Tests.ThetaPropose();
+		Tests.ThetaAcceptSame();
+		Tests.ThetaAdapt();
 
 		// tests for the data augmentation class
-		//Tests.DaugPopPtr();
-		//Tests.DaugGetChi();
+		Tests.DaugPopPtr();
+		Tests.DaugGetChi();
+		Tests.DaugLogDensPtr();
 		// Tests.DaugAcceptSame();
 		// Tests.DaugAcceptBetter();
 
@@ -139,6 +140,8 @@ int main(int argc, char** argv)
 
 	}
 
+	/*
+
 	for (int i = 0; i < ndata; ++i) {
 		delete [] meas_temp[i];
 		delete [] meas_unc_temp[i];
@@ -146,6 +149,7 @@ int main(int argc, char** argv)
 	delete meas_temp;
 	delete meas_unc_temp;
 
+	*/
 
 	std::cout << "...... Finished ......." << std::endl;
 

@@ -176,12 +176,16 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 				cholfact_index++;
 			}
 		}
-
+		double local_meas[3], local_meas_unc[3];
+		for (int j = 0; j < mfeat; ++j) {
+			local_meas[j] = meas[j * ndata + idata];
+			local_meas_unc[j] = meas_unc[j * ndata + idata];
+		}
 		// propose a new value of chi
 		Propose(local_chi, local_cholfact, proposed_chi, snorm_deviate, scaled_proposal, pchi, &localState);
 
 		// get value of log-posterior for proposed chi value
-		double logdens_meas_prop = LogDensityMeas(proposed_chi, meas, meas_unc, mfeat, pchi);
+		double logdens_meas_prop = LogDensityMeas(proposed_chi, local_meas, local_meas_unc, mfeat, pchi);
 		double logdens_pop_prop = LogDensityPop(proposed_chi, theta, pchi, dim_theta);
 		double logpost_prop = logdens_meas_prop + logdens_pop_prop;
 
@@ -224,11 +228,15 @@ void logdensity_meas(double* meas, double* meas_unc, double* chi, double* logden
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
 	if (idata < ndata)
 	{
-		double chi_i[3];
+		double chi_i[3], meas_i[3], meas_unc_i[3];
 		for (int j = 0; j < pchi; ++j) {
 			chi_i[j] = chi[j * ndata + idata];
 		}
-		logdens[idata] = LogDensityMeas(chi_i, meas, meas_unc, mfeat, pchi);
+		for (int j = 0; j < mfeat; ++j) {
+			meas_i[j] = meas[j * ndata + idata];
+			meas_unc_i[j] = meas_unc[j * ndata + idata];
+		}
+		logdens[idata] = LogDensityMeas(chi_i, meas_i, meas_unc_i, mfeat, pchi);
 	}
 }
 

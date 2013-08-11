@@ -63,7 +63,7 @@ __device__ __host__
 double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, int pchi)
 {
 	double logdens = 0.0;
-	for (int i = 0; i < 3; ++i) {
+	for (int i = 0; i < pchi; ++i) {
 		double chi_std = (meas[i] - chi[i]) / meas_unc[i];
 		logdens += -0.5 * chi_std * chi_std;
 	}
@@ -674,32 +674,60 @@ void UnitTests::DaugLogDensPtr()
 
 	// first test that pointer is set to point to LogDensityPop()
 	Theta.SetTheta(d_true_theta);
-	double logdens_from_theta = Theta.GetLogDens()[0];
+	hvector h_logdens_from_theta = Theta.GetLogDens();
+	double logdens_from_theta = 0.0;
+	for (int i = 0; i < h_logdens_from_theta.size(); ++i) {
+		logdens_from_theta += h_logdens_from_theta[i];
+	}
 	hvector h_chi = Daug.GetHostChi();
-	double* p_chi = thrust::raw_pointer_cast(&h_chi[0]);
 	double* p_theta = thrust::raw_pointer_cast(&h_true_theta[0]);
-	double logdens_from_host = LogDensityPop(p_chi, p_theta, pchi, dim_theta);
+	double local_chi[3];
+	double logdens_from_host = 0.0;
+	for (int i = 0; i < ndata; ++i) {
+		for (int j = 0; j < pchi; ++j) {
+			local_chi[j] = h_chi[j * ndata + i];
+		}
+		logdens_from_host += LogDensityPop(local_chi, p_theta, pchi, dim_theta);
+	}
 	double frac_diff = abs(logdens_from_theta - logdens_from_host) / abs(logdens_from_host);
 	if (frac_diff < 1e-8) {
 		npassed++;
 	} else {
-		std::cerr << "Test for PopulationPar constructor failed: Pointer to LogDensityPop() not correctly set." << std::cerr;
+		std::cerr << "Test for PopulationPar constructor failed: Pointer to LogDensityPop() not correctly set." << std::endl;
+		std::cerr << "Log-Density of characteristics|theta from host-side function: " << logdens_from_host << std::endl;
+		std::cerr << "Log-Density of characteristics|theta from PopulationPar: " << logdens_from_theta << std::endl;
 	}
 	nperformed++;
 
+	// TODO: make this calculate the sum, as above
+
 	// now test that pointer is set to point to LogDensityMeas()
 	Daug.SetChi(d_true_chi);
-	double logdens_from_daug = Daug.GetDevLogDens()[0];
-	p_chi = thrust::raw_pointer_cast(&h_true_chi[0]);
-	double* p_meas = thrust::raw_pointer_cast(&h_meas[0]);
-	double* p_meas_unc = thrust::raw_pointer_cast(&h_meas_unc[0]);
-	logdens_from_host = LogDensityMeas(p_chi, p_meas, p_meas_unc, mfeat, pchi);
+	dvector d_logdens_from_daug = Daug.GetDevLogDens();
+	double logdens_from_daug = thrust::reduce(d_logdens_from_daug.begin(), d_logdens_from_daug.end());
+	h_chi = Daug.GetHostChi();
+	logdens_from_host = 0.0;
+	double local_meas[3];
+	double local_meas_unc[3];
+	for (int i = 0; i < ndata; ++i) {
+		for (int j = 0; j < pchi; ++j) {
+			local_chi[j] = h_chi[j * ndata + i];
+			local_meas[j] = h_meas[j * ndata + i];
+			local_meas_unc[j] = h_meas_unc[j * ndata + i];
+		}
+		double logdens_from_host_i = LogDensityMeas(local_chi, local_meas, local_meas_unc, mfeat, pchi);
+		logdens_from_host += logdens_from_host_i;
+	}
+
+	// TODO: CHECK DAUG.LOGDENSPOP
 
 	frac_diff = abs(logdens_from_daug - logdens_from_host) / abs(logdens_from_host);
 	if (frac_diff < 1e-8) {
 		npassed++;
 	} else {
-		std::cerr << "Test for PopulationPar constructor failed: Pointer to LogDensityPop() not correctly set." << std::cerr;
+		std::cerr << "Test for DataAugmentation constructor failed: Pointer to LogDensityMeas() not correctly set." << std::endl;
+		std::cerr << "Log-Density of measurements|characteristics from host-side function: " << logdens_from_host << std::endl;
+		std::cerr << "Log-Density of measurements|characteristics from DataAugmentation: " << logdens_from_daug << std::endl;
 	}
 	nperformed++;
 

@@ -111,6 +111,51 @@ double variance(double* x, int nx) {
 	return sigsqr;
 }
 
+std::vector<double> covariance(vecvec X) {
+	std::vector<double> xcovar(X[0].size() * X[0].size(), 0.0);
+	std::vector<double> xmean(X[0].size(), 0.0);
+	for (int j = 0; j < X[0].size(); ++j) {
+		for (int i = 0; i < X.size(); ++i) {
+			xmean[j] += X[i][j];
+		}
+		xmean[j] /= X.size();
+	}
+	for (int i = 0; i < X.size(); ++i) {
+		for (int j = 0; j < X[0].size(); ++j) {
+			for (int k = 0; k < X[0].size(); ++k) {
+				xcovar[j * X[0].size() + k] += (X[i][j] - xmean[j]) * (X[i][k] - xmean[k]) / X.size();
+			}
+		}
+	}
+	return xcovar;
+}
+
+void matrix_invert3d(double* A, double* A_inv) {
+	double a, b, c, d, e, f, g, h, k;
+	a = A[0];
+	b = A[1];
+	c = A[2];
+	d = A[3];
+	e = A[4];
+	f = A[5];
+	g = A[6];
+	h = A[7];
+	k = A[8];
+
+	double determ_inv = 0.0;
+	determ_inv = 1.0 / (a * (e * k - f * h) - b * (k * d - f * g) + c * (d * h - e * g));
+
+	A_inv[0] = determ_inv * (e * k - f * h);
+	A_inv[1] = -determ_inv * (b * k - c * h);
+	A_inv[2] = determ_inv * (b * f - c * e);
+	A_inv[3] = -determ_inv * (d * k - f * g);
+	A_inv[4] = determ_inv * (a * k - c * g);
+	A_inv[5] = -determ_inv * (a * f - c * d);
+	A_inv[6] = determ_inv * (d * h - e * g);
+	A_inv[7] = -determ_inv * (a * h - b * g);
+	A_inv[8] = determ_inv * (a * e - b * d);
+}
+
 // constructor for class that performs unit tests
 UnitTests::UnitTests(int n, dim3& nB, dim3& nT) : ndata(n), nBlocks(nB), nThreads(nT)
 {
@@ -207,6 +252,8 @@ UnitTests::~UnitTests() {
 // test rank-1 cholesky update
 void UnitTests::R1CholUpdate() {
 
+	std::cout << "Testing rank-1 Cholesky update..." << std::endl;
+
 	double v[3] = {-0.39108095, -0.0668706, -0.30427621};
 	// cholesky factor for update (covar + v * transpose(v)), computed from python
 	double Lup0[6] = {2.33301185, 0.14429923, 0.43145036, -6.55419017, 9.78632116,  6.39711602};
@@ -237,6 +284,7 @@ void UnitTests::R1CholUpdate() {
 	if ((max_frac_diff_down < 1e-6) && (max_frac_diff_up < 1e-6)) {
 		// cholesky factors agree, so test passed
 		npassed++;
+		std::cout << "... passed." << std::endl;
 	} else {
 		// test failed
 		std::cerr << "Rank-1 Cholesky update test failed." << std::endl;
@@ -247,6 +295,10 @@ void UnitTests::R1CholUpdate() {
 
 // check that Propose follows a multivariate normal distribution
 void UnitTests::ChiPropose() {
+
+	std::cout << "Testing chi proposal generation..." << std::endl;
+
+	int local_passed = 0;
 
 	double** covar_inv_local;
 	covar_inv_local = new double* [3];
@@ -292,6 +344,7 @@ void UnitTests::ChiPropose() {
 	double zdiff_mean = abs(mean_chisqr - true_mean) / mu_sigma;
 	if (zdiff_mean < 3.0) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for Chi::Propose failed: average chi-square value more than 3-sigma away from true value" << std::endl;
 	}
@@ -313,12 +366,14 @@ void UnitTests::ChiPropose() {
 	}
 	if ((count_low > nlow_low) && (count_low < nlow_high)) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for Chi::Propose failed: empirical 4.0 percentile inconsistent with true value" << std::endl;
 	}
 	nperformed++;
 	if ((count_high > nhigh_low) && (count_high < nhigh_high)) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for Chi::Propose failed: empirical 95.4 percentile inconsistent with true value" << std::endl;
 	}
@@ -329,10 +384,16 @@ void UnitTests::ChiPropose() {
 		delete [] covar_inv_local[i];
 	}
 	delete covar_inv_local;
+	if (local_passed == 3) {
+		std::cout << "... passed." << std::endl;
+	}
 }
 
 // check that Chi::Accept always accepts when the proposal and the current values are the same
 void UnitTests::ChiAcceptSame() {
+
+	std::cout << "Testing chi acceptance step for same posteriors..." << std::endl;
+
 	int p = 3, ntrials = 100000;
 
 	bool accept;
@@ -349,6 +410,7 @@ void UnitTests::ChiAcceptSame() {
 
 	if (naccept == ntrials) {
 		npassed++;
+		std::cout << "... passed." << std::endl;
 	} else {
 		std::cerr << "Test for Chi::Accept failed: Failed to always accept when the log-posteriors are the same." << std::endl;
 	}
@@ -357,6 +419,9 @@ void UnitTests::ChiAcceptSame() {
 
 // test Chi::Adapt acceptance rate and covariance by running a simple MCMC sampler for a 3-dimensional normal distribution
 void UnitTests::ChiAdapt() {
+
+	std::cout << "Testing that RAM MCMC sampler achieves desired acceptance rate for a single chi using host functions."
+			<< std::endl;
 
 	int p = 3, niter = 300000;
 	int current_iter = 1;
@@ -417,6 +482,7 @@ void UnitTests::ChiAdapt() {
 	// make sure acceptance rate is within 5% of the target rate
 	if (frac_diff < 0.05) {
 		npassed++;
+		std::cout << "... passed." << std::endl;
 	} else {
 		std::cerr << "Test for Chi::Adapt failed: Acceptance rate is not within 5% of the target rate." << std::endl;
 		std::cout << accept_rate << ", " << target_rate << std::endl;
@@ -426,6 +492,10 @@ void UnitTests::ChiAdapt() {
 
 // check that PopulationPar::Propose follow a multivariate normal distribution
 void UnitTests::ThetaPropose() {
+
+	std::cout << "Testing that population parameter proposal follows correct distribution..." << std::endl;
+	int local_passed = 0;
+
 	double** covar_inv_local;
 	covar_inv_local = new double* [3];
 	for (int i = 0; i < 3; ++i) {
@@ -482,6 +552,7 @@ void UnitTests::ThetaPropose() {
 	double zdiff_mean = abs(mean_chisqr - true_mean) / mu_sigma;
 	if (zdiff_mean < 3.0) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for Theta::Propose failed: average chi-square value more than 3-sigma away from true value" << std::endl;
 	}
@@ -503,12 +574,14 @@ void UnitTests::ThetaPropose() {
 	}
 	if ((count_low > nlow_low) && (count_low < nlow_high)) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for Theta::Propose failed: empirical 4.0 percentile inconsistent with true value" << std::endl;
 	}
 	nperformed++;
 	if ((count_high > nhigh_low) && (count_high < nhigh_high)) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for Theta::Propose failed: empirical 95.4 percentile inconsistent with true value" << std::endl;
 	}
@@ -519,10 +592,16 @@ void UnitTests::ThetaPropose() {
 		delete [] covar_inv_local[i];
 	}
 	delete covar_inv_local;
+
+	if (local_passed == 3) {
+		std::cout << "... passed." << std::endl;
+	}
 }
 
 // check that PopulationPar::Accept always accepts when the logdensities are the same
 void UnitTests::ThetaAcceptSame() {
+	std::cout << "Testing that population parameter updates always accept when posterior are the same." << std::endl;
+
 	int ntrials = 100000;
     PopulationPar Theta(dim_theta, nBlocks, nThreads);
 
@@ -539,6 +618,7 @@ void UnitTests::ThetaAcceptSame() {
 
 	if (naccept == ntrials) {
 		npassed++;
+		std::cout << "... passed." << std::endl;
 	} else {
 		std::cerr << "Test for Theta::Accept failed: Failed to always accept when the log-posteriors are the same." << std::endl;
 	}
@@ -547,6 +627,8 @@ void UnitTests::ThetaAcceptSame() {
 
 // test PopulationPar::Adapt acceptance rate and covariance by running a simple MCMC sampler
 void UnitTests::ThetaAdapt() {
+
+	std::cout << "Testing that population parameter RAM sampler achieves desired acceptance rate." << std::endl;
 
 	double mu[3] = {1.2, 0.4, -0.7};
 
@@ -597,6 +679,7 @@ void UnitTests::ThetaAdapt() {
 	// make sure acceptance rate is within 5% of the target rate
 	if (frac_diff < 0.05) {
 		npassed++;
+		std::cout << "... passed." << std::endl;
 	} else {
 		std::cerr << "Test for Theta::Adapt failed: Acceptance rate is not within 5% of the target rate." << std::endl;
 		std::cout << accept_rate << ", " << target_rate << std::endl;
@@ -606,6 +689,8 @@ void UnitTests::ThetaAdapt() {
 
 // check that constructor for population parameter correctly set the pointer data member of DataAugmentation
 void UnitTests::DaugPopPtr() {
+	std::cout << "Making sure population parameter constructor correctly sets the data augmentation pointer." << std::endl;
+
 	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
 	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
 
@@ -613,6 +698,7 @@ void UnitTests::DaugPopPtr() {
 
 	if (p_Theta == &Theta) {
 		npassed++;
+		std::cout << "... passed." << std::endl;
 	} else {
 		std::cerr << "Test for PopulationPar constructor failed: Pointer to DataAugmentation member not correctly initialized."
 				<< std::endl;
@@ -622,6 +708,8 @@ void UnitTests::DaugPopPtr() {
 
 // test DataAugmentation::GetChi
 void UnitTests::DaugGetChi() {
+
+	std::cout << "Testing DataAugmentation::GetChi..." << std::endl;
 
 	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
 	hvector h_chi = Daug.GetHostChi();
@@ -654,6 +742,7 @@ void UnitTests::DaugGetChi() {
 	}
     if (nequal == ndata * pchi) {
 		npassed++;
+		std::cout << "... passed." << std::endl;
 	} else {
 		std::cerr << "Test for Daug::GetChi failed: Values returned do not match the input values." << std::endl;
 	}
@@ -669,6 +758,9 @@ void UnitTests::DaugGetChi() {
 // with that obtained from the host-side functions
 void UnitTests::DaugLogDensPtr()
 {
+	std::cout << "Testing that pointers to log density functions are properly set..." << std::endl;
+	int local_passed = 0;
+
 	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
 	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
 
@@ -692,6 +784,7 @@ void UnitTests::DaugLogDensPtr()
 	double frac_diff = abs(logdens_from_theta - logdens_from_host) / abs(logdens_from_host);
 	if (frac_diff < 1e-8) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for PopulationPar constructor failed: Pointer to LogDensityPop() not correctly set." << std::endl;
 		std::cerr << "Log-Density of characteristics|theta from host-side function: " << logdens_from_host << std::endl;
@@ -724,6 +817,7 @@ void UnitTests::DaugLogDensPtr()
 	frac_diff = abs(logdens_from_daug - logdens_from_host) / abs(logdens_from_host);
 	if (frac_diff < 1e-8) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for DataAugmentation constructor failed: Pointer to LogDensityMeas() not correctly set." << std::endl;
 		std::cerr << "Log-Density of measurements|characteristics from host-side function: " << logdens_from_host << std::endl;
@@ -731,12 +825,17 @@ void UnitTests::DaugLogDensPtr()
 	}
 	nperformed++;
 
+	if (local_passed == 2) {
+		std::cout << "... passed." << std::endl;
+	}
 }
 
 // check that DataAugmentation::Update always accepts when the proposed and current chi values are the same
 void UnitTests::DaugAcceptSame()
 {
-	std::cout << "Testing DaugAcceptSame...." << std::endl;
+	std::cout << "Testing that update for DataAugmentation always accepts when chi values are unchanged...." << std::endl;
+	int local_passed = 0;
+
 	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
 	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
 
@@ -760,6 +859,7 @@ void UnitTests::DaugAcceptSame()
 	}
 	if (naccept == ndata) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for Daug::Accept() failed: Did not accept all of the proposed characteristics "
 				<< "when they are the same." << std::endl;
@@ -780,16 +880,22 @@ void UnitTests::DaugAcceptSame()
 	naccept = Theta.GetNaccept();
 	if (naccept == ntrials) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for PopulationPar::Accept() failed: Did not accept all of the proposed population "
 				<< "values when they are the same." << std::endl;
 	}
 	nperformed++;
+	if (local_passed == 2) {
+		std::cout << "... passed." << std::endl;
+	}
 }
 
 // make sure that DataAugmentation::Update() accepts and saves Chi values when the posterior is much higher
 void UnitTests::DaugAcceptBetter() {
-	std::cout << "Testing DaugAcceptBetter...." << std::endl;
+	std::cout << "Testing DaugAccept.Update() always accepts a better proposal...." << std::endl;
+	int local_passed = 0;
+
 	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
 	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
 
@@ -812,6 +918,7 @@ void UnitTests::DaugAcceptBetter() {
 	}
 	if (naccept == ndata) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for Daug::Accept() failed: Did not accept all of the proposed characteristics when "
 				<< "the posterior is improved." << std::endl;
@@ -828,6 +935,7 @@ void UnitTests::DaugAcceptBetter() {
 	}
 	if (ndiff_chi == h_true_chi.size()) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for Daug::Accept() failed: Did not update the characteristics when the "
 				<< "proposals are accepted." << std::endl;
@@ -842,15 +950,22 @@ void UnitTests::DaugAcceptBetter() {
 	}
 	if (ndiff_logdens == h_logdens_meas.size()) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for Daug::Accept() failed: Did not update the posteriors when the "
 				<< "proposals are accepted." << std::endl;
 	}
 	nperformed++;
 
+	if (local_passed == 3) {
+		std::cout << "... passed." << std::endl;
+	}
+
 	/*
 	 * Now do the same thing, but for the population parameters.
 	 */
+	std::cout << "Testing Theta.Update() always accepts a better proposal...." << std::endl;
+	local_passed = 0;
 
 	hvector h_logdens_pop(ndata);
 	thrust::fill(h_logdens_pop.begin(), h_logdens_pop.end(), -1e10);
@@ -863,6 +978,7 @@ void UnitTests::DaugAcceptBetter() {
 	naccept = Theta.GetNaccept();
 	if (naccept == 1) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for PopulationPar::Accept() failed: Did not accept the proposed population "
 				<< "values when the posterior is improved" << std::endl;
@@ -880,6 +996,7 @@ void UnitTests::DaugAcceptBetter() {
 	if (ndiff_theta == h_new_theta.size()) {
 		// did we save the accepted theta?
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for PopulationPar::Accept() failed: Did not update the population parameter value when the "
 				<< "proposal is accepted." << std::endl;
@@ -895,20 +1012,28 @@ void UnitTests::DaugAcceptBetter() {
 	if (ndiff_logdens == h_logdens_meas.size()) {
 		// did we update the posterior?
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for PopulationPar::Accept() failed: Did not update the posteriors when the "
 				<< "proposals are accepted." << std::endl;
 	}
 	nperformed++;
+	if (local_passed == 3) {
+		std::cout << "... passed." << std::endl;
+	}
 }
 
 // test the Gibbs Sampler for a Normal-Normal model keeping the characteristics fixed
 void UnitTests::FixedChar() {
 
+	std::cout << "Testing Gibbs Sampler for fixed characteristics...";
+	int local_passed = 0;
+
 	// create the parameter objects
 	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
-	Daug.SetChi(d_true_chi);
 	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
+
+	Daug.SetChi(d_true_chi);
 
 	// setup the Gibbs sampler object
 	int niter(100000), nburn(10000);
@@ -926,6 +1051,7 @@ void UnitTests::FixedChar() {
 	// make sure acceptance rate is within 5% of the target rate
 	if (frac_diff < 0.05) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for GibbsSampler with fixed Characteristics failed: Acceptance rate "
 				<< "is not within 5% of the target rate." << std::endl;
@@ -957,7 +1083,7 @@ void UnitTests::FixedChar() {
 		theta_mean_true[j] /= ndata;
 	}
 
-	// make sure estimated value and true value are within 2% of eachother
+	// make sure estimated value and true value are within 2% of each other
 	frac_diff = 0.0;
 	for (int j = 0; j < dim_theta; ++j) {
 		frac_diff += abs(theta_mean[j] - theta_mean_true[j]) / abs(theta_mean_true[j]);
@@ -965,6 +1091,7 @@ void UnitTests::FixedChar() {
 	frac_diff /= dim_theta;
 	if (frac_diff < 0.02) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for GibbsSampler with fixed Characteristics failed: Average fractional difference "
 				<< "between estimated posterior mean and true value is greater than 2%." << std::endl;
@@ -1005,16 +1132,178 @@ void UnitTests::FixedChar() {
 	frac_diff /= (dim_theta * dim_theta) ;
 	if (frac_diff < 0.02) {
 		npassed++;
+		local_passed++;
 	} else {
 		std::cerr << "Test for GibbsSampler with fixed Characteristics failed: Average fractional difference "
 				<< "between estimated posterior covariance in mean parameter and the true value is greater than 2%." << std::endl;
+		std::cout << "Average fractional difference:" << frac_diff << std::endl;
+		std::cout << "Estimated posterior covariance:" << std::endl;
+		for (int i = 0; i < 3; ++i) {
+			for (int j = 0; j < 3; ++j) {
+				std::cout << mean_covar[i][j] << "  ";
+			}
+			std::cout << std::endl;
+		}
+		std::cout << "True posterior covariance:" << std::endl;
+		for (int i = 0; i < 3; ++i) {
+			for (int j = 0; j < 3; ++j) {
+				std::cout << mean_covar_true[i][j] << "  ";
+			}
+			std::cout << std::endl;
+		}
 	}
 	nperformed++;
+
+	// TODO: write the results to a file so I can inspect them.
+
+	if (local_passed == 3) {
+		std::cout << "... passed." << std::endl;
+	}
+
 }
 
 // test the Gibbs Sampler for a Normal-Normal model keeping the population parameter fixed
 void UnitTests::FixedPopPar() {
 
+	std::cout << "Testing Gibbs Sampler for fixed population parameter...";
+	int local_passed = 0;
+
+	// create the parameter objects
+	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
+	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
+
+	Theta.SetTheta(d_true_theta);
+
+	// setup the Gibbs sampler object
+	int niter(100000), nburn(10000);
+	GibbsSampler Sampler(Daug, Theta, niter, nburn);
+	Sampler.FixPopPar(); // keep the population parameter fixed
+
+	// run the MCMC sampler
+	Sampler.Run();
+
+	// check the acceptance rate
+	double target_rate = 0.4;
+	thrust::host_vector<double> naccept = Daug.GetNaccept();
+	std::vector<double> frac_diff(naccept.size());
+	int npass = 0;
+	for (int i = 0; i < naccept.size(); ++i) {
+		double arate = naccept[i] / double(niter + nburn);
+		frac_diff[i] = abs(arate - target_rate) / target_rate;
+		// make sure acceptance rate is within 5% of the target rate
+		if (frac_diff[i] < 0.05) {
+			npass++;
+		}
+	}
+
+	// make sure acceptance rate is within 5% of the target rate
+	if (npass == ndata) {
+		npassed++;
+		local_passed++;
+	} else {
+		int nbad = ndata - npass;
+		std::cerr << "Test for GibbsSampler with fixed PopulationPar failed: Acceptance rate "
+				<< "is not within 5% of the target rate for " << nbad << " characteristics." << std::endl;
+		for (int i = 0; i < frac_diff.size(); ++i) {
+			if (frac_diff[i] > 0.05) {
+				std::cout << frac_diff[i] << ", " << target_rate << std::endl;
+			}
+		}
+	}
+	nperformed++;
+
+	// grab the MCMC samples of the population parameter
+	std::vector<vecvec> csamples = Sampler.GetCharSamples();
+
+	// compare the estimated posterior mean and covariance of characteristics with true values
+	// for the NormalNormal model
+	int npass_mean = 0;
+	int npass_covar = 0;
+	for (int i = 0; i < ndata; ++i) {
+		double chi_mean[3] = {0.0, 0.0, 0.0};
+		vecvec this_csamples(csamples.size());
+		for (int j = 0; j < csamples.size(); ++j) {
+			this_csamples[j] = csamples[j][i];
+			chi_mean[0] += csamples[j][i][0] / csamples.size();
+			chi_mean[1] += csamples[j][i][1] / csamples.size();
+			chi_mean[2] += csamples[j][i][2] / csamples.size();
+		}
+		// get true value of posterior covariance matrix
+		double meas_var_inv[9] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+		meas_var_inv[0] = 1.0 / meas_unc[i][0] / meas_unc[i][0];
+		meas_var_inv[4] = 1.0 / meas_unc[i][1] / meas_unc[i][1];
+		meas_var_inv[8] = 1.0 / meas_unc[i][2] / meas_unc[i][2];
+		double post_var_inv[9];
+		for (int k = 0; k < mfeat; ++k) {
+			post_var_inv[k] = meas_var_inv[k] + covar_inv[k];
+		}
+		double post_var[9];
+		matrix_invert3d(post_var_inv, post_var);
+		// get true value of posterior mean
+		double wchi_mean_true[3] = {0.0, 0.0, 0.0};
+		for (int k = 0; k < mfeat; ++k) {
+			// contribution to posterior mean from measured value of characteristic
+			wchi_mean_true[k] = meas[i][k] / meas_unc[i][k] / meas_unc[i][k];
+			for (int l = 0; l < mfeat; ++l) {
+				// add in prior contribution
+				wchi_mean_true[k] += covar_inv[k * mfeat + l] * h_true_theta[l];
+			}
+		}
+		double chi_mean_true[3] = {0.0, 0.0, 0.0};
+		for (int k = 0; k < mfeat; ++k) {
+			for (int l = 0; l < mfeat; ++l) {
+				// true value of posterior mean
+				chi_mean_true[k] += post_var[k * mfeat + l] * wchi_mean_true[l];
+			}
+		}
+		// make sure estimated and true posterior means are within 2% of each other
+		double frac_diff = 0.0;
+		for (int k = 0; k < mfeat; ++k) {
+			frac_diff += abs(chi_mean_true[k] - chi_mean[k]) / abs(chi_mean_true[k]) / dim_theta;
+		}
+		if (frac_diff < 0.02) {
+			npass_mean++;
+		}
+		// make sure estimated and true posterior covariance matrices are within 2% of eachother
+		std::vector<double> post_covar_true = covariance(this_csamples);
+		frac_diff = 0.0;
+		for (int j = 0; j < pchi; ++j) {
+			for (int k = 0; k < pchi; ++k) {
+				frac_diff += abs(post_covar_true[j * pchi + k] - post_var[j * pchi + k]) / abs(post_var[j * pchi + k]);
+			}
+		}
+		frac_diff /= (pchi * pchi);
+		if (frac_diff < 0.02) {
+			npass_covar++;
+		}
+	}
+
+	if (npass_mean == ndata) {
+		npassed++;
+		local_passed++;
+	}
+	else {
+		int nfailed = ndata - npass;
+		std::cerr << "Test for GibbsSampler with fixed PopulationPar failed: Average fractional difference "
+				<< "between estimated posterior mean and true value is greater than 2% for " << nfailed
+				<< " characteristics." << std::endl;
+	}
+	nperformed++;
+	if (npass_covar == ndata) {
+		npassed++;
+		local_passed++;
+	}
+	else {
+		int nfailed = ndata - npass;
+		std::cerr << "Test for GibbsSampler with fixed PopulationPar failed: Average fractional difference "
+				<< "between estimated posterior covariance and true value is greater than 2% for " << nfailed
+				<< " characteristics." << std::endl;
+	}
+	nperformed++;
+
+	if (local_passed == 3) {
+		std::cout << "... passed." << std::endl;
+	}
 }
 
 // test the Gibbs Sampler for a Normal-Normal model

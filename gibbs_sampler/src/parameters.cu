@@ -94,7 +94,7 @@ void DataAugmentation::Update()
 	int dim_theta = p_Theta->GetDim();
 
 	// grab host-side pointer function that compute the conditional posterior of characteristics|population
-	pLogDensPop p_logdens_pop_function = p_Theta->GetLogDensPtr();
+	pLogDensPop p_logdens_pop_function = p_Theta->GetLogDensPopPtr();
 
 	// launch the kernel to update the characteristics on the GPU
 	update_characteristic<<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_devtheta, p_cholfact, p_logdens_meas,
@@ -123,7 +123,7 @@ void DataAugmentation::SetChi(dvector& chi, bool update_logdens)
 		int dim_theta = p_Theta->GetDim();
 		double* p_logdens_pop = p_Theta->GetDevLogDensPtr();
 		// no update the posteriors of the characteristics | population parameter
-		pLogDensPop p_LogDensPop = p_Theta->GetLogDensPtr();
+		pLogDensPop p_LogDensPop = p_Theta->GetLogDensPopPtr();
 		logdensity_pop<<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens_pop, p_LogDensPop, ndata, pchi, dim_theta);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
 		CUDA_CHECK_RETURN(cudaDeviceSynchronize());

@@ -53,18 +53,21 @@ void GibbsSampler::Run()
 	//progress_bar.restart(niter_);
 
 	for (int i = 0; i < niter_; ++i) {
+		if (i % 1000 == 0) {
+			std::cout << i << "..." << std::endl;
+		}
 		Iterate();
-		if (current_iter_ % nthin_theta_ == 0) {
+		// TODO: How long does saving the values take? Maybe replace these with iterators?
+		if (!fix_poppar && (current_iter_ % nthin_theta_ == 0)) {
 			// save the value of the population parameter since we've done nthin_theta_ iterations since the last save
 			ThetaSamples_[ntheta_samples_] = PopPar_.GetTheta();
 			ntheta_samples_++;
 		}
-		if (current_iter_ % nthin_chi_ == 0) {
+		if (!fix_char && (current_iter_ % nthin_chi_ == 0)) {
 			// save the value of the characteristics
 			ChiSamples_[nchi_samples_] = Daug_.GetChi();
 			nchi_samples_++;
 		}
-		current_iter_++;
 		//progress_bar++;
 	}
 	// report on the results

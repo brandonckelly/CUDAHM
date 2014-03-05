@@ -44,7 +44,7 @@ typedef std::vector<std::vector<double> > vecvec;
 typedef thrust::host_vector<double> hvector;
 typedef thrust::device_vector<double> dvector;
 
-// pointers to functions that must be supplied by the user for computed the conditional log-densities
+// pointers to functions that must be supplied by the user for computing the conditional log-densities
 typedef double (*pLogDensMeas)(double*, double*, double*, int, int);
 typedef double (*pLogDensPop)(double*, double*, int, int);
 
@@ -87,7 +87,7 @@ public:
 	int GetDataDim() { return ndata; }
 	int GetChiDim() { return pchi; }
 	PopulationPar* GetPopulationPtr() { return p_Theta; }
-	pLogDensMeas GetLogDensPtr() { return p_logdens_function; }
+	pLogDensMeas GetLogDensMeasPtr() { return p_logdens_function; }
 	thrust::host_vector<int> GetNaccept() {
 		h_naccept = d_naccept;
 		return h_naccept;
@@ -181,7 +181,7 @@ public:
 	int GetDim() { return dim_theta; }
 	hvector GetCholFactor() { return cholfact; }
 	int GetNaccept() { return naccept; }
-	pLogDensPop GetLogDensPtr() { return p_logdens_function; }
+	pLogDensPop GetLogDensPopPtr() { return p_logdens_function; }
 
 protected:
 	int dim_theta;

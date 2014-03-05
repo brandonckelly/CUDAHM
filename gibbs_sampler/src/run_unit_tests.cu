@@ -37,7 +37,7 @@ extern boost::random::mt19937 rng;
 
 int main(int argc, char** argv)
 {
-	int ndata = 1000;
+	int ndata = 100;
 	int mfeat = 3;
 	int pchi = 3;
 	int dtheta = 3;
@@ -134,6 +134,10 @@ int main(int argc, char** argv)
 		Tests.DaugLogDensPtr();
 		Tests.DaugAcceptSame();
 		Tests.DaugAcceptBetter();
+
+		// tests for the MCMC sampler
+		// Tests.FixedChar();
+		Tests.FixedPopPar();
 
 		// print results
 		Tests.Finish();

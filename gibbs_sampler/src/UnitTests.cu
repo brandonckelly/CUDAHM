@@ -92,6 +92,120 @@ double LogDensityPop(double* chi, double* theta, int pchi, int dim_theta)
 	return logdens;
 }
 
+/*
+ * kernels that will be used to test each component of update_characteristic
+ */
+
+// test the function that proposes a new characteristic on the device
+__global__
+void test_propose(double* chi, double* cholfact, curandState* devStates, int ndata, int pchi)
+{
+	int idata = blockDim.x * blockIdx.x + threadIdx.x;
+	if (idata < ndata)
+	{
+		curandState localState = devStates[idata]; // grab state of this random number generator
+
+		// copy values for this data point to registers for speed
+		double snorm_deviate[3], scaled_proposal[3], proposed_chi[3], local_chi[3], local_cholfact[6];
+		int cholfact_index = 0;
+		for (int j = 0; j < pchi; ++j) {
+			local_chi[j] = chi[j * ndata + idata];
+			for (int k = 0; k < (j+1); ++k) {
+				local_cholfact[cholfact_index] = cholfact[cholfact_index * ndata + idata];
+				cholfact_index++;
+			}
+		}
+		// propose a new value of chi
+		Propose(local_chi, local_cholfact, proposed_chi, snorm_deviate, scaled_proposal, pchi, &localState);
+
+		// copy local RNG state back to global memory
+		devStates[idata] = localState;
+
+		// copy proposed value of chi back to global memory
+		for (int j=0; j<pchi; j++) {
+			chi[ndata * j + idata] = proposed_chi[j];
+		}
+	}
+}
+
+// test the function perform the Metropolis-Hasting acceptance step
+__global__
+void test_accept(double* chi, double* cholfact, double* logdens_meas, double* logdens_pop, curandState* devStates,
+		int* naccept, int ndata, int pchi)
+{
+	int idata = blockDim.x * blockIdx.x + threadIdx.x;
+	if (idata < ndata)
+	{
+		curandState localState = devStates[idata]; // grab state of this random number generator
+
+		// copy values for this data point to registers for speed
+		double snorm_deviate[3] = {1.2, -0.6, 0.8};
+		double scaled_proposal[3], local_cholfact[6], proposed_chi[3];
+		int cholfact_index = 0;
+		for (int j = 0; j < pchi; ++j) {
+			double scaled_proposal_j = 0.0;
+			for (int k = 0; k < (j+1); ++k) {
+				local_cholfact[cholfact_index] = cholfact[cholfact_index * ndata + idata];
+				scaled_proposal_j += local_cholfact[cholfact_index] * snorm_deviate[k];
+				cholfact_index++;
+			}
+			scaled_proposal[j] = scaled_proposal_j;
+			proposed_chi[j] = chi[ndata * j + idata] + scaled_proposal[j];
+		}
+
+		// should always accept when proposed posterior is higher
+		double logpost_current = 0.0;
+		double logpost_prop = 1.0;
+		double metro_ratio = 0.0;
+		bool accept = AcceptProp(logpost_prop, logpost_current, 0.0, 0.0, metro_ratio, &localState);
+
+		// copy local RNG state back to global memory
+		devStates[idata] = localState;
+
+		if (accept) {
+			// accepted this proposal, so save new value of chi and log-densities
+			for (int j=0; j<pchi; j++) {
+				chi[ndata * j + idata] = proposed_chi[j];
+			}
+			logdens_meas[idata] = 0.5;
+			logdens_pop[idata] = 0.5;
+			naccept[idata] += 1;
+		}
+	}
+}
+
+// test that we adapt the proposal covariance matrix
+__global__
+void test_adapt(double* cholfact, int ndata, int pchi, int current_iter)
+{
+	int idata = blockDim.x * blockIdx.x + threadIdx.x;
+	if (idata < ndata)
+	{
+		// copy values for this data point to registers for speed
+		double snorm_deviate[3] = {1.2, -0.6, 0.8};
+		double scaled_proposal[3], local_cholfact[6];
+		int cholfact_index = 0;
+		for (int j = 0; j < pchi; ++j) {
+			double scaled_proposal_j = 0.0;
+			for (int k = 0; k < (j+1); ++k) {
+				local_cholfact[cholfact_index] = cholfact[cholfact_index * ndata + idata];
+				scaled_proposal_j += local_cholfact[cholfact_index] * snorm_deviate[k];
+				cholfact_index++;
+			}
+			scaled_proposal[j] = scaled_proposal_j;
+		}
+
+		// adapt the covariance matrix of the characteristic proposal distribution using some predetermined values
+		double metro_ratio = 0.34;
+		AdaptProp(local_cholfact, snorm_deviate, scaled_proposal, metro_ratio, pchi, current_iter);
+
+		int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
+		for (int j = 0; j < dim_cholfact; ++j) {
+			// copy value of this adapted cholesky factor back to global memory
+			cholfact[j * ndata + idata] = local_cholfact[j];
+		}
+	}
+}
 
 double mean(double* x, int nx) {
 	double mu = 0.0;
@@ -830,6 +944,134 @@ void UnitTests::DaugLogDensPtr()
 	}
 }
 
+// test the device side function to generate the chi proposals. this is needed for DataAugmenation::Update().
+void UnitTests::DevicePropose()
+{
+	std::cout << "Testing device-side function that generates proposals for characteristics..." << std::endl;
+	int local_passed = 0;
+
+	int local_ndata = 10000;
+	// Cuda grid launch
+    dim3 nT(256);
+    dim3 nB((local_ndata + nT.x-1) / nT.x);
+    if (nB.x > 65535)
+    {
+        std::cerr << "ERROR: Block is too large" << std::endl;
+        return;
+    }
+
+	// initialize the RNG seed on the GPU first
+	curandState* p_devStates;
+	// Allocate memory on GPU for RNG states
+
+	CUDA_CHECK_RETURN(cudaMalloc((void **)&p_devStates, nT.x * nB.x * sizeof(curandState)));
+	initialize_rng<<<nB,nT>>>(p_devStates);
+	CUDA_CHECK_RETURN(cudaPeekAtLastError());
+	// Wait until RNG stuff is done running on the GPU, make sure everything went OK
+	CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+
+	// build the chi values on the host and device. just use a values of all ones.
+	hvector h_chi(local_ndata * pchi);
+	thrust::fill(h_chi.begin(), h_chi.end(), 1.0);
+	dvector d_chi = h_chi;
+	double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
+
+	// set covariance matrix of the chi proposals as the identity matrix
+	int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
+	hvector h_cholfact(local_ndata * dim_cholfact);
+	for (int i=0; i<local_ndata; i++) {
+		int diag_index = 0;
+		for (int j=0; j<pchi; j++) {
+			h_cholfact[i + local_ndata * diag_index] = 1.0;
+			diag_index += j + 2;
+		}
+	}
+
+	dvector d_cholfactor = h_cholfact;
+	double* p_cholfactor = thrust::raw_pointer_cast(&d_cholfactor[0]);
+
+	// get proposals from the device. since the cholesky factor corresponds to an identity covariance matrix,
+	// the proposed chi values should follow a standard normal distribution
+	test_propose<<<nB,nT>>>(p_chi, p_cholfactor, p_devStates, local_ndata, pchi);
+	CUDA_CHECK_RETURN(cudaPeekAtLastError());
+
+	hvector h_chi_proposed = d_chi;
+
+	bool doprint = false;
+	if (doprint) {
+		// print out the results to a file
+		std::ofstream data_file;
+		data_file.open("device_proposal_samples.txt");
+		data_file << "# nsamples = " << local_ndata << ", pchi = " << pchi << std::endl;
+		for (int i = 0; i < local_ndata; ++i) {
+			for (int j = 0; j < pchi; ++j) {
+				// chi_samples is [nmcmc, ndata, mfeat]
+				data_file << h_chi_proposed[i + local_ndata * j] << " ";
+			}
+			data_file << std::endl;
+		}
+		data_file.close();
+	}
+
+	std::vector<double> avg_chi(pchi);
+	std::vector<double> avg_chi_sqr(pchi);
+	std::fill(avg_chi.begin(), avg_chi.end(), 0.0);
+	std::fill(avg_chi_sqr.begin(), avg_chi_sqr.end(), 0.0);
+	for (int j = 0; j < pchi; ++j) {
+		for (int i = 0; i < local_ndata; ++i) {
+			double chi_diff = h_chi_proposed[i + local_ndata * j] - h_chi[i + local_ndata * j];
+			avg_chi[j] += chi_diff / local_ndata;
+			avg_chi_sqr[j] += chi_diff * chi_diff / local_ndata;
+		}
+	}
+
+	// make sure average value of proposed chi within 3-sigma of expected value
+	int npassed_zscore = 0;
+	std::cout << "average chi proposals:" << std::endl;
+	for (int j=0; j<pchi; j++) {
+		double zscore = avg_chi[j] * sqrt(double(local_ndata));
+		if (abs(zscore) < 3) {
+			npassed_zscore++;
+		}
+	}
+
+	if (npassed_zscore == pchi) {
+		npassed++;
+		local_passed++;
+	} else {
+		std::cerr << "Test for device-side Proposal failed: mean of random variables outside of 3-sigma for " <<
+				pchi - npassed_zscore << " out of " << pchi << " characteristics." << std::endl;
+	}
+	nperformed++;
+
+	// make sure variance of proposed chi within 3-sigma of expected value
+	npassed_zscore = 0;
+	double expected_var = 1.0;
+	double var_sigma = 2.0 / sqrt(double(local_ndata));
+	std::cout << "variance in chi proposals:" << std::endl;
+	for (int j = 0; j < pchi; ++j) {
+		double var_chi = avg_chi_sqr[j] - avg_chi[j] * avg_chi[j];
+		double zscore = (var_chi - expected_var) / var_sigma;
+		if (abs(zscore) < 3) {
+			npassed_zscore++;
+		}
+	}
+	if (npassed_zscore == pchi) {
+		npassed++;
+		local_passed++;
+	} else {
+		std::cerr << "Test for device-side Proposal failed: variance of random variables outside of 3-sigma for " <<
+				pchi - npassed_zscore << " out of " << pchi << " characteristics." << std::endl;
+	}
+	nperformed++;
+
+	if (local_passed == 2) {
+		std::cout << "... passed." << std::endl;
+	}
+
+	cudaFree(p_devStates);
+}
+
 // check that DataAugmentation::Update always accepts when the proposed and current chi values are the same
 void UnitTests::DaugAcceptSame()
 {
@@ -1154,7 +1396,18 @@ void UnitTests::FixedChar() {
 	}
 	nperformed++;
 
-	// TODO: write the results to a file so I can inspect them.
+	vecvec theta_samples = Sampler.GetPopSamples();
+	std::ofstream mcmc_file;
+	mcmc_file.open("const_chi_samples.txt");
+	mcmc_file << "# nsamples = " << theta_samples.size() << ", ndata = " << ndata << ", mfeat = " << mfeat << std::endl;
+	for (int l = 0; l < theta_samples.size(); ++l) {
+		for (int i = 0; i < dim_theta; ++i) {
+			// theta_samples is [nmcmc, dim_theta]
+			mcmc_file << theta_samples[l][i] << " ";
+		}
+		mcmc_file << std::endl;
+	}
+	mcmc_file.close();
 
 	if (local_passed == 3) {
 		std::cout << "... passed." << std::endl;
@@ -1304,6 +1557,22 @@ void UnitTests::FixedPopPar() {
 	if (local_passed == 3) {
 		std::cout << "... passed." << std::endl;
 	}
+
+	// print out the results to a file
+	std::vector<vecvec> chi_samples = Sampler.GetCharSamples();
+	std::ofstream mcmc_file;
+	mcmc_file.open("const_theta_samples.txt");
+	mcmc_file << "# nsamples = " << chi_samples.size() << ", ndata = " << ndata << ", pchi = " << pchi << std::endl;
+	for (int l = 0; l < chi_samples.size(); ++l) {
+		for (int i = 0; i < ndata; ++i) {
+			for (int j = 0; j < pchi; ++j) {
+				// chi_samples is [nmcmc, ndata, mfeat]
+				mcmc_file << chi_samples[l][i][j] << " ";
+			}
+		}
+		mcmc_file << std::endl;
+	}
+	mcmc_file.close();
 }
 
 // test the Gibbs Sampler for a Normal-Normal model

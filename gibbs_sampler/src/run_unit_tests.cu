@@ -37,7 +37,7 @@ extern boost::random::mt19937 rng;
 
 int main(int argc, char** argv)
 {
-	int ndata = 100;
+	int ndata = 25;
 	int mfeat = 3;
 	int pchi = 3;
 	int dtheta = 3;
@@ -128,6 +128,9 @@ int main(int argc, char** argv)
 		Tests.ThetaAcceptSame();
 		Tests.ThetaAdapt();
 
+		// tests for device-side functions used in updated the characteristics
+		Tests.DevicePropose();
+
 		// tests for the data augmentation class
 		Tests.DaugPopPtr();
 		Tests.DaugGetChi();
@@ -137,7 +140,7 @@ int main(int argc, char** argv)
 
 		// tests for the MCMC sampler
 		// Tests.FixedChar();
-		Tests.FixedPopPar();
+		// Tests.FixedPopPar();
 
 		// print results
 		Tests.Finish();

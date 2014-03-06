@@ -67,6 +67,8 @@ public:
 	void DaugGetChi();
 	// check that pointers to device-side LogDensityMeas and LogDensityPop are properly set
 	void DaugLogDensPtr();
+	// check that proposals for chi generated on the GPU have correct distribution
+	void DevicePropose();
 	// check that DataAugmentation::Update always accepts when the proposed and current chi values are the same
 	void DaugAcceptSame();
 	// make sure that DataAugmentation::Update() accepts and saves Chi values when the posterior is much higher

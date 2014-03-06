@@ -130,6 +130,7 @@ int main(int argc, char** argv)
 
 		// tests for device-side functions used in updated the characteristics
 		Tests.DevicePropose();
+		Tests.DeviceAccept();
 
 		// tests for the data augmentation class
 		Tests.DaugPopPtr();

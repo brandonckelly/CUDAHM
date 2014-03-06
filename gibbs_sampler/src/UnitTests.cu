@@ -270,6 +270,14 @@ void matrix_invert3d(double* A, double* A_inv) {
 	A_inv[8] = determ_inv * (a * e - b * d);
 }
 
+bool approx_equal(double a, double b, double eps) {
+	if (abs(a - b) < eps) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
 // constructor for class that performs unit tests
 UnitTests::UnitTests(int n, dim3& nB, dim3& nT) : ndata(n), nBlocks(nB), nThreads(nT)
 {
@@ -962,8 +970,8 @@ void UnitTests::DevicePropose()
 
 	// initialize the RNG seed on the GPU first
 	curandState* p_devStates;
-	// Allocate memory on GPU for RNG states
 
+	// Allocate memory on GPU for RNG states
 	CUDA_CHECK_RETURN(cudaMalloc((void **)&p_devStates, nT.x * nB.x * sizeof(curandState)));
 	initialize_rng<<<nB,nT>>>(p_devStates);
 	CUDA_CHECK_RETURN(cudaPeekAtLastError());
@@ -1027,7 +1035,6 @@ void UnitTests::DevicePropose()
 
 	// make sure average value of proposed chi within 3-sigma of expected value
 	int npassed_zscore = 0;
-	std::cout << "average chi proposals:" << std::endl;
 	for (int j=0; j<pchi; j++) {
 		double zscore = avg_chi[j] * sqrt(double(local_ndata));
 		if (abs(zscore) < 3) {
@@ -1048,7 +1055,6 @@ void UnitTests::DevicePropose()
 	npassed_zscore = 0;
 	double expected_var = 1.0;
 	double var_sigma = 2.0 / sqrt(double(local_ndata));
-	std::cout << "variance in chi proposals:" << std::endl;
 	for (int j = 0; j < pchi; ++j) {
 		double var_chi = avg_chi_sqr[j] - avg_chi[j] * avg_chi[j];
 		double zscore = (var_chi - expected_var) / var_sigma;
@@ -1070,6 +1076,97 @@ void UnitTests::DevicePropose()
 	}
 
 	cudaFree(p_devStates);
+}
+
+// check that Accept accepts better proposals on the GPU, and updates the chi values
+void UnitTests::DeviceAccept()
+{
+	std::cout << "Testing device-side Metropolis acceptance for characteristics..." << std::endl;
+
+	// initialize the RNG seed on the GPU first
+	curandState* p_devStates;
+
+	// Allocate memory on GPU for RNG states
+	CUDA_CHECK_RETURN(cudaMalloc((void **)&p_devStates, nThreads.x * nBlocks.x * sizeof(curandState)));
+	initialize_rng<<<nBlocks, nThreads>>>(p_devStates);
+	CUDA_CHECK_RETURN(cudaPeekAtLastError());
+	// Wait until RNG stuff is done running on the GPU, make sure everything went OK
+	CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+
+	// first update the chi-values on the device. start with the true values.
+	int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
+	hvector h_cholfact(ndata * dim_cholfact);
+	for (int i=0; i<ndata; i++) {
+		// set covariance matrix of the chi proposals as the identity matrix
+		int diag_index = 0;
+		for (int j=0; j<pchi; j++) {
+			h_cholfact[i + ndata * diag_index] = 1.0;
+			diag_index += j + 2;
+		}
+	}
+	dvector d_cholfact = h_cholfact;
+
+	hvector h_logdens_meas(ndata);  // just set initial log-densities to zero
+	thrust::fill(h_logdens_meas.begin(), h_logdens_meas.end(), 0.0);
+	dvector d_logdens_meas = h_logdens_meas;
+	hvector h_logdens_pop(ndata);
+	thrust::fill(h_logdens_pop.begin(), h_logdens_pop.end(), 0.0);
+	dvector d_logdens_pop = h_logdens_pop;
+
+	thrust::host_vector<int> h_naccept(ndata);
+	thrust::fill(h_naccept.begin(), h_naccept.end(), 0);
+	thrust::device_vector<int> d_naccept = h_naccept;
+
+	dvector d_chi = d_true_chi;
+	hvector h_chi = h_true_chi;
+
+	double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
+	double* p_cholfact = thrust::raw_pointer_cast(&d_cholfact[0]);
+	double* p_logdens_meas = thrust::raw_pointer_cast(&d_logdens_meas[0]);
+	double* p_logdens_pop = thrust::raw_pointer_cast(&d_logdens_pop[0]);
+	int* p_naccept = thrust::raw_pointer_cast(&d_naccept[0]);
+
+	test_accept<<<nBlocks, nThreads>>>(p_chi, p_cholfact, p_logdens_meas, p_logdens_pop, p_devStates, p_naccept, ndata, pchi);
+
+	hvector h_proposed_chi = d_chi;
+	hvector h_proposed_logdens_meas = d_logdens_meas;
+	hvector h_proposed_logdens_pop = d_logdens_pop;
+
+	double snorm_deviate[3] = {1.2, -0.6, 0.8};
+	int nmatch_chi(0), nmatch_logdens(0);
+	// make sure Metropolis step saved the new values of chi and the logdensities
+	for (int i=0; i<ndata; ++i) {
+		int cholfact_index = 0;
+		for (int j = 0; j < pchi; ++j) {
+			double scaled_proposal_j = 0.0;
+			for (int k = 0; k < (j+1); ++k) {
+				scaled_proposal_j += h_cholfact[cholfact_index * ndata + i] * snorm_deviate[k];
+				cholfact_index++;
+			}
+			double proposed_chi_ij = h_chi[ndata * j + i] + scaled_proposal_j;
+			if (approx_equal(proposed_chi_ij, h_proposed_chi[ndata * j + i], 1e-8)) {
+				nmatch_chi++;
+			}
+		}
+		if ((h_proposed_logdens_meas[i] == 0.5) && (h_proposed_logdens_pop[i] == 0.5)) {
+			nmatch_logdens++;
+		}
+	}
+
+	if ((nmatch_chi != h_proposed_chi.size()) || (nmatch_logdens != ndata)) {
+		std::cerr << "Test for device-side Accept failed: values updated on device do not match those updated on the host."
+				<< std::endl;
+	} else {
+		std::cout << "... done." << std::endl;
+	}
+
+	cudaFree(p_devStates);
+}
+
+// check that Adapt updates the cholesky factor of the chi proposals on the GPU
+void UnitTests::DeviceAdapt()
+{
+	return;
 }
 
 // check that DataAugmentation::Update always accepts when the proposed and current chi values are the same

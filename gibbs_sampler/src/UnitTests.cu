@@ -888,7 +888,7 @@ void UnitTests::DaugLogDensPtr()
 
 	// first test that pointer is set to point to LogDensityPop()
 	Theta.SetTheta(d_true_theta);
-	hvector h_logdens_from_theta = Theta.GetLogDens();
+	hvector h_logdens_from_theta = Theta.GetHostLogDens();
 	double logdens_from_theta = 0.0;
 	for (int i = 0; i < h_logdens_from_theta.size(); ++i) {
 		logdens_from_theta += h_logdens_from_theta[i];
@@ -1157,16 +1157,76 @@ void UnitTests::DeviceAccept()
 		std::cerr << "Test for device-side Accept failed: values updated on device do not match those updated on the host."
 				<< std::endl;
 	} else {
-		std::cout << "... done." << std::endl;
+		std::cout << "... passed." << std::endl;
+		npassed++;
 	}
 
+	nperformed++;
 	cudaFree(p_devStates);
 }
 
 // check that Adapt updates the cholesky factor of the chi proposals on the GPU
 void UnitTests::DeviceAdapt()
 {
-	return;
+	std::cout << "Testing device-side adapt step via rank-1 cholesky update..." << std::endl;
+
+	int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
+	hvector h_cholfact(ndata * dim_cholfact);
+	for (int i=0; i<ndata; i++) {
+		// set covariance matrix of the chi proposals as the identity matrix
+		int diag_index = 0;
+		for (int j=0; j<pchi; j++) {
+			h_cholfact[i + ndata * diag_index] = 1.0;
+			diag_index += j + 2;
+		}
+	}
+	dvector d_cholfact = h_cholfact;
+
+	double* p_cholfact = thrust::raw_pointer_cast(&d_cholfact[0]);
+	int current_iter = 5;
+
+	test_adapt<<<nBlocks, nThreads>>>(p_cholfact, ndata, pchi, current_iter);
+
+	hvector h_updated_cholfact = d_cholfact;
+
+	// now adapt the cholesky factor manually on the CPU
+	double snorm_deviate[3] = {1.2, -0.6, 0.8};
+	double scaled_proposal[3];
+	double this_cholfact[6];
+	int nmatch(0);
+	double metro_ratio = 0.34;
+	for (int i=0; i<ndata; ++i) {
+		int cholfact_index = 0;
+		// first get scaled proposed chi value
+		for (int j = 0; j < pchi; ++j) {
+			double scaled_proposal_j = 0.0;
+			for (int k = 0; k < (j+1); ++k) {
+				scaled_proposal_j += h_cholfact[cholfact_index * ndata + i] * snorm_deviate[k];
+				cholfact_index++;
+			}
+			scaled_proposal[j] = scaled_proposal_j;
+		}
+		// store this cholesky factor in an array with shape needed by AdaptProp
+		for (int j=0; j<dim_cholfact; j++) {
+			this_cholfact[j] = h_cholfact[i + ndata * j];
+		}
+		AdaptProp(this_cholfact, snorm_deviate, scaled_proposal, metro_ratio, pchi, current_iter);
+
+		// now make sure the two cholesky factors agree
+		for (int j = 0; j < dim_cholfact; ++j) {
+			if (approx_equal(this_cholfact[j], h_updated_cholfact[ndata * j + i], 1e-8)) {
+				nmatch++;
+			}
+		}
+	}
+
+	if (nmatch == h_updated_cholfact.size()) {
+		std::cout << "... passed." << std::endl;
+		npassed++;
+	} else {
+		std::cerr << "Test for RAM Cholesky adaption step on the GPU failed: device and host results do not agree." << std::endl;
+	}
+	nperformed++;
 }
 
 // check that DataAugmentation::Update always accepts when the proposed and current chi values are the same
@@ -1341,7 +1401,7 @@ void UnitTests::DaugAcceptBetter() {
 				<< "proposal is accepted." << std::endl;
 	}
 	nperformed++;
-	h_new_logdens = Theta.GetLogDens();
+	h_new_logdens = Theta.GetHostLogDens();
 	ndiff_logdens = 0;
 	for (int i = 0; i < h_new_logdens.size(); ++i) {
 		if (h_new_logdens[i] != h_logdens_meas[i]) {
@@ -1394,7 +1454,7 @@ void UnitTests::FixedChar() {
 	} else {
 		std::cerr << "Test for GibbsSampler with fixed Characteristics failed: Acceptance rate "
 				<< "is not within 5% of the target rate." << std::endl;
-		std::cout << arate << ", " << target_rate << std::endl;
+		std::cerr << arate << ", " << target_rate << std::endl;
 	}
 	nperformed++;
 
@@ -1434,6 +1494,11 @@ void UnitTests::FixedChar() {
 	} else {
 		std::cerr << "Test for GibbsSampler with fixed Characteristics failed: Average fractional difference "
 				<< "between estimated posterior mean and true value is greater than 2%." << std::endl;
+		std::cerr << "Average fractional difference: " << frac_diff << std::endl;
+		for (int j = 0; j < dim_theta; ++j) {
+			std::cerr << "Estimated, True:" << std::endl;
+			std::cerr << theta_mean[j] << ", " << theta_mean_true[j] << std::endl;
+		}
 	}
 	nperformed++;
 
@@ -1556,7 +1621,7 @@ void UnitTests::FixedPopPar() {
 				<< "is not within 5% of the target rate for " << nbad << " characteristics." << std::endl;
 		for (int i = 0; i < frac_diff.size(); ++i) {
 			if (frac_diff[i] > 0.05) {
-				std::cout << frac_diff[i] << ", " << target_rate << std::endl;
+				std::cout << naccept[i] / double(niter + nburn) << ", " << target_rate << std::endl;
 			}
 		}
 	}

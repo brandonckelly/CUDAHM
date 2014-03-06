@@ -38,6 +38,8 @@ public:
 	// grab the MCMC samples
 	const vecvec& GetPopSamples() const { return ThetaSamples_; }
 	const std::vector<vecvec>& GetCharSamples() const { return ChiSamples_; }
+	const vecvec& GetLogDensPop() const { return LogDensPop_Samples_; }
+	const std::vector<vecvec>& GetLogDensMeas() const { return LogDensMeas_Samples_; }
 
 protected:
 	int niter_, nburnin_, nthin_chi_, nthin_theta_; // total # of iterations, # of burnin iterations, and thinning amount
@@ -47,6 +49,8 @@ protected:
 	PopulationPar& PopPar_;
 	std::vector<vecvec> ChiSamples_;
 	vecvec ThetaSamples_;
+	std::vector<vecvec> LogDensMeas_Samples_;
+	vecvec LogDensPop_Samples_;
 };
 
 #endif /* GIBBSSAMPLER_HPP_ */

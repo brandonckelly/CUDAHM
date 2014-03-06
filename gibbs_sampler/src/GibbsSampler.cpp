@@ -17,6 +17,8 @@ GibbsSampler::GibbsSampler(DataAugmentation& Daug, PopulationPar& PopPar, int ni
 	int ntheta_samples = niter / nthin_theta;
 	ChiSamples_.resize(nchi_samples);
 	ThetaSamples_.resize(ntheta_samples);
+	LogDensMeas_Samples_.resize(nchi_samples);
+	LogDensPop_Samples_.resize(ntheta_samples);
 
 	ntheta_samples_ = 0;
 	nchi_samples_ = 0;
@@ -61,11 +63,13 @@ void GibbsSampler::Run()
 		if (!fix_poppar && (current_iter_ % nthin_theta_ == 0)) {
 			// save the value of the population parameter since we've done nthin_theta_ iterations since the last save
 			ThetaSamples_[ntheta_samples_] = PopPar_.GetTheta();
+			LogDensPop_Samples_[ntheta_samples_] = PopPar_.GetLogDens();
 			ntheta_samples_++;
 		}
 		if (!fix_char && (current_iter_ % nthin_chi_ == 0)) {
 			// save the value of the characteristics
 			ChiSamples_[nchi_samples_] = Daug_.GetChi();
+			LogDensMeas_Samples_[nchi_samples_] = Daug_.GetLogDens();
 			nchi_samples_++;
 		}
 		//progress_bar++;

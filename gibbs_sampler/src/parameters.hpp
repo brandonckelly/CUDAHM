@@ -70,18 +70,23 @@ public:
 
 	void SetLogDens(dvector& logdens) {
 		d_logdens = logdens;
-		h_logdens = d_logdens;
 	}
 	void SetCholFact(dvector& cholfact) {
 		d_cholfact = cholfact;
-		h_cholfact = d_cholfact;
 	}
 
 	vecvec GetChi(); // return the value of the characteristic in a std::vector of std::vectors for convenience
-	hvector GetHostLogDens() { return h_logdens; }
+	hvector GetHostLogDens() {
+		hvector h_logdens = d_logdens;
+		return h_logdens;
+	}
+	vecvec GetLogDens();  // return the current values of the log-densities in a vecvec for convenience
 	dvector GetDevLogDens() { return d_logdens; }
 	double* GetDevLogDensPtr() { return thrust::raw_pointer_cast(&d_logdens[0]); }
-	hvector GetHostChi() { return h_chi; }
+	hvector GetHostChi() {
+		hvector h_chi = d_chi;
+		return h_chi;
+	}
 	dvector GetDevChi() { return d_chi; }
 	double* GetDevChiPtr() { return thrust::raw_pointer_cast(&d_chi[0]); }
 	int GetDataDim() { return ndata; }
@@ -89,7 +94,7 @@ public:
 	PopulationPar* GetPopulationPtr() { return p_Theta; }
 	pLogDensMeas GetLogDensMeasPtr() { return p_logdens_function; }
 	thrust::host_vector<int> GetNaccept() {
-		h_naccept = d_naccept;
+		hvector h_naccept = d_naccept;
 		return h_naccept;
 	}
 
@@ -105,15 +110,12 @@ protected:
 	int mfeat;
 	int pchi;
 	// characteristics
-	hvector h_chi;
 	dvector d_chi;
 	// population-level parameters
 	PopulationPar* p_Theta;
-	// logarithm of conditional posterior densities
-	hvector h_logdens; // probability of meas|chi
+	// logarithm of conditional posterior densities, y | chi
 	dvector d_logdens;
 	// cholesky factors of Metropolis proposal covariance matrix
-	hvector h_cholfact;
 	dvector d_cholfact;
 	// state of parallel random number generator on the device
 	curandState* p_devStates;
@@ -124,7 +126,6 @@ protected:
 	pLogDensMeas p_logdens_function;
 	// MCMC sampler parameters
 	int current_iter;
-	thrust::host_vector<int> h_naccept;
 	thrust::device_vector<int> d_naccept;
 };
 
@@ -158,8 +159,8 @@ public:
 	void SetDataAugPtr(DataAugmentation* DataAug) { Daug = DataAug; }
 	void SetTheta(dvector& theta, bool update_logdens = true);
 	void SetLogDens(dvector& logdens) {
-		h_logdens = logdens;
 		d_logdens = logdens;
+		current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
 	}
 	void SetCholFact(hvector cholfact_new) { cholfact = cholfact_new; }
 	void SetCurrentIter(int iter) { current_iter = iter; }
@@ -171,9 +172,10 @@ public:
 		thrust::copy(h_theta.begin(), h_theta.end(), std_theta.begin());
 		return std_theta;
 	}
+	double GetLogDens() { return current_logdens; } // return the current value of summed log p(chi | theta);
 	double* GetDevThetaPtr() { return thrust::raw_pointer_cast(&d_theta[0]); }
-	hvector GetLogDens() {
-		h_logdens = d_logdens;
+	hvector GetHostLogDens() {
+		hvector h_logdens = d_logdens;
 		return h_logdens;
 	}
 	dvector GetDevLogDens() { return d_logdens; }
@@ -189,9 +191,11 @@ protected:
 	// the value of the population parameter
 	hvector h_theta;
 	dvector d_theta;
-	// log of the value the probability of the characteristics given the population parameter
-	hvector h_logdens;
+	dvector d_proposed_theta;
+	// log of the value the probability of the characteristics given the population parameter, chi | theta
 	dvector d_logdens;
+	dvector d_proposed_logdens;
+	double current_logdens;
 	// make sure that the population parameter knows about the characteristics
 	DataAugmentation* Daug;
 	// cholesky factors of Metropolis proposal covariance matrix

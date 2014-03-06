@@ -202,10 +202,11 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 			// copy value of this adapted cholesky factor back to global memory
 			cholfact[j * ndata + idata] = local_cholfact[j];
 		}
-		current_iter++;  // TODO: why do I update the current iteration here?
 
 		// copy local RNG state back to global memory
 		devStates[idata] = localState;
+
+		// TODO: try to avoid branching statement
 
 		if (accept) {
 			// accepted this proposal, so save new value of chi and log-densities

@@ -37,7 +37,7 @@ extern boost::random::mt19937 rng;
 
 int main(int argc, char** argv)
 {
-	int ndata = 25;
+	int ndata = 100000;
 	int mfeat = 3;
 	int pchi = 3;
 	int dtheta = 3;
@@ -131,6 +131,7 @@ int main(int argc, char** argv)
 		// tests for device-side functions used in updated the characteristics
 		Tests.DevicePropose();
 		Tests.DeviceAccept();
+		Tests.DeviceAdapt();
 
 		// tests for the data augmentation class
 		Tests.DaugPopPtr();
@@ -140,7 +141,7 @@ int main(int argc, char** argv)
 		Tests.DaugAcceptBetter();
 
 		// tests for the MCMC sampler
-		// Tests.FixedChar();
+		Tests.FixedChar();
 		// Tests.FixedPopPar();
 
 		// print results

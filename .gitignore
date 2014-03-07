@@ -233,4 +233,8 @@ local.properties
 # PDT-specific
 .buildpath
 
+measurements.txt
+const_theta_samples.txt
+const_theta_logdens.txt
+
 # End of file

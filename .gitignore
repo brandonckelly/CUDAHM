@@ -233,8 +233,10 @@ local.properties
 # PDT-specific
 .buildpath
 
-measurements.txt
+# data from unit tests
+const_chi_samples.txt
 const_theta_samples.txt
 const_theta_logdens.txt
+measurements.txt
 
 # End of file

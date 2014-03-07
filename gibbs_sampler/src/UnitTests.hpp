@@ -27,90 +27,28 @@
 // standard includes
 #include <vector>
 // local includes
-#include "data_augmentation.cuh"
+#include "parameters.hpp"
+#include "GibbsSampler.hpp"
+
+// function definitions
+__device__ __host__
+double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, int pchi);
+
+__device__ __host__
+double LogDensityPop(double* chi, double* theta, int pchi, int dim_theta);
+
+// class definition for running the unit tests
 
 class UnitTests {
 public:
 	// constructor
-	UnitTests(int n, dim3& nB, dim3& nT) : ndata(n), nBlocks(nB), nThreads(nT)
-	{
-		mfeat = 3;
-		pchi = 3;
-		dim_theta = 3;
-		// known population parameters
-	    h_true_theta.resize(dim_theta);
-		double mu[3] = {1.2, -0.4, 3.4};
-	    h_true_theta[0] = mu[0];
-	    h_true_theta[1] = mu[1];
-	    h_true_theta[2] = mu[2];
-
-	    covar[0][0] = 5.29;
-	    covar[0][1] = 0.3105;
-	    covar[0][2] = -15.41;
-	    covar[1][0] = 0.3105;
-	    covar[1][1] = 0.2025;
-	    covar[1][2] = 3.2562;
-	    covar[2][0] = -15.41;
-	    covar[2][1] = 3.2562;
-	    covar[2][2] = 179.56;
-
-		cholfact[0] = 2.3;
-		cholfact[1] = 0.135;
-		cholfact[2] = 0.42927264;
-		cholfact[3] = -6.7;
-		cholfact[4] = 9.6924416;
-		cholfact[5] = 6.38173768;
-
-		covar_inv[0] = 0.64880351;
-		covar_inv[1] = -2.66823952;
-		covar_inv[2] = 0.10406763;
-		covar_inv[3] = -2.66823952;
-		covar_inv[4] = 17.94430089;
-		covar_inv[5] = -0.55439855;
-		covar_inv[6] = 0.10406763;
-		covar_inv[7] = -0.55439855;
-		covar_inv[8] = 0.02455399;
-
-		// generate some chi values as chi_i|theta ~ N(mu,covar)
-	    h_true_chi.resize(ndata * pchi);
-		thrust::fill(h_true_chi.begin(), h_true_chi.end(), 0.0);
-		for (int i = 0; i < ndata; ++i) {
-			double snorm_deviate[3];
-			for (int j = 0; j < dim_theta; ++j) {
-				snorm_deviate[j] = snorm(rng);
-			}
-			int cholfact_index = 0;
-			for (int j = 0; j < dim_theta; ++j) {
-				h_true_chi[j * ndata + i] = mu[j];
-				for (int k = 0; k < (j+1); ++k) {
-					h_true_chi[j * ndata + i] += cholfact[cholfact_index] * snorm_deviate[k];
-					cholfact_index++;
-				}
-			}
-		}
-		d_true_chi = h_true_chi;
-		d_true_theta = h_true_theta;
-
-		// fill data arrays
-	    meas = new double* [ndata];
-	    meas_unc = new double* [ndata];
-	    double meas_err[3] = {1.2, 0.4, 0.24};
-	    for (int i = 0; i < ndata; ++i) {
-			meas[i] = new double [mfeat];
-			meas_unc[i] = new double [mfeat];
-			for (int j = 0; j < mfeat; ++j) {
-				// y_ij|chi_ij ~ N(chi_ij, meas_err_j^2)
-				meas[i][j] = h_true_chi[j * ndata + i] + meas_err[j] * snorm(rng);
-				meas_unc[i][j] = meas_err[j];
-			}
-		}
-
-	    nperformed = 0;
-	    npassed = 0;
-	}
+	UnitTests(int n, dim3& nB, dim3& nT);
 
 	// destructor
 	virtual ~UnitTests();
+
+	// save the measurement values to a text file
+	void SaveMeasurements();
 
 	// test rank-1 cholesky update
 	void R1CholUpdate();
@@ -130,6 +68,14 @@ public:
 	void DaugPopPtr();
 	// test DataAugmentation::GetChi
 	void DaugGetChi();
+	// check that pointers to device-side LogDensityMeas and LogDensityPop are properly set
+	void DaugLogDensPtr();
+	// check that proposals for chi generated on the GPU have correct distribution
+	void DevicePropose();
+	// check that the device-side Accept method works and updates the chi-values
+	void DeviceAccept();
+	// check that the device-side Adapt method works and updates the cholesky factor of the chi proposal covariances
+	void DeviceAdapt();
 	// check that DataAugmentation::Update always accepts when the proposed and current chi values are the same
 	void DaugAcceptSame();
 	// make sure that DataAugmentation::Update() accepts and saves Chi values when the posterior is much higher
@@ -148,7 +94,9 @@ private:
 	int ndata, pchi, mfeat, dim_theta;
 	// data
 	double** meas;
+	hvector h_meas;
 	double** meas_unc;
+	hvector h_meas_unc;
 	// true values of parameters
 	hvector h_true_chi;
 	dvector d_true_chi;

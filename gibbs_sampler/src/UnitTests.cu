@@ -1603,7 +1603,7 @@ void UnitTests::FixedPopPar() {
 	Theta.SetTheta(d_true_theta);
 
 	// setup the Gibbs sampler object
-	int niter(10), nburn(10);
+	int niter(100000), nburn(10000);
 	GibbsSampler Sampler(Daug, Theta, niter, nburn);
 	Sampler.FixPopPar(); // keep the population parameter fixed
 
@@ -1711,7 +1711,7 @@ void UnitTests::FixedPopPar() {
 		local_passed++;
 	}
 	else {
-		int nfailed = ndata - npass;
+		int nfailed = ndata - npass_mean;
 		std::cerr << "Test for GibbsSampler with fixed PopulationPar failed: Average fractional difference "
 				<< "between estimated posterior mean and true value is greater than 2% for " << nfailed
 				<< " characteristics." << std::endl;
@@ -1722,7 +1722,7 @@ void UnitTests::FixedPopPar() {
 		local_passed++;
 	}
 	else {
-		int nfailed = ndata - npass;
+		int nfailed = ndata - npass_covar;
 		std::cerr << "Test for GibbsSampler with fixed PopulationPar failed: Average fractional difference "
 				<< "between estimated posterior covariance and true value is greater than 2% for " << nfailed
 				<< " characteristics." << std::endl;

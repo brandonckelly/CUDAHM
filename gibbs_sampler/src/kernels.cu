@@ -150,7 +150,12 @@ void initial_chi_value(double* chi, double* meas, double* meas_unc, double* chol
 		for (int j = 0; j < pchi; ++j) {
 			this_chi[j] = chi[j * ndata + idata];
 		}
-		logdens[idata] = LogDensityMeas(this_chi, meas, meas_unc, pchi, mfeat);
+		double local_meas[3], local_meas_unc[3];
+		for (int j = 0; j < mfeat; ++j) {
+			local_meas[j] = meas[j * ndata + idata];
+			local_meas_unc[j] = meas_unc[j * ndata + idata];
+		}
+		logdens[idata] = LogDensityMeas(this_chi, local_meas, local_meas_unc, pchi, mfeat);
 	}
 }
 
@@ -189,6 +194,17 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 		double logdens_pop_prop = LogDensityPop(proposed_chi, theta, pchi, dim_theta);
 		double logpost_prop = logdens_meas_prop + logdens_pop_prop;
 
+//		if (idata == 0) {
+//			printf("current iter, idata: %i, %i\n", current_iter, idata);
+//			printf("  measurements: %g, %g, %g\n", local_meas[0], local_meas[1], local_meas[2]);
+//			printf("  measurement sigmas: %g, %g, %g\n", local_meas_unc[0], local_meas_unc[1], local_meas_unc[2]);
+//			printf("  current chi: %g, %g, %g\n", local_chi[0], local_chi[1], local_chi[2]);
+//			printf("  proposed chi: %g, %g, %g\n", proposed_chi[0], proposed_chi[1], proposed_chi[2]);
+//			printf("  current logdens_meas, logdens_pop: %g, %g\n", logdens_meas[idata], logdens_pop[idata]);
+//			printf("  proposed logdens_meas, logdens_pop: %g, %g\n", logdens_meas_prop, logdens_pop_prop);
+//			printf("\n");
+//		}
+
 		// accept the proposed value of the characteristic?
 		double logpost_current = logdens_meas[idata] + logdens_pop[idata];
 		double metro_ratio = 0.0;
@@ -207,7 +223,7 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 		devStates[idata] = localState;
 
 		// TODO: try to avoid branching statement
-		// printf("Accept, idata: %d, %d\n", accept, idata);
+		// printf("current iter, Accept, idata: %d, %d, %d\n", current_iter, accept, idata);
 		if (accept) {
 			// accepted this proposal, so save new value of chi and log-densities
 			for (int j=0; j<pchi; j++) {

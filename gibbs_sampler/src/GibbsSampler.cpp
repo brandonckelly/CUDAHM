@@ -46,8 +46,12 @@ void GibbsSampler::Run()
 		Iterate();
 		//progress_bar++;
 	}
-	// reset the current iteration
+	// TODO: print out acceptance rates during burnin
+
+	// reset the current iteration and acceptance rates
 	current_iter_ = 1;
+	Daug_.ResetAcceptance();
+	PopPar_.ResetAcceptance();
 
 	// run the main MCMC sampler
 	std::cout << "Burnin finished." << std::endl;

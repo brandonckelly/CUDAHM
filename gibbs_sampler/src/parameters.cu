@@ -97,6 +97,11 @@ void DataAugmentation::Update()
     current_iter++;
 }
 
+void DataAugmentation::ResetAcceptance()
+{
+	thrust::fill(d_naccept.begin(), d_naccept.end(), 0);
+}
+
 void DataAugmentation::SetChi(dvector& chi, bool update_logdens)
 {
 	d_chi = chi;
@@ -137,19 +142,10 @@ vecvec DataAugmentation::GetChi()
 }
 
 // return the values of log p(y | chi) in a 2-d structure (vector of vectors)
-vecvec DataAugmentation::GetLogDens()
+double DataAugmentation::GetLogDens()
 {
-	hvector h_logdens = d_logdens;  // grab the values from the GPU
-	vecvec logdens(ndata);
-	for (int i = 0; i < ndata; ++i) {
-		// organize values into a 2-d array of dimension ndata x pchi
-		std::vector<double> logdens_i(pchi);
-		for (int j = 0; j < pchi; ++j) {
-			logdens_i[j] = h_logdens[ndata * j + i];
-		}
-		logdens[i] = logdens_i;
-	}
-	return logdens;
+	double logdensity = thrust::reduce(d_logdens.begin(), d_logdens.end());
+	return logdensity;
 }
 
 void DataAugmentation::_SetArraySizes()
@@ -245,6 +241,12 @@ void PopulationPar::InitialValue()
 	// reset the number of MCMC iterations
 	current_iter = 1;
 	naccept = 0;
+}
+
+void PopulationPar::SetLogDens(dvector& logdens)
+{
+	d_logdens = logdens;
+	current_logdens = thrust::reduce(logdens.begin(), logdens.end());
 }
 
 hvector PopulationPar::Propose()
@@ -355,6 +357,7 @@ void PopulationPar::SetTheta(dvector& theta, bool update_logdens)
 		logdensity_pop<<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, p_logdens_function,
 				Daug->GetDataDim(), pchi, dim_theta);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
+		current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
 	}
 }
 

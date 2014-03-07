@@ -62,6 +62,8 @@ public:
 	// launch the update kernel on the GPU
 	void Update();
 
+	void ResetAcceptance();
+
 	// setters and getters
 	void SetChi(dvector& chi, bool update_logdens = true);
 
@@ -80,8 +82,8 @@ public:
 		hvector h_logdens = d_logdens;
 		return h_logdens;
 	}
-	vecvec GetLogDens();  // return the current values of the log-densities in a vecvec for convenience
-	dvector GetDevLogDens() { return d_logdens; }
+	double GetLogDens();  // return the current values of the log-densities in a vecvec for convenience
+	dvector GetDevLogDens() { return d_logdens; } // return the summed log-densities for y|chi
 	double* GetDevLogDensPtr() { return thrust::raw_pointer_cast(&d_logdens[0]); }
 	hvector GetHostChi() {
 		hvector h_chi = d_chi;
@@ -155,13 +157,12 @@ public:
 	// update the value of the population parameter value using a robust adaptive metropolis algorithm
 	virtual void Update();
 
+	void ResetAcceptance() { naccept = 0; }
+
 	// setters and getters
 	void SetDataAugPtr(DataAugmentation* DataAug) { Daug = DataAug; }
 	void SetTheta(dvector& theta, bool update_logdens = true);
-	void SetLogDens(dvector& logdens) {
-		d_logdens = logdens;
-		current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
-	}
+	void SetLogDens(dvector& logdens);
 	void SetCholFact(hvector cholfact_new) { cholfact = cholfact_new; }
 	void SetCurrentIter(int iter) { current_iter = iter; }
 

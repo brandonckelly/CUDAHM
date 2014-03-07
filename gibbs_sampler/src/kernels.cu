@@ -207,7 +207,7 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 		devStates[idata] = localState;
 
 		// TODO: try to avoid branching statement
-
+		// printf("Accept, idata: %d, %d\n", accept, idata);
 		if (accept) {
 			// accepted this proposal, so save new value of chi and log-densities
 			for (int j=0; j<pchi; j++) {

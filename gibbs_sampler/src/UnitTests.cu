@@ -355,7 +355,6 @@ UnitTests::UnitTests(int n, dim3& nB, dim3& nT) : ndata(n), nBlocks(nB), nThread
 			h_meas_unc[ndata * j + i] = meas_err[j];
 		}
 	}
-
     nperformed = 0;
     npassed = 0;
 }
@@ -369,6 +368,20 @@ UnitTests::~UnitTests() {
 	}
 	delete meas;
 	delete meas_unc;
+}
+
+// save measurements to "measurement.txt"
+void UnitTests::SaveMeasurements()
+{
+	std::ofstream meas_file;
+	meas_file.open("measurements.txt");
+	meas_file << "# (measurement, sigma), ndata=" << ndata << ", mfeat=" << mfeat << std::endl;
+	for (int i = 0; i < ndata; ++i) {
+		for (int j = 0; j < mfeat; ++j) {
+			meas_file << h_meas[ndata * j + i] << " " << h_meas_unc[ndata * j + i] << " ";
+		}
+		meas_file << std::endl;
+	}
 }
 
 // test rank-1 cholesky update
@@ -1445,7 +1458,7 @@ void UnitTests::FixedChar() {
 	// check the acceptance rate
 	double target_rate = 0.4;
 	double naccept = Theta.GetNaccept();
-	double arate = naccept / double(niter + nburn);
+	double arate = naccept / double(niter);
 	double frac_diff = abs(arate - target_rate) / target_rate;
 	// make sure acceptance rate is within 5% of the target rate
 	if (frac_diff < 0.05) {
@@ -1590,7 +1603,7 @@ void UnitTests::FixedPopPar() {
 	Theta.SetTheta(d_true_theta);
 
 	// setup the Gibbs sampler object
-	int niter(100000), nburn(10000);
+	int niter(10), nburn(10);
 	GibbsSampler Sampler(Daug, Theta, niter, nburn);
 	Sampler.FixPopPar(); // keep the population parameter fixed
 
@@ -1599,11 +1612,11 @@ void UnitTests::FixedPopPar() {
 
 	// check the acceptance rate
 	double target_rate = 0.4;
-	thrust::host_vector<double> naccept = Daug.GetNaccept();
+	thrust::host_vector<int> naccept = Daug.GetNaccept();
 	std::vector<double> frac_diff(naccept.size());
 	int npass = 0;
 	for (int i = 0; i < naccept.size(); ++i) {
-		double arate = naccept[i] / double(niter + nburn);
+		double arate = naccept[i] / double(niter);
 		frac_diff[i] = abs(arate - target_rate) / target_rate;
 		// make sure acceptance rate is within 5% of the target rate
 		if (frac_diff[i] < 0.05) {
@@ -1621,7 +1634,7 @@ void UnitTests::FixedPopPar() {
 				<< "is not within 5% of the target rate for " << nbad << " characteristics." << std::endl;
 		for (int i = 0; i < frac_diff.size(); ++i) {
 			if (frac_diff[i] > 0.05) {
-				std::cout << naccept[i] / double(niter + nburn) << ", " << target_rate << std::endl;
+				std::cout << naccept[i] / double(niter) << ", " << target_rate << std::endl;
 			}
 		}
 	}
@@ -1721,20 +1734,27 @@ void UnitTests::FixedPopPar() {
 	}
 
 	// print out the results to a file
-	std::vector<vecvec> chi_samples = Sampler.GetCharSamples();
 	std::ofstream mcmc_file;
 	mcmc_file.open("const_theta_samples.txt");
-	mcmc_file << "# nsamples = " << chi_samples.size() << ", ndata = " << ndata << ", pchi = " << pchi << std::endl;
-	for (int l = 0; l < chi_samples.size(); ++l) {
+	mcmc_file << "# nsamples = " << csamples.size() << ", ndata = " << ndata << ", pchi = " << pchi << std::endl;
+	for (int l = 0; l < csamples.size(); ++l) {
 		for (int i = 0; i < ndata; ++i) {
 			for (int j = 0; j < pchi; ++j) {
 				// chi_samples is [nmcmc, ndata, mfeat]
-				mcmc_file << chi_samples[l][i][j] << " ";
+				mcmc_file << csamples[l][i][j] << " ";
 			}
 		}
 		mcmc_file << std::endl;
 	}
 	mcmc_file.close();
+
+	std::vector<double> logdens_samples = Sampler.GetLogDensMeas();
+	std::ofstream logdens_file;
+	logdens_file.open("const_theta_logdens.txt");
+	for (int i = 0; i < csamples.size(); ++i) {
+		logdens_file << logdens_samples[i] << std::endl;
+	}
+	logdens_file.close();
 }
 
 // test the Gibbs Sampler for a Normal-Normal model

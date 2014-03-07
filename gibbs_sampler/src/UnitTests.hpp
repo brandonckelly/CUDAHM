@@ -47,6 +47,9 @@ public:
 	// destructor
 	virtual ~UnitTests();
 
+	// save the measurement values to a text file
+	void SaveMeasurements();
+
 	// test rank-1 cholesky update
 	void R1CholUpdate();
 	// check that Chi::Propose follows a multivariate normal distribution

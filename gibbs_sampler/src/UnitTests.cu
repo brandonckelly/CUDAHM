@@ -1662,7 +1662,7 @@ void UnitTests::FixedPopPar() {
 		meas_var_inv[4] = 1.0 / meas_unc[i][1] / meas_unc[i][1];
 		meas_var_inv[8] = 1.0 / meas_unc[i][2] / meas_unc[i][2];
 		double post_var_inv[9];
-		for (int k = 0; k < mfeat; ++k) {
+		for (int k = 0; k < mfeat * mfeat; ++k) {
 			post_var_inv[k] = meas_var_inv[k] + covar_inv[k];
 		}
 		double post_var[9];
@@ -1684,48 +1684,52 @@ void UnitTests::FixedPopPar() {
 				chi_mean_true[k] += post_var[k * mfeat + l] * wchi_mean_true[l];
 			}
 		}
-		// make sure estimated and true posterior means are within 2% of each other
+		// make sure estimated and true posterior means are within 5% of each other
 		double frac_diff = 0.0;
 		for (int k = 0; k < mfeat; ++k) {
 			frac_diff += abs(chi_mean_true[k] - chi_mean[k]) / abs(chi_mean_true[k]) / dim_theta;
 		}
-		if (frac_diff < 0.02) {
+		if (frac_diff < 0.05) {
 			npass_mean++;
 		}
-		// make sure estimated and true posterior covariance matrices are within 2% of eachother
-		std::vector<double> post_covar_true = covariance(this_csamples);
+		// make sure estimated and true posterior standard deviations are within 5% of eachother
+		std::vector<double> post_covar_est = covariance(this_csamples);
 		frac_diff = 0.0;
 		for (int j = 0; j < pchi; ++j) {
 			for (int k = 0; k < pchi; ++k) {
-				frac_diff += abs(post_covar_true[j * pchi + k] - post_var[j * pchi + k]) / abs(post_var[j * pchi + k]);
+				if (j == k) {
+					double post_sigma_est = sqrt(post_covar_est[j * pchi + k]);
+					double post_sigma_true = sqrt(post_var[j * pchi + k]);
+					frac_diff += abs(post_sigma_est - post_sigma_true) / post_sigma_true;
+				}
 			}
 		}
-		frac_diff /= (pchi * pchi);
-		if (frac_diff < 0.02) {
+		frac_diff /= (pchi);
+		if (frac_diff < 0.05) {
 			npass_covar++;
 		}
 	}
 
-	if (npass_mean == ndata) {
+	if (npass_mean > 0.9 * ndata) {
 		npassed++;
 		local_passed++;
 	}
 	else {
 		int nfailed = ndata - npass_mean;
 		std::cerr << "Test for GibbsSampler with fixed PopulationPar failed: Average fractional difference "
-				<< "between estimated posterior mean and true value is greater than 2% for " << nfailed
-				<< " characteristics." << std::endl;
+				<< "between estimated posterior mean and true value is greater than 5% for " << nfailed
+				<< "out of " << ndata << " characteristics." << std::endl;
 	}
 	nperformed++;
-	if (npass_covar == ndata) {
+	if (npass_covar > 0.9 * ndata) {
 		npassed++;
 		local_passed++;
 	}
 	else {
 		int nfailed = ndata - npass_covar;
 		std::cerr << "Test for GibbsSampler with fixed PopulationPar failed: Average fractional difference "
-				<< "between estimated posterior covariance and true value is greater than 2% for " << nfailed
-				<< " characteristics." << std::endl;
+				<< "between estimated posterior covariance and true value is greater than 5% for " << nfailed
+				<< "out of " << ndata << " characteristics." << std::endl;
 	}
 	nperformed++;
 

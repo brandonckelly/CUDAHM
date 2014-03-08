@@ -20,7 +20,7 @@ class GibbsSampler
 public:
 	// constructor
 	GibbsSampler(DataAugmentation& Daug, PopulationPar& PopPar, int niter, int nburnin,
-			int nthin_chi=10, int nthin_theta=1);
+			int nthin_chi=100, int nthin_theta=1);
 
 	// fix the population parameters throughout the sampler?
 	void FixPopPar(bool fix=true) { fix_poppar = fix; }

@@ -1448,7 +1448,7 @@ void UnitTests::FixedChar() {
 	Daug.SetChi(d_true_chi);
 
 	// setup the Gibbs sampler object
-	int niter(100000), nburn(10000);
+	int niter(25000), nburn(10000);
 	GibbsSampler Sampler(Daug, Theta, niter, nburn);
 	Sampler.FixChar(); // keep the characteristics fixed
 
@@ -1571,18 +1571,22 @@ void UnitTests::FixedChar() {
 	}
 	nperformed++;
 
-	vecvec theta_samples = Sampler.GetPopSamples();
-	std::ofstream mcmc_file;
-	mcmc_file.open("const_chi_samples.txt");
-	mcmc_file << "# nsamples = " << theta_samples.size() << ", ndata = " << ndata << ", mfeat = " << mfeat << std::endl;
-	for (int l = 0; l < theta_samples.size(); ++l) {
-		for (int i = 0; i < dim_theta; ++i) {
-			// theta_samples is [nmcmc, dim_theta]
-			mcmc_file << theta_samples[l][i] << " ";
+	bool print_thetas = false;
+	if (print_thetas) {
+		// print out results to a file
+		vecvec theta_samples = Sampler.GetPopSamples();
+		std::ofstream mcmc_file;
+		mcmc_file.open("const_chi_samples.txt");
+		mcmc_file << "# nsamples = " << theta_samples.size() << ", ndata = " << ndata << ", mfeat = " << mfeat << std::endl;
+		for (int l = 0; l < theta_samples.size(); ++l) {
+			for (int i = 0; i < dim_theta; ++i) {
+				// theta_samples is [nmcmc, dim_theta]
+				mcmc_file << theta_samples[l][i] << " ";
+			}
+			mcmc_file << std::endl;
 		}
-		mcmc_file << std::endl;
+		mcmc_file.close();
 	}
-	mcmc_file.close();
 
 	if (local_passed == 3) {
 		std::cout << "... passed." << std::endl;
@@ -1603,7 +1607,7 @@ void UnitTests::FixedPopPar() {
 	Theta.SetTheta(d_true_theta);
 
 	// setup the Gibbs sampler object
-	int niter(100000), nburn(10000);
+	int niter(25000), nburn(10000);
 	GibbsSampler Sampler(Daug, Theta, niter, nburn);
 	Sampler.FixPopPar(); // keep the population parameter fixed
 
@@ -1737,33 +1741,291 @@ void UnitTests::FixedPopPar() {
 		std::cout << "... passed." << std::endl;
 	}
 
-	// print out the results to a file
-	std::ofstream mcmc_file;
-	mcmc_file.open("const_theta_samples.txt");
-	mcmc_file << "# nsamples = " << csamples.size() << ", ndata = " << ndata << ", pchi = " << pchi << std::endl;
-	for (int l = 0; l < csamples.size(); ++l) {
-		for (int i = 0; i < ndata; ++i) {
-			for (int j = 0; j < pchi; ++j) {
-				// chi_samples is [nmcmc, ndata, mfeat]
-				mcmc_file << csamples[l][i][j] << " ";
+	bool print_chis = false;
+	if (print_chis) {
+		// print out the results to a file
+		std::ofstream mcmc_file;
+		mcmc_file.open("const_theta_samples.txt");
+		mcmc_file << "# nsamples = " << csamples.size() << ", ndata = " << ndata << ", pchi = " << pchi << std::endl;
+		for (int l = 0; l < csamples.size(); ++l) {
+			for (int i = 0; i < ndata; ++i) {
+				for (int j = 0; j < pchi; ++j) {
+					// chi_samples is [nmcmc, ndata, mfeat]
+					mcmc_file << csamples[l][i][j] << " ";
+				}
 			}
+			mcmc_file << std::endl;
 		}
-		mcmc_file << std::endl;
-	}
-	mcmc_file.close();
+		mcmc_file.close();
 
-	std::vector<double> logdens_samples = Sampler.GetLogDensMeas();
-	std::ofstream logdens_file;
-	logdens_file.open("const_theta_logdens.txt");
-	for (int i = 0; i < csamples.size(); ++i) {
-		logdens_file << logdens_samples[i] << std::endl;
+		std::vector<double> logdens_samples = Sampler.GetLogDensMeas();
+		std::ofstream logdens_file;
+		logdens_file.open("const_theta_logdens.txt");
+		for (int i = 0; i < csamples.size(); ++i) {
+			logdens_file << logdens_samples[i] << std::endl;
+		}
+		logdens_file.close();
 	}
-	logdens_file.close();
 }
 
 // test the Gibbs Sampler for a Normal-Normal model
-void UnitTests::NormNorm() {
+void UnitTests::NormNorm()
+{
+	std::cout << "Testing Gibbs Sampler for normal-normal model...";
+	int local_passed = 0;
 
+	// create the parameter objects
+	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
+	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
+
+	// setup the Gibbs sampler object
+	int niter(25000), nburn(10000);
+	GibbsSampler Sampler(Daug, Theta, niter, nburn);
+
+	// run the MCMC sampler
+	Sampler.Run();
+
+	/*
+	 * FIRST CHECK THAT ACCEPTANCE RATES HAVE CONVERGED TO WITHIN 5% OF THE TARGET RATE
+	 */
+
+	double target_rate = 0.4;
+	// first check the acceptance rate for the population level parameter
+	double naccept_theta = Theta.GetNaccept();
+	double arate = naccept_theta / double(niter);
+	double frac_diff_theta = abs(arate - target_rate) / target_rate;
+	// make sure acceptance rate is within 5% of the target rate
+	if (frac_diff_theta < 0.05) {
+		npassed++;
+		local_passed++;
+	} else {
+		std::cerr << "Test for GibbsSampler under normal-normal model failed: Acceptance rate "
+				<< "is not within 5% of the target rate for the population parameter." << std::endl;
+		std::cerr << arate << ", " << target_rate << std::endl;
+	}
+	nperformed++;
+
+	// check the acceptance rate for the characteristics
+	thrust::host_vector<int> naccept_chi = Daug.GetNaccept();
+	std::vector<double> frac_diff_chi(naccept_chi.size());
+	int npass = 0;
+	for (int i = 0; i < naccept_chi.size(); ++i) {
+		arate = naccept_chi[i] / double(niter);
+		frac_diff_chi[i] = abs(arate - target_rate) / target_rate;
+		// make sure acceptance rate is within 5% of the target rate
+		if (frac_diff_chi[i] < 0.05) {
+			npass++;
+		}
+	}
+
+	// make sure acceptance rate is within 5% of the target rate
+	if (npass > 0.9 * ndata) {
+		npassed++;
+		local_passed++;
+	} else {
+		int nbad = ndata - npass;
+		std::cerr << "Test for GibbsSampler under normal-normal model failed: Acceptance rate "
+				<< "is not within 5% of the target rate for " << nbad << " out of " << ndata <<
+				" characteristics." << std::endl;
+		for (int i = 0; i < frac_diff_chi.size(); ++i) {
+			if (frac_diff_chi[i] > 0.05) {
+				std::cout << i << ", " << naccept_chi[i] / double(niter) << ", " << target_rate << std::endl;
+			}
+		}
+	}
+	nperformed++;
+
+	/*
+	 * NOW CHECK THAT THE ESTIMATED VALUE OF THE POPULATION PARAMETER IS ABOUT 3-SIGMA OF THE TRUE VALUE
+	 */
+	// grab the MCMC samples of the population parameter
+	vecvec tsamples = Sampler.GetPopSamples();
+
+	// get the estimated posterior mean of normal mean parameter
+	double theta_mean[3] = {0.0, 0.0, 0.0};
+	for (int i = 0; i < tsamples.size(); ++i) {
+		theta_mean[0] += tsamples[i][0];
+		theta_mean[1] += tsamples[i][1];
+		theta_mean[2] += tsamples[i][2];
+	}
+	for (int j = 0; j < dim_theta; ++j) {
+		theta_mean[j] /= tsamples.size();
+	}
+	// get the estimated posterior covariance of the normal mean parameter
+	double tmean_covar[9];
+	int idx(0);
+	for (int j = 0; j < dim_theta; ++j) {
+		for (int k = 0; k < dim_theta; ++k) {
+			// initialize to zero
+			tmean_covar[idx] = 0.0;
+			idx++;
+		}
+	}
+	for (int i = 0; i < tsamples.size(); ++i) {
+		idx = 0;
+		for (int j = 0; j < dim_theta; ++j) {
+			for (int k = 0; k < dim_theta; ++k) {
+				tmean_covar[idx] += (tsamples[i][j] - theta_mean[j]) * (tsamples[i][k] - theta_mean[k]);
+				idx++;
+			}
+		}
+	}
+	idx = 0;
+	for (int j = 0; j < dim_theta; ++j) {
+		for (int k = 0; k < dim_theta; ++k) {
+			tmean_covar[idx] /= tsamples.size();
+			idx++;
+		}
+	}
+
+	// get number of mahalonabis distance to true value
+	double tmean_covar_inv[9];
+	matrix_invert3d(tmean_covar, tmean_covar_inv);
+
+	double** tmean_covar_inv2d;
+	tmean_covar_inv2d = new double* [3];
+	for (int j = 0; j < 3; ++j) {
+		tmean_covar_inv2d[j] = new double [3];
+	}
+	double tmean_diff[3];
+	idx = 0;
+	for (int i = 0; i < 3; ++i) {
+		tmean_diff[i] = theta_mean[i] - h_true_theta[i];
+		for (int j = 0; j < 3; ++j) {
+			tmean_covar_inv2d[i][j] = tmean_covar_inv[idx];
+			idx++;
+		}
+	}
+
+	double chisqr = mahalanobis_distance(tmean_covar_inv2d, tmean_diff, dim_theta);
+	double chi3_99 = 11.34;  // 99th percentile of chi-square distribution with 3 degrees of freedom
+
+	if (chisqr < chi3_99) {
+		npassed++;
+		local_passed++;
+	} else {
+		std::cerr << "Test for GibbsSampler under normal-normal model failed: Estimated value of theta is too far from true value"
+				<< std::endl;
+		std::cerr << "Mahalanobis distance is " << sqrt(chisqr) << std::endl;
+	}
+	nperformed++;
+
+	// free memory
+	for (int i = 0; i < 3; ++i) {
+		delete [] tmean_covar_inv2d[i];
+	}
+	delete tmean_covar_inv2d;
+	/*
+	 * NOW CHECK THAT THE ESTIMATED VALUE OF THE CHARACTERISTICS ARE WITHIN ABOUT 3-SIGMA OF THE TRUE VALUES AT
+	 * LEAST 95% OF THE TIME
+	 */
+
+	// grab the MCMC samples of the population parameter
+	std::vector<vecvec> csamples = Sampler.GetCharSamples();
+	int nchi_passed = 0;
+	for (int i = 0; i < ndata; ++i) {
+		// get the estimated posterior mean for this characteristic
+		double chi_mean[3] = {0.0, 0.0, 0.0};
+		vecvec this_csamples(csamples.size());
+		for (int j = 0; j < csamples.size(); ++j) {
+			this_csamples[j] = csamples[j][i];
+			chi_mean[0] += csamples[j][i][0] / csamples.size();
+			chi_mean[1] += csamples[j][i][1] / csamples.size();
+			chi_mean[2] += csamples[j][i][2] / csamples.size();
+		}
+		// get the estimated posterior covariance for this characteristic
+		std::vector<double> chi_covar = covariance(this_csamples);
+
+		// convert format
+		double chi_covar_inv[9];
+		matrix_invert3d(&chi_covar.front(), chi_covar_inv);
+
+		double** chi_covar_inv2d;
+		chi_covar_inv2d = new double* [3];
+		for (int j = 0; j < 3; ++j) {
+			chi_covar_inv2d[j] = new double [3];
+		}
+
+		double chi_diff[3];
+		idx = 0;
+		for (int j = 0; j < 3; ++j) {
+			chi_diff[j] = chi_mean[j] - h_true_chi[j * ndata + i];
+			for (int k = 0; k < 3; ++k) {
+				chi_covar_inv2d[j][k] = chi_covar_inv[idx];
+				idx++;
+			}
+		}
+		// get mahalanobis distance to true value for this characteristic
+		chisqr = mahalanobis_distance(chi_covar_inv2d, chi_diff, pchi);
+
+		if (chisqr < chi3_99) {
+			nchi_passed++;
+		}
+		// free memory
+		for (int j = 0; j < 3; ++j) {
+			delete [] chi_covar_inv2d[j];
+		}
+		delete chi_covar_inv2d;
+	}
+
+	if (nchi_passed > 0.95 * ndata) {
+		npassed++;
+		local_passed++;
+	} else {
+		int nfailed = ndata - nchi_passed;
+		std::cerr << "Test for GibbsSampler under normal-normal model failed: Estimated value of the characteristic is too far "
+				<< "from true value for " << nfailed << " out of " << ndata << " characteristics." << std::endl;
+	}
+	nperformed++;
+
+	if (local_passed == 4) {
+		std::cout << "... passed." << std::endl;
+	}
+
+	bool print_values = false;
+	if (print_values) {
+		// print out the results to a file
+		vecvec theta_samples = Sampler.GetPopSamples();
+		std::ofstream mcmc_file;
+		mcmc_file.open("normnorm_theta_samples.txt");
+		mcmc_file << "# nsamples = " << theta_samples.size() << ", ndata = " << ndata << ", mfeat = " << mfeat << std::endl;
+		for (int l = 0; l < theta_samples.size(); ++l) {
+			for (int i = 0; i < dim_theta; ++i) {
+				// theta_samples is [nmcmc, dim_theta]
+				mcmc_file << theta_samples[l][i] << " ";
+			}
+			mcmc_file << std::endl;
+		}
+		mcmc_file.close();
+
+		std::vector<double> logdens_samples = Sampler.GetLogDensPop();
+		std::ofstream logdens_file;
+		logdens_file.open("normnorm_pop_logdens.txt");
+		for (int i = 0; i < csamples.size(); ++i) {
+			logdens_file << logdens_samples[i] << std::endl;
+		}
+		logdens_file.close();
+
+		mcmc_file.open("normnorm_chi_samples.txt");
+		mcmc_file << "# nsamples = " << csamples.size() << ", ndata = " << ndata << ", pchi = " << pchi << std::endl;
+		for (int l = 0; l < csamples.size(); ++l) {
+			for (int i = 0; i < ndata; ++i) {
+				for (int j = 0; j < pchi; ++j) {
+					// chi_samples is [nmcmc, ndata, mfeat]
+					mcmc_file << csamples[l][i][j] << " ";
+				}
+			}
+			mcmc_file << std::endl;
+		}
+		mcmc_file.close();
+
+		logdens_samples = Sampler.GetLogDensMeas();
+		logdens_file.open("normnorm_meas_logdens.txt");
+		for (int i = 0; i < csamples.size(); ++i) {
+			logdens_file << logdens_samples[i] << std::endl;
+		}
+		logdens_file.close();
+	}
 }
 
 // print out summary of test results

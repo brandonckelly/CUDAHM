@@ -43,6 +43,9 @@ void GibbsSampler::Run()
 	std::cout << "Doing " << nburnin_ << " iterations of burnin..." << std::endl;
 	//boost::progress_display progress_bar(nburnin_); // show a progress bar
 	for (int i = 0; i < nburnin_; ++i) {
+		if (i % 1000 == 0) {
+			std::cout << i << "..." << std::endl;
+		}
 		Iterate();
 		//progress_bar++;
 	}

@@ -238,5 +238,9 @@ const_chi_samples.txt
 const_theta_samples.txt
 const_theta_logdens.txt
 measurements.txt
+normnorm_theta_samples.txt
+normnorm_chi_samples.txt
+normnorm_meas_logdens.txt
+normnorm_pop_logdens.txt
 
 # End of file

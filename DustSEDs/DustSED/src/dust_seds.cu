@@ -325,20 +325,24 @@ void g_logdens_pop(double* chi, int ndata, double* logdens_pop)
 		for (int j=0; j<p; j++) {
 			this_chi[j] = chi[j * ndata + i];
 		}
-		logdens_pop[i] = logdensity_pop(this_chi, c_theta);
+		double chi_sum = 0.0;
+		for (int j = 0; j < p; ++j) {
+			chi_sum += this_chi[j];
+		}
+
+		logdens_pop[i] = chi_sum;
 	}
 }
 
 /*
-struct zsqr : public thrust::unary_function<double,double> {
-    double mu, var;
-    zsqr(double m, double v) : mu(m), var(v) {}
-
+struct zsqr : public thrust::unary_function<double*,double> {
     __device__ __host__
     double operator()(double* chi) {
-        double chi_cent = chi - mu;
-        double logdens_pop = -0.5 * log(var) - 0.5 * chi_cent * chi_cent / var;
-        return logdens_pop;
+    	double chi_sum = 0.0;
+    	for (int j = 0; j < p; ++j) {
+			chi_sum += chi[j];
+		}
+        return chi_sum;
     }
 };
 */
@@ -455,7 +459,7 @@ void test_CholUpdateR1() {
 	std::cout << "Maximum fractional difference for rank-1 downdat: " << fracdiff_down << std::endl;
 }
 
-int main(void)
+int main(int argc, char** argv)
 {
     /* TODO: Add command line options */
 
@@ -471,6 +475,7 @@ int main(void)
      although we should later include correlations among the parameters. So, for now, theta is just the
      collection of the mean and variances of the normal distributions.
     */
+
 
     int ndata = 1000; // # of data points
 
@@ -552,7 +557,8 @@ int main(void)
     //std::ofstream chifile("chis.dat");
     std::ofstream thetafile("thetas.dat");
     std::ofstream chifile("chi0.dat");
-    int mcmc_iter = 50000;
+
+    int mcmc_iter = 10000;
     int naccept_theta = 0;
     std::cout << "Running MCMC Sampler...." << std::endl;
 

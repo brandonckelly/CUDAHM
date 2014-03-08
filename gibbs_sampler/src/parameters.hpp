@@ -77,6 +77,8 @@ public:
 		d_cholfact = cholfact;
 	}
 
+	void SetSaveTrace(bool dosave) { save_trace = dosave; }
+
 	vecvec GetChi(); // return the value of the characteristic in a std::vector of std::vectors for convenience
 	hvector GetHostLogDens() {
 		hvector h_logdens = d_logdens;
@@ -129,6 +131,7 @@ protected:
 	// MCMC sampler parameters
 	int current_iter;
 	thrust::device_vector<int> d_naccept;
+	bool save_trace;
 };
 
 // class for a population level parameter

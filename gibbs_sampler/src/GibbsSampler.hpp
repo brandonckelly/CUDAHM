@@ -35,6 +35,16 @@ public:
 	// print out useful information on the MCMC sampler results
 	virtual void Report();
 
+	// save the characteristic samples? not saving them can speed up the sampler since we do not need to
+	// read the values from the GPU
+	void NoSave(bool nosave = true) {
+		if (nosave) {
+			Daug_.SetSaveTrace(false);
+		} else {
+			Daug_.SetSaveTrace(true);
+		}
+	}
+
 	// grab the MCMC samples
 	const vecvec& GetPopSamples() const { return ThetaSamples_; }
 	const std::vector<vecvec>& GetCharSamples() const { return ChiSamples_; }

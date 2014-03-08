@@ -70,6 +70,7 @@ ndata(n), mfeat(m), pchi(p), nBlocks(nB), nThreads(nT)
 
 	thrust::fill(d_naccept.begin(), d_naccept.end(), 0);
 	current_iter = 1;
+	save_trace = true;
 }
 
 void DataAugmentation::Update()

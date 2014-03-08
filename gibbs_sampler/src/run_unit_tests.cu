@@ -66,7 +66,7 @@ int main(int argc, char** argv)
     	 */
 		UnitTests Tests(ndata, nBlocks, nThreads);
 
-		bool save_meas = true;
+		bool save_meas = false;
 		if (save_meas) {
 			Tests.SaveMeasurements();
 		}

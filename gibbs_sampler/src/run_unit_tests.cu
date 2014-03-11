@@ -8,8 +8,7 @@
 // standard includes
 #include <iostream>
 // local includes
-#include "UnitTests.hpp"
-#include "GibbsSampler.hpp"
+#include "UnitTests.cuh"
 
 /* list of unit tests:
  *
@@ -31,16 +30,9 @@
  *
  */
 
-// Global random number generator and distributions for generating random numbers on the host. The random number generator used
-// is the Mersenne Twister mt19937 from the BOOST library. These are instantiated in data_augmentation.cu.
-extern boost::random::mt19937 rng;
-
 int main(int argc, char** argv)
 {
 	int ndata = 10000;
-	int mfeat = 3;
-	int pchi = 3;
-	int dtheta = 3;
 
 	bool check_memory = false;  // set to true if you want to check how much memory is available without running the tests
 	if (check_memory) {
@@ -74,6 +66,9 @@ int main(int argc, char** argv)
 		// test the rank-1 cholesky update
 		Tests.R1CholUpdate();
 
+		// test that pointers are correctly set
+		Tests.GibbsSamplerPtr();
+
 		// tests for the characteristic class
 		Tests.ChiPropose();
 		Tests.ChiAcceptSame();
@@ -90,15 +85,14 @@ int main(int argc, char** argv)
 		Tests.DeviceAdapt();
 
 		// tests for the data augmentation class
-		Tests.DaugPopPtr();
 		Tests.DaugGetChi();
 		Tests.DaugLogDensPtr();
 		Tests.DaugAcceptSame();
 		Tests.DaugAcceptBetter();
-
-		// tests for the MCMC sampler
-		// Tests.FixedChar();
-		// Tests.FixedPopPar();
+//
+//		// tests for the MCMC sampler
+		Tests.FixedChar();
+		Tests.FixedPopPar();
 		Tests.NormNorm();
 
 		// print results

@@ -48,14 +48,15 @@ typedef thrust::device_vector<double> dvector;
 typedef double (*pLogDensMeas)(double*, double*, double*, int, int);
 typedef double (*pLogDensPop)(double*, double*, int, int);
 
-class PopulationPar; // forward declaration
+template <int mfeat, int pchi, int dtheta> class PopulationPar; // forward declaration
 
 // class for a data augmentation.
+template <int mfeat, int pchi, int dtheta>
 class DataAugmentation
 {
 public:
 	// Constructor
-	DataAugmentation(double** meas, double** meas_unc, int n, int m, int p, dim3& nB, dim3& nT);
+	DataAugmentation(double** meas, double** meas_unc, int n, dim3& nB, dim3& nT);
 
 	virtual ~DataAugmentation() { cudaFree(p_devStates); }
 
@@ -68,7 +69,7 @@ public:
 	void SetChi(dvector& chi, bool update_logdens = true);
 
 	// make sure that the data augmentation knows about the population parameters
-	void SetPopulationPtr(PopulationPar* t) { p_Theta = t; }
+	void SetPopulationPtr(PopulationPar<mfeat, pchi, dtheta>* t) { p_Theta = t; }
 
 	void SetLogDens(dvector& logdens) {
 		d_logdens = logdens;
@@ -95,7 +96,7 @@ public:
 	double* GetDevChiPtr() { return thrust::raw_pointer_cast(&d_chi[0]); }
 	int GetDataDim() { return ndata; }
 	int GetChiDim() { return pchi; }
-	PopulationPar* GetPopulationPtr() { return p_Theta; }
+	PopulationPar<mfeat, pchi, dtheta>* GetPopulationPtr() { return p_Theta; }
 	pLogDensMeas GetLogDensMeasPtr() { return p_logdens_function; }
 	thrust::host_vector<int> GetNaccept() {
 		hvector h_naccept = d_naccept;
@@ -111,12 +112,10 @@ protected:
 	dvector d_meas;
 	dvector d_meas_unc;
 	int ndata;
-	int mfeat;
-	int pchi;
 	// characteristics
 	dvector d_chi;
 	// population-level parameters
-	PopulationPar* p_Theta;
+	PopulationPar<mfeat, pchi, dtheta>* p_Theta;
 	// logarithm of conditional posterior densities, y | chi
 	dvector d_logdens;
 	// cholesky factors of Metropolis proposal covariance matrix
@@ -135,12 +134,13 @@ protected:
 };
 
 // class for a population level parameter
+template <int mfeat, int pchi, int dtheta>
 class PopulationPar
 {
 public:
 	// constructors
-	PopulationPar(int dtheta, dim3& nB, dim3& nT);
-	PopulationPar(int dtheta, DataAugmentation* D, dim3& nB, dim3& nT);
+	PopulationPar(dim3& nB, dim3& nT);
+	PopulationPar(DataAugmentation<mfeat, pchi, dtheta>* D, dim3& nB, dim3& nT);
 
 	// calculate the initial value of the population parameters
 	virtual void InitialValue();
@@ -163,7 +163,7 @@ public:
 	void ResetAcceptance() { naccept = 0; }
 
 	// setters and getters
-	void SetDataAugPtr(DataAugmentation* DataAug) { Daug = DataAug; }
+	void SetDataAugPtr(DataAugmentation<mfeat, pchi, dtheta>* DataAug) { Daug = DataAug; }
 	void SetTheta(dvector& theta, bool update_logdens = true);
 	void SetLogDens(dvector& logdens);
 	void SetCholFact(hvector cholfact_new) { cholfact = cholfact_new; }
@@ -184,14 +184,12 @@ public:
 	}
 	dvector GetDevLogDens() { return d_logdens; }
 	double* GetDevLogDensPtr() { return thrust::raw_pointer_cast(&d_logdens[0]); }
-	int GetDim() { return dim_theta; }
+	int GetDim() { return dtheta; }
 	hvector GetCholFactor() { return cholfact; }
 	int GetNaccept() { return naccept; }
 	pLogDensPop GetLogDensPopPtr() { return p_logdens_function; }
 
 protected:
-	int dim_theta;
-	int pchi;
 	// the value of the population parameter
 	hvector h_theta;
 	dvector d_theta;
@@ -201,7 +199,7 @@ protected:
 	dvector d_proposed_logdens;
 	double current_logdens;
 	// make sure that the population parameter knows about the characteristics
-	DataAugmentation* Daug;
+	DataAugmentation<mfeat, pchi, dtheta>* Daug;
 	// cholesky factors of Metropolis proposal covariance matrix
 	hvector cholfact;
 	// interval variables used in robust adaptive metropolis algorithm

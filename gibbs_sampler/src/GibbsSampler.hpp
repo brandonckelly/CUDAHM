@@ -9,17 +9,19 @@
 #define GIBBSSAMPLER_HPP_
 
 // boost includes
+#include <boost/shared_ptr.hpp>
 //#include <boost/timer/timer.hpp>
 //#include <boost/progress.hpp>
 
 // local includes
 #include "parameters.hpp"
 
+template<int mfeat, int pchi, int dtheta>
 class GibbsSampler
 {
 public:
 	// constructor
-	GibbsSampler(DataAugmentation& Daug, PopulationPar& PopPar, int niter, int nburnin,
+	GibbsSampler(double** meas, double** meas_unc, int ndata, dim3& nB, dim3& nT, int niter, int nburnin,
 			int nthin_chi=100, int nthin_theta=1);
 
 	// fix the population parameters throughout the sampler?
@@ -39,11 +41,14 @@ public:
 	// read the values from the GPU
 	void NoCharSave(bool nosave = true) {
 		if (nosave) {
-			Daug_.SetSaveTrace(false);
+			Daug_->SetSaveTrace(false);
 		} else {
-			Daug_.SetSaveTrace(true);
+			Daug_->SetSaveTrace(true);
 		}
 	}
+
+	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > GetDaugPtr() { return Daug_; }
+	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > GetThetaPtr() { return PopPar_; }
 
 	// grab the MCMC samples
 	const vecvec& GetPopSamples() const { return ThetaSamples_; }
@@ -55,8 +60,8 @@ protected:
 	int niter_, nburnin_, nthin_chi_, nthin_theta_; // total # of iterations, # of burnin iterations, and thinning amount
 	int current_iter_, ntheta_samples_, nchi_samples_;
 	bool fix_poppar, fix_char; // is set to true, then keep the values fixed throughout the MCMC sampler
-	DataAugmentation& Daug_;
-	PopulationPar& PopPar_;
+	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > Daug_;
+	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > PopPar_;
 	std::vector<vecvec> ChiSamples_;
 	vecvec ThetaSamples_;
 	std::vector<double> LogDensMeas_Samples_;

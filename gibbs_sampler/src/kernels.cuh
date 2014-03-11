@@ -41,24 +41,23 @@ bool AcceptProp(double logdens_prop, double logdens_current, double forward_dens
 __global__ void initialize_rng(curandState *state);
 
 // calculate initial value of characteristics
-__global__
+template<int mfeat, int pchi> __global__
 void initial_chi_value(double* chi, double* meas, double* meas_unc, double* cholfact, double* logdens,
-		int ndata, int mfeat, int pchi, pLogDensMeas LogDensityMeas);
+		int ndata, pLogDensMeas LogDensityMeas);
 
 // kernel to update the values of the characteristics in parallel on the GPU
-__global__
+template<int mfeat, int pchi, int dtheta> __global__
 void update_characteristic(double* meas, double* meas_unc, double* chi, double* theta, double* cholfact,
 		double* logdens_meas, double* logdens_pop, curandState* devStates, pLogDensMeas LogDensityMeas,
-		pLogDensPop LogDensityPop, int current_iter, int* naccept, int ndata, int mfeat, int pchi, int dim_theta);
+		pLogDensPop LogDensityPop, int current_iter, int* naccept, int ndata);
 
 // compute the conditional log-posterior density of the characteristics given the population parameter
-__global__
+template<int mfeat, int pchi> __global__
 void logdensity_meas(double* meas, double* meas_unc, double* chi, double* logdens, pLogDensMeas LogDensityMeas,
-		int ndata, int mfeat, int pchi);
+		int ndata);
 
 // compute the conditional log-posterior density of the characteristics given the population parameter
-__global__
-void logdensity_pop(double* theta, double* chi, double* logdens, pLogDensPop LogDensityPop, int ndata,
-		int pchi, int dim_theta);
+template<int pchi, int dtheta> __global__
+void logdensity_pop(double* theta, double* chi, double* logdens, pLogDensPop LogDensityPop, int ndata);
 
 #endif /* KERNELS_H__ */

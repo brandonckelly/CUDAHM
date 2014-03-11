@@ -128,9 +128,9 @@ __global__ void initialize_rng(curandState *state)
 }
 
 // calculate initial value of characteristics
-__global__
+template<int mfeat, int pchi> __global__
 void initial_chi_value(double* chi, double* meas, double* meas_unc, double* cholfact, double* logdens,
-		int ndata, int mfeat, int pchi, pLogDensMeas LogDensityMeas)
+		int ndata, pLogDensMeas LogDensityMeas)
 {
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
 	if (idata < ndata)
@@ -160,10 +160,10 @@ void initial_chi_value(double* chi, double* meas, double* meas_unc, double* chol
 }
 
 // kernel to update the values of the characteristics in parallel on the GPU
-__global__
+template<int mfeat, int pchi, int dtheta> __global__
 void update_characteristic(double* meas, double* meas_unc, double* chi, double* theta, double* cholfact,
 		double* logdens_meas, double* logdens_pop, curandState* devStates, pLogDensMeas LogDensityMeas,
-		pLogDensPop LogDensityPop, int current_iter, int* naccept, int ndata, int mfeat, int pchi, int dim_theta)
+		pLogDensPop LogDensityPop, int current_iter, int* naccept, int ndata)
 {
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
 	if (idata < ndata)
@@ -172,7 +172,9 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 
 		// copy values for this data point to registers for speed
 		// TODO: convert these arrays to shared memory
-		double snorm_deviate[3], scaled_proposal[3], proposed_chi[3], local_chi[3], local_cholfact[6];
+		double snorm_deviate[pchi], scaled_proposal[pchi], proposed_chi[pchi], local_chi[pchi];
+		const int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
+		double local_cholfact[pchi];
 		int cholfact_index = 0;
 		for (int j = 0; j < pchi; ++j) {
 			local_chi[j] = chi[j * ndata + idata];
@@ -181,7 +183,7 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 				cholfact_index++;
 			}
 		}
-		double local_meas[3], local_meas_unc[3];
+		double local_meas[mfeat], local_meas_unc[mfeat];
 		for (int j = 0; j < mfeat; ++j) {
 			local_meas[j] = meas[j * ndata + idata];
 			local_meas_unc[j] = meas_unc[j * ndata + idata];
@@ -191,7 +193,7 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 
 		// get value of log-posterior for proposed chi value
 		double logdens_meas_prop = LogDensityMeas(proposed_chi, local_meas, local_meas_unc, mfeat, pchi);
-		double logdens_pop_prop = LogDensityPop(proposed_chi, theta, pchi, dim_theta);
+		double logdens_pop_prop = LogDensityPop(proposed_chi, theta, pchi, dtheta);
 		double logpost_prop = logdens_meas_prop + logdens_pop_prop;
 
 //		if (idata == 0) {
@@ -213,7 +215,6 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 		// adapt the covariance matrix of the characteristic proposal distribution
 		AdaptProp(local_cholfact, snorm_deviate, scaled_proposal, metro_ratio, pchi, current_iter);
 
-		int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
 		for (int j = 0; j < dim_cholfact; ++j) {
 			// copy value of this adapted cholesky factor back to global memory
 			cholfact[j * ndata + idata] = local_cholfact[j];
@@ -238,14 +239,14 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 }
 
 // compute the conditional log-posterior density of the characteristics given the population parameter
-__global__
+template<int mfeat, int pchi> __global__
 void logdensity_meas(double* meas, double* meas_unc, double* chi, double* logdens, pLogDensMeas LogDensityMeas,
-		int ndata, int mfeat, int pchi)
+		int ndata)
 {
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
 	if (idata < ndata)
 	{
-		double chi_i[3], meas_i[3], meas_unc_i[3];
+		double chi_i[pchi], meas_i[mfeat], meas_unc_i[mfeat];
 		for (int j = 0; j < pchi; ++j) {
 			chi_i[j] = chi[j * ndata + idata];
 		}
@@ -258,18 +259,17 @@ void logdensity_meas(double* meas, double* meas_unc, double* chi, double* logden
 }
 
 // compute the conditional log-posterior density of the characteristics given the population parameter
-__global__
-void logdensity_pop(double* theta, double* chi, double* logdens, pLogDensPop LogDensityPop, int ndata,
-		int pchi, int dim_theta)
+template<int pchi, int dtheta> __global__
+void logdensity_pop(double* theta, double* chi, double* logdens, pLogDensPop LogDensityPop, int ndata)
 {
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
 	if (idata < ndata)
 	{
-		double chi_i[3];
+		double chi_i[pchi];
 		for (int j = 0; j < pchi; ++j) {
 			chi_i[j] = chi[j * ndata + idata];
 		}
-		logdens[idata] = LogDensityPop(chi_i, theta, pchi, dim_theta);
+		logdens[idata] = LogDensityPop(chi_i, theta, pchi, dtheta);
 	}
 }
 

@@ -652,7 +652,7 @@ void UnitTests::ThetaPropose() {
 
 	int ntrials = 100000;
 	int current_iter = 1;
-    PopulationPar Theta(dim_theta, nBlocks, nThreads);
+    PopulationPar<3,3,3> Theta(nBlocks, nThreads);
 
     hvector h_theta(3);
     h_theta[0] = 1.2;
@@ -738,7 +738,7 @@ void UnitTests::ThetaAcceptSame() {
 	std::cout << "Testing that population parameter updates always accept when posterior are the same." << std::endl;
 
 	int ntrials = 100000;
-    PopulationPar Theta(dim_theta, nBlocks, nThreads);
+    PopulationPar<3,3,3> Theta(nBlocks, nThreads);
 
 	bool accept;
 	int naccept = 0;
@@ -767,7 +767,7 @@ void UnitTests::ThetaAdapt() {
 
 	double mu[3] = {1.2, 0.4, -0.7};
 
-	PopulationPar Theta(dim_theta, nBlocks, nThreads);
+	PopulationPar<3,3,3> Theta(nBlocks, nThreads);
 
 	hvector h_theta = Theta.GetHostTheta();
 	dvector d_theta = h_theta;
@@ -826,10 +826,10 @@ void UnitTests::ThetaAdapt() {
 void UnitTests::DaugPopPtr() {
 	std::cout << "Making sure population parameter constructor correctly sets the data augmentation pointer." << std::endl;
 
-	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
-	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
+	DataAugmentation<3,3,3> Daug(meas, meas_unc, ndata, nBlocks, nThreads);
+	PopulationPar<3,3,3> Theta(&Daug, nBlocks, nThreads);
 
-	PopulationPar* p_Theta = Daug.GetPopulationPtr();
+	PopulationPar<3, 3, 3>* p_Theta = Daug.GetPopulationPtr();
 
 	if (p_Theta == &Theta) {
 		npassed++;
@@ -846,7 +846,7 @@ void UnitTests::DaugGetChi() {
 
 	std::cout << "Testing DataAugmentation::GetChi..." << std::endl;
 
-	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
+	DataAugmentation<3,3,3> Daug(meas, meas_unc, ndata, nBlocks, nThreads);
 	hvector h_chi = Daug.GetHostChi();
 
 	assert(h_chi.size() == ndata * pchi);
@@ -896,8 +896,8 @@ void UnitTests::DaugLogDensPtr()
 	std::cout << "Testing that pointers to log density functions are properly set..." << std::endl;
 	int local_passed = 0;
 
-	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
-	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
+	DataAugmentation<3,3,3> Daug(meas, meas_unc, ndata, nBlocks, nThreads);
+	PopulationPar<3,3,3> Theta(&Daug, nBlocks, nThreads);
 
 	// first test that pointer is set to point to LogDensityPop()
 	Theta.SetTheta(d_true_theta);
@@ -1248,8 +1248,8 @@ void UnitTests::DaugAcceptSame()
 	std::cout << "Testing that update for DataAugmentation always accepts when chi values are unchanged...." << std::endl;
 	int local_passed = 0;
 
-	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
-	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
+	DataAugmentation<3,3,3> Daug(meas, meas_unc, ndata, nBlocks, nThreads);
+	PopulationPar<3,3,3> Theta(&Daug, nBlocks, nThreads);
 
 	Daug.SetChi(d_true_chi);
 	Theta.SetTheta(d_true_theta);
@@ -1308,8 +1308,8 @@ void UnitTests::DaugAcceptBetter() {
 	std::cout << "Testing DaugAccept.Update() always accepts a better proposal...." << std::endl;
 	int local_passed = 0;
 
-	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
-	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
+	DataAugmentation<3,3,3> Daug(meas, meas_unc, ndata, nBlocks, nThreads);
+	PopulationPar<3,3,3> Theta(&Daug, nBlocks, nThreads);
 
 	Daug.SetChi(d_true_chi);
 	Theta.SetTheta(d_true_theta);
@@ -1441,23 +1441,20 @@ void UnitTests::FixedChar() {
 	std::cout << "Testing Gibbs Sampler for fixed characteristics...";
 	int local_passed = 0;
 
-	// create the parameter objects
-	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
-	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
-
-	Daug.SetChi(d_true_chi);
-
 	// setup the Gibbs sampler object
 	int niter(25000), nburn(10000);
-	GibbsSampler Sampler(Daug, Theta, niter, nburn);
-	Sampler.FixChar(); // keep the characteristics fixed
+	GibbsSampler<3,3,3> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburn);
+
+	// keep the characteristics fixed
+	Sampler.GetDaugPtr()->SetChi(d_true_chi);
+	Sampler.FixChar();
 
 	// run the MCMC sampler
 	Sampler.Run();
 
 	// check the acceptance rate
 	double target_rate = 0.4;
-	double naccept = Theta.GetNaccept();
+	double naccept = Sampler.GetThetaPtr()->GetNaccept();
 	double arate = naccept / double(niter);
 	double frac_diff = abs(arate - target_rate) / target_rate;
 	// make sure acceptance rate is within 5% of the target rate
@@ -1600,23 +1597,20 @@ void UnitTests::FixedPopPar() {
 	std::cout << "Testing Gibbs Sampler for fixed population parameter...";
 	int local_passed = 0;
 
-	// create the parameter objects
-	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
-	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
-
-	Theta.SetTheta(d_true_theta);
-
 	// setup the Gibbs sampler object
 	int niter(25000), nburn(10000);
-	GibbsSampler Sampler(Daug, Theta, niter, nburn);
-	Sampler.FixPopPar(); // keep the population parameter fixed
+	GibbsSampler<3,3,3> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburn);
+
+	// keep the population parameter fixed
+	Sampler.GetThetaPtr()->SetTheta(d_true_theta);
+	Sampler.FixPopPar();
 
 	// run the MCMC sampler
 	Sampler.Run();
 
 	// check the acceptance rate
 	double target_rate = 0.4;
-	thrust::host_vector<int> naccept = Daug.GetNaccept();
+	thrust::host_vector<int> naccept = Sampler.GetDaugPtr()->GetNaccept();
 	std::vector<double> frac_diff(naccept.size());
 	int npass = 0;
 	for (int i = 0; i < naccept.size(); ++i) {
@@ -1774,13 +1768,9 @@ void UnitTests::NormNorm()
 	std::cout << "Testing Gibbs Sampler for normal-normal model...";
 	int local_passed = 0;
 
-	// create the parameter objects
-	DataAugmentation Daug(meas, meas_unc, ndata, mfeat, pchi, nBlocks, nThreads);
-	PopulationPar Theta(dim_theta, &Daug, nBlocks, nThreads);
-
 	// setup the Gibbs sampler object
 	int niter(25000), nburn(10000);
-	GibbsSampler Sampler(Daug, Theta, niter, nburn);
+	GibbsSampler<3,3,3> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburn);
 
 	// run the MCMC sampler
 	Sampler.Run();
@@ -1791,7 +1781,7 @@ void UnitTests::NormNorm()
 
 	double target_rate = 0.4;
 	// first check the acceptance rate for the population level parameter
-	double naccept_theta = Theta.GetNaccept();
+	double naccept_theta = Sampler.GetThetaPtr()->GetNaccept();
 	double arate = naccept_theta / double(niter);
 	double frac_diff_theta = abs(arate - target_rate) / target_rate;
 	// make sure acceptance rate is within 5% of the target rate
@@ -1806,7 +1796,7 @@ void UnitTests::NormNorm()
 	nperformed++;
 
 	// check the acceptance rate for the characteristics
-	thrust::host_vector<int> naccept_chi = Daug.GetNaccept();
+	thrust::host_vector<int> naccept_chi = Sampler.GetDaugPtr()->GetNaccept();
 	std::vector<double> frac_diff_chi(naccept_chi.size());
 	int npass = 0;
 	for (int i = 0; i < naccept_chi.size(); ++i) {

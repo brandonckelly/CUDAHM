@@ -1,5 +1,5 @@
 /*
- * UnitTests.hpp
+ * UnitTests.cuh
  *
  *  Created on: Jul 17, 2013
  *      Author: brandonkelly
@@ -27,7 +27,6 @@
 // standard includes
 #include <vector>
 // local includes
-#include "parameters.hpp"
 #include "GibbsSampler.hpp"
 
 // function definitions

@@ -11,14 +11,7 @@
 #include <cassert>
 
 // local includes
-#include "UnitTests.hpp"
-#include "kernels.cuh"
-
-// Global random number generator and distributions for generating random numbers on the host. The random number generator used
-// is the Mersenne Twister mt19937 from the BOOST library. These are instantiated in data_augmentation.cu.
-extern boost::random::mt19937 rng;
-extern boost::random::normal_distribution<> snorm; // Standard normal distribution
-extern boost::random::uniform_real_distribution<> uniform; // Uniform distribution from 0.0 to 1.0
+#include "UnitTests.cuh"
 
 /*
  * Pointers to the device-side functions used to compute the conditional log-posteriors

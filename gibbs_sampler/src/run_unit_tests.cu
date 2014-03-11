@@ -8,8 +8,7 @@
 // standard includes
 #include <iostream>
 // local includes
-#include "UnitTests.hpp"
-#include "GibbsSampler.hpp"
+#include "UnitTests.cuh"
 
 /* list of unit tests:
  *
@@ -30,10 +29,6 @@
  *	parameter fixed
  *
  */
-
-// Global random number generator and distributions for generating random numbers on the host. The random number generator used
-// is the Mersenne Twister mt19937 from the BOOST library. These are instantiated in data_augmentation.cu.
-extern boost::random::mt19937 rng;
 
 int main(int argc, char** argv)
 {

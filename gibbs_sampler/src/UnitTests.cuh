@@ -63,8 +63,6 @@ public:
 	void ThetaAcceptSame();
 	// test PopulationPar::Adapt acceptance rate and covariance by running a simple MCMC sampler
 	void ThetaAdapt();
-	// check that constructor for population parameter correctly set the pointer data member of DataAugmentation
-	void DaugPopPtr();
 	// test DataAugmentation::GetChi
 	void DaugGetChi();
 	// check that pointers to device-side LogDensityMeas and LogDensityPop are properly set
@@ -79,6 +77,8 @@ public:
 	void DaugAcceptSame();
 	// make sure that DataAugmentation::Update() accepts and saves Chi values when the posterior is much higher
 	void DaugAcceptBetter();
+	// check that constructor for GibbsSampler correctly sets the DataAugmentation and PopulationPar pointers.
+	void GibbsSamplerPtr();
 	// test the Gibbs Sampler for a Normal-Normal model keeping the characteristics fixed
 	void FixedChar();
 	// test the Gibbs Sampler for a Normal-Normal model keeping the population parameter fixed

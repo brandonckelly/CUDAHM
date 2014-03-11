@@ -761,6 +761,10 @@ void UnitTests::ThetaAdapt() {
 	double mu[3] = {1.2, 0.4, -0.7};
 
 	PopulationPar<3,3,3> Theta(nBlocks, nThreads);
+	boost::shared_ptr<DataAugmentation<3,3,3> > DaugPtr(new DataAugmentation<3,3,3>(meas, meas_unc, ndata, nBlocks, nThreads));
+	Theta.SetDataAugPtr(DaugPtr);
+
+	Theta.Initialize();
 
 	hvector h_theta = Theta.GetHostTheta();
 	dvector d_theta = h_theta;
@@ -811,25 +815,6 @@ void UnitTests::ThetaAdapt() {
 	} else {
 		std::cerr << "Test for Theta::Adapt failed: Acceptance rate is not within 5% of the target rate." << std::endl;
 		std::cout << accept_rate << ", " << target_rate << std::endl;
-	}
-	nperformed++;
-}
-
-// check that constructor for population parameter correctly set the pointer data member of DataAugmentation
-void UnitTests::DaugPopPtr() {
-	std::cout << "Making sure population parameter constructor correctly sets the data augmentation pointer." << std::endl;
-
-	DataAugmentation<3,3,3> Daug(meas, meas_unc, ndata, nBlocks, nThreads);
-	PopulationPar<3,3,3> Theta(&Daug, nBlocks, nThreads);
-
-	PopulationPar<3, 3, 3>* p_Theta = Daug.GetPopulationPtr();
-
-	if (p_Theta == &Theta) {
-		npassed++;
-		std::cout << "... passed." << std::endl;
-	} else {
-		std::cerr << "Test for PopulationPar constructor failed: Pointer to DataAugmentation member not correctly initialized."
-				<< std::endl;
 	}
 	nperformed++;
 }
@@ -889,17 +874,20 @@ void UnitTests::DaugLogDensPtr()
 	std::cout << "Testing that pointers to log density functions are properly set..." << std::endl;
 	int local_passed = 0;
 
-	DataAugmentation<3,3,3> Daug(meas, meas_unc, ndata, nBlocks, nThreads);
-	PopulationPar<3,3,3> Theta(&Daug, nBlocks, nThreads);
+	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc, ndata, nBlocks, nThreads));
+	boost::shared_ptr<PopulationPar<3,3,3> > Theta(new PopulationPar<3,3,3> (nBlocks, nThreads));
+
+	Daug->SetPopulationPtr(Theta);
+	Theta->SetDataAugPtr(Daug);
 
 	// first test that pointer is set to point to LogDensityPop()
-	Theta.SetTheta(d_true_theta);
-	hvector h_logdens_from_theta = Theta.GetHostLogDens();
+	Theta->SetTheta(d_true_theta);
+	hvector h_logdens_from_theta = Theta->GetHostLogDens();
 	double logdens_from_theta = 0.0;
 	for (int i = 0; i < h_logdens_from_theta.size(); ++i) {
 		logdens_from_theta += h_logdens_from_theta[i];
 	}
-	hvector h_chi = Daug.GetHostChi();
+	hvector h_chi = Daug->GetHostChi();
 	double* p_theta = thrust::raw_pointer_cast(&h_true_theta[0]);
 	double local_chi[3];
 	double logdens_from_host = 0.0;
@@ -923,10 +911,10 @@ void UnitTests::DaugLogDensPtr()
 	// TODO: make this calculate the sum, as above
 
 	// now test that pointer is set to point to LogDensityMeas()
-	Daug.SetChi(d_true_chi);
-	dvector d_logdens_from_daug = Daug.GetDevLogDens();
+	Daug->SetChi(d_true_chi);
+	dvector d_logdens_from_daug = Daug->GetDevLogDens();
 	double logdens_from_daug = thrust::reduce(d_logdens_from_daug.begin(), d_logdens_from_daug.end());
-	h_chi = Daug.GetHostChi();
+	h_chi = Daug->GetHostChi();
 	logdens_from_host = 0.0;
 	double local_meas[3];
 	double local_meas_unc[3];
@@ -1241,22 +1229,25 @@ void UnitTests::DaugAcceptSame()
 	std::cout << "Testing that update for DataAugmentation always accepts when chi values are unchanged...." << std::endl;
 	int local_passed = 0;
 
-	DataAugmentation<3,3,3> Daug(meas, meas_unc, ndata, nBlocks, nThreads);
-	PopulationPar<3,3,3> Theta(&Daug, nBlocks, nThreads);
+	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc, ndata, nBlocks, nThreads));
+	boost::shared_ptr<PopulationPar<3,3,3> > Theta(new PopulationPar<3,3,3> (nBlocks, nThreads));
 
-	Daug.SetChi(d_true_chi);
-	Theta.SetTheta(d_true_theta);
+	Daug->SetPopulationPtr(Theta);
+	Theta->SetDataAugPtr(Daug);
+
+	Daug->SetChi(d_true_chi);
+	Theta->SetTheta(d_true_theta);
 
 	// set the cholesky factors to zero so that NormalPropose() just returns the same chi value
 	int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
 	hvector h_cholfact(ndata * dim_cholfact);
 	thrust::fill(h_cholfact.begin(), h_cholfact.end(), 0.0);
 	dvector d_cholfact = h_cholfact;
-	Daug.SetCholFact(d_cholfact);
+	Daug->SetCholFact(d_cholfact);
 
-	Daug.Update();
+	Daug->Update();
 
-	thrust::host_vector<int> h_naccept = Daug.GetNaccept();
+	thrust::host_vector<int> h_naccept = Daug->GetNaccept();
 	// make sure all of the proposals are accepted, since the proposed chi values are the same as the current ones
 	int naccept = 0;
 	for (int i = 0; i < h_naccept.size(); ++i) {
@@ -1279,10 +1270,10 @@ void UnitTests::DaugAcceptSame()
 
 	int ntrials = 1000;
 	for (int i = 0; i < ntrials; ++i) {
-		Theta.SetCholFact(h_cholfact);
-		Theta.Update();
+		Theta->SetCholFact(h_cholfact);
+		Theta->Update();
 	}
-	naccept = Theta.GetNaccept();
+	naccept = Theta->GetNaccept();
 	if (naccept == ntrials) {
 		npassed++;
 		local_passed++;
@@ -1301,20 +1292,26 @@ void UnitTests::DaugAcceptBetter() {
 	std::cout << "Testing DaugAccept.Update() always accepts a better proposal...." << std::endl;
 	int local_passed = 0;
 
-	DataAugmentation<3,3,3> Daug(meas, meas_unc, ndata, nBlocks, nThreads);
-	PopulationPar<3,3,3> Theta(&Daug, nBlocks, nThreads);
+	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc, ndata, nBlocks, nThreads));
+	boost::shared_ptr<PopulationPar<3,3,3> > Theta(new PopulationPar<3,3,3> (nBlocks, nThreads));
 
-	Daug.SetChi(d_true_chi);
-	Theta.SetTheta(d_true_theta);
+	Daug->SetPopulationPtr(Theta);
+	Theta->SetDataAugPtr(Daug);
+
+	Daug->Initialize();
+	Theta->Initialize();
+
+	Daug->SetChi(d_true_chi);
+	Theta->SetTheta(d_true_theta);
 
 	// artificially set the conditional log-posteriors to a really low value to make sure we accept the proposal
 	hvector h_logdens_meas(ndata);
 	thrust::fill(h_logdens_meas.begin(), h_logdens_meas.end(), -1e10);
 	dvector d_logdens_meas = h_logdens_meas;
-	Daug.SetLogDens(d_logdens_meas);
+	Daug->SetLogDens(d_logdens_meas);
 
-	Daug.Update();
-	thrust::host_vector<int> h_naccept = Daug.GetNaccept();
+	Daug->Update();
+	thrust::host_vector<int> h_naccept = Daug->GetNaccept();
 
 	// make sure all of the proposals are accepted
 	int naccept = 0;
@@ -1331,10 +1328,11 @@ void UnitTests::DaugAcceptBetter() {
 	nperformed++;
 
 	// make sure that the proposed values and new posteriors are saved
-	hvector h_new_chi = Daug.GetDevChi();
+	hvector h_new_chi = Daug->GetDevChi();
 	int ndiff_chi = 0;
 	for (int i = 0; i < h_true_chi.size(); ++i) {
-		if (h_new_chi[i] != h_true_chi[i]) {
+		// if the proposal is saved, then new chi should not equal initial chi
+		if (!approx_equal(h_new_chi[i], h_true_chi[i], 1e-6)) {
 			ndiff_chi++;
 		}
 	}
@@ -1346,10 +1344,10 @@ void UnitTests::DaugAcceptBetter() {
 				<< "proposals are accepted." << std::endl;
 	}
 	nperformed++;
-	hvector h_new_logdens = Daug.GetDevLogDens();
+	hvector h_new_logdens = Daug->GetDevLogDens();
 	int ndiff_logdens = 0;
 	for (int i = 0; i < h_new_logdens.size(); ++i) {
-		if (h_new_logdens[i] != h_logdens_meas[i]) {
+		if (!approx_equal(h_new_logdens[i], h_logdens_meas[i], 1e-6)) {
 			ndiff_logdens++;
 		}
 	}
@@ -1375,12 +1373,12 @@ void UnitTests::DaugAcceptBetter() {
 	hvector h_logdens_pop(ndata);
 	thrust::fill(h_logdens_pop.begin(), h_logdens_pop.end(), -1e10);
 	dvector d_logdens_pop = h_logdens_pop;
-	Theta.SetLogDens(d_logdens_pop);
+	Theta->SetLogDens(d_logdens_pop);
 
-	Theta.Update();
+	Theta->Update();
 
 	// make sure we accepted the proposal
-	naccept = Theta.GetNaccept();
+	naccept = Theta->GetNaccept();
 	if (naccept == 1) {
 		npassed++;
 		local_passed++;
@@ -1391,10 +1389,10 @@ void UnitTests::DaugAcceptBetter() {
 	nperformed++;
 
 	// make sure that the proposed values and new posteriors are saved
-	hvector h_new_theta = Theta.GetHostTheta();
+	hvector h_new_theta = Theta->GetHostTheta();
 	int ndiff_theta = 0;
 	for (int i = 0; i < h_new_theta.size(); ++i) {
-		if (h_new_theta[i] != h_true_theta[i]) {
+		if (!approx_equal(h_new_theta[i], h_true_theta[i], 1e-6)) {
 			ndiff_theta++;
 		}
 	}
@@ -1407,14 +1405,14 @@ void UnitTests::DaugAcceptBetter() {
 				<< "proposal is accepted." << std::endl;
 	}
 	nperformed++;
-	h_new_logdens = Theta.GetHostLogDens();
+	h_new_logdens = Theta->GetHostLogDens();
 	ndiff_logdens = 0;
 	for (int i = 0; i < h_new_logdens.size(); ++i) {
-		if (h_new_logdens[i] != h_logdens_meas[i]) {
+		if (!approx_equal(h_new_logdens[i], h_logdens_pop[i], 1e-6)) {
 			ndiff_logdens++;
 		}
 	}
-	if (ndiff_logdens == h_logdens_meas.size()) {
+	if (ndiff_logdens == h_logdens_pop.size()) {
 		// did we update the posterior?
 		npassed++;
 		local_passed++;
@@ -1428,20 +1426,60 @@ void UnitTests::DaugAcceptBetter() {
 	}
 }
 
+// check that constructor for population parameter correctly set the pointer data member of DataAugmentation
+void UnitTests::GibbsSamplerPtr() {
+	std::cout << "Making sure DataAugmentation and PopulationPar know about eachother." << std::endl;
+	int local_passed = 0;
+
+	int niter = 10;
+	int nburn = 10;
+	GibbsSampler<3, 3, 3> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburn);
+
+	boost::shared_ptr<DataAugmentation<3,3,3> > DaugPtr = Sampler.GetDaugPtr();
+	boost::shared_ptr<PopulationPar<3,3,3> > ThetaPtr = Sampler.GetThetaPtr();
+
+	if (DaugPtr->GetPopulationPtr() == ThetaPtr) {
+		npassed++;
+		local_passed++;
+	} else {
+		std::cerr << "Test for GibbsSampler constructor failed: Data Augmentation does not know about the Population Parameter."
+				<< std::endl;
+	}
+
+	nperformed++;
+
+	if (ThetaPtr->GetDataAugPtr() == DaugPtr) {
+		npassed++;
+		local_passed++;
+	} else {
+		std::cerr << "Test for GibbsSampler constructor failed: Population Parameter does not know about the Data Augmentation."
+				<< std::endl;
+	}
+
+	nperformed++;
+
+	if (local_passed == 2) {
+		std::cout << "... passed." << std::endl;
+	}
+
+}
+
 // test the Gibbs Sampler for a Normal-Normal model keeping the characteristics fixed
 void UnitTests::FixedChar() {
 
-	std::cout << "Testing Gibbs Sampler for fixed characteristics...";
+	std::cout << "Testing Gibbs Sampler for fixed characteristics..." << std::endl;;
 	int local_passed = 0;
 
 	// setup the Gibbs sampler object
-	int niter(25000), nburn(10000);
+	int niter(50000), nburn(25000);
 	GibbsSampler<3,3,3> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburn);
 
 	// keep the characteristics fixed
 	Sampler.GetDaugPtr()->SetChi(d_true_chi);
 	Sampler.FixChar();
 
+	// start at the true values
+	Sampler.GetThetaPtr()->SetTheta(d_true_theta);
 	// run the MCMC sampler
 	Sampler.Run();
 
@@ -1485,18 +1523,18 @@ void UnitTests::FixedChar() {
 		theta_mean_true[j] /= ndata;
 	}
 
-	// make sure estimated value and true value are within 2% of each other
+	// make sure estimated value and true value are within 5% of each other
 	frac_diff = 0.0;
 	for (int j = 0; j < dim_theta; ++j) {
 		frac_diff += abs(theta_mean[j] - theta_mean_true[j]) / abs(theta_mean_true[j]);
 	}
 	frac_diff /= dim_theta;
-	if (frac_diff < 0.02) {
+	if (frac_diff < 0.05) {
 		npassed++;
 		local_passed++;
 	} else {
 		std::cerr << "Test for GibbsSampler with fixed Characteristics failed: Average fractional difference "
-				<< "between estimated posterior mean and true value is greater than 2%." << std::endl;
+				<< "between estimated posterior mean and true value is greater than 5%." << std::endl;
 		std::cerr << "Average fractional difference: " << frac_diff << std::endl;
 		for (int j = 0; j < dim_theta; ++j) {
 			std::cerr << "Estimated, True:" << std::endl;
@@ -1529,7 +1567,7 @@ void UnitTests::FixedChar() {
 		}
 	}
 
-	// make sure estimated value and true value are within 2% of eachother
+	// make sure estimated value and true value are within 5% of eachother
 	frac_diff = 0.0;
 	for (int j = 0; j < dim_theta; ++j) {
 		for (int k = 0; k < dim_theta; ++k) {
@@ -1537,26 +1575,26 @@ void UnitTests::FixedChar() {
 		}
 	}
 	frac_diff /= (dim_theta * dim_theta) ;
-	if (frac_diff < 0.02) {
+	if (frac_diff < 0.05) {
 		npassed++;
 		local_passed++;
 	} else {
 		std::cerr << "Test for GibbsSampler with fixed Characteristics failed: Average fractional difference "
-				<< "between estimated posterior covariance in mean parameter and the true value is greater than 2%." << std::endl;
-		std::cout << "Average fractional difference:" << frac_diff << std::endl;
-		std::cout << "Estimated posterior covariance:" << std::endl;
+				<< "between estimated posterior covariance in mean parameter and the true value is greater than 5%." << std::endl;
+		std::cerr << "Average fractional difference:" << frac_diff << std::endl;
+		std::cerr << "Estimated posterior covariance:" << std::endl;
 		for (int i = 0; i < 3; ++i) {
 			for (int j = 0; j < 3; ++j) {
-				std::cout << mean_covar[i][j] << "  ";
+				std::cerr << mean_covar[i][j] << "  ";
 			}
-			std::cout << std::endl;
+			std::cerr << std::endl;
 		}
-		std::cout << "True posterior covariance:" << std::endl;
+		std::cerr << "True posterior covariance:" << std::endl;
 		for (int i = 0; i < 3; ++i) {
 			for (int j = 0; j < 3; ++j) {
-				std::cout << mean_covar_true[i][j] << "  ";
+				std::cerr << mean_covar_true[i][j] << "  ";
 			}
-			std::cout << std::endl;
+			std::cerr << std::endl;
 		}
 	}
 	nperformed++;
@@ -1591,13 +1629,15 @@ void UnitTests::FixedPopPar() {
 	int local_passed = 0;
 
 	// setup the Gibbs sampler object
-	int niter(25000), nburn(10000);
+	int niter(50000), nburn(25000);
 	GibbsSampler<3,3,3> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburn);
 
 	// keep the population parameter fixed
 	Sampler.GetThetaPtr()->SetTheta(d_true_theta);
 	Sampler.FixPopPar();
 
+	// start at the true values
+	Sampler.GetDaugPtr()->SetChi(d_true_chi);
 	// run the MCMC sampler
 	Sampler.Run();
 
@@ -1709,7 +1749,7 @@ void UnitTests::FixedPopPar() {
 		int nfailed = ndata - npass_mean;
 		std::cerr << "Test for GibbsSampler with fixed PopulationPar failed: Average fractional difference "
 				<< "between estimated posterior mean and true value is greater than 5% for " << nfailed
-				<< "out of " << ndata << " characteristics." << std::endl;
+				<< " out of " << ndata << " characteristics." << std::endl;
 	}
 	nperformed++;
 	if (npass_covar > 0.9 * ndata) {
@@ -1762,7 +1802,7 @@ void UnitTests::NormNorm()
 	int local_passed = 0;
 
 	// setup the Gibbs sampler object
-	int niter(25000), nburn(10000);
+	int niter(50000), nburn(25000);
 	GibbsSampler<3,3,3> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburn);
 
 	// run the MCMC sampler

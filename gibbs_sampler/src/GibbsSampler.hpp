@@ -28,6 +28,8 @@ public:
 			// construct DataAugmentation and PopulationPar objects
 			Daug_.reset(new DataAugmentation<mfeat, pchi, dtheta>(meas, meas_unc, ndata, nB, nT));
 			PopPar_.reset(new PopulationPar<mfeat, pchi, dtheta>(nB, nT));
+			Daug_->SetPopulationPtr(PopPar_);
+			PopPar_->SetDataAugPtr(Daug_);
 
 			int nchi_samples = niter / nthin_chi;
 			int ntheta_samples = niter / nthin_theta;
@@ -41,6 +43,8 @@ public:
 			current_iter_ = 1;
 			fix_poppar = false; // default is to sample both the population parameters and characteristics
 			fix_char = false;
+
+			Initialize();
 		}
 
 	// fix the population parameters throughout the sampler?
@@ -52,6 +56,12 @@ public:
 		if (!fix_char) Daug_->Update();
 		if (!fix_poppar) PopPar_->Update();
 		current_iter_++;
+	}
+
+	void Initialize() {
+		// Initialize the parameter values and the log-densities
+		if (!fix_char) Daug_->Initialize();
+		if (!fix_poppar) PopPar_->Initialize();
 	}
 
 	// run the MCMC sampler

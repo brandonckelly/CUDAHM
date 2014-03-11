@@ -30,14 +30,12 @@
 #include <vector>
 #include <stdio.h>
 
-// Boost includes
-#include <boost/random/mersenne_twister.hpp>
-#include <boost/random/normal_distribution.hpp>
-#include <boost/random/uniform_real_distribution.hpp>
-
 // Thrust includes
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
+
+// Boost includes
+#include <boost/shared_ptr.hpp>
 
 // Local includes
 #include "kernels.cuh"
@@ -97,24 +95,27 @@ public:
 			// __constant__ memory
 		    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensMeas, sizeof(c_LogDensMeas)));
 
-			// grab pointers to the device vector memory locations
-			double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
-			double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
-			double* p_meas_unc = thrust::raw_pointer_cast(&d_meas_unc[0]);
-			double* p_cholfact = thrust::raw_pointer_cast(&d_cholfact[0]);
-			double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
-
-			// set initial values for the characteristics. this will launch a CUDA kernel.
-			initial_chi_value <mfeat, pchi> <<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens,
-					ndata, p_logdens_function);
-			CUDA_CHECK_RETURN(cudaDeviceSynchronize());
-
-			thrust::fill(d_naccept.begin(), d_naccept.end(), 0);
-			current_iter = 1;
 			save_trace = true;
 		}
 
 	virtual ~DataAugmentation() { cudaFree(p_devStates); }
+
+	void Initialize() {
+		// grab pointers to the device vector memory locations
+		double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
+		double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
+		double* p_meas_unc = thrust::raw_pointer_cast(&d_meas_unc[0]);
+		double* p_cholfact = thrust::raw_pointer_cast(&d_cholfact[0]);
+		double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
+
+		// set initial values for the characteristics. this will launch a CUDA kernel.
+		initial_chi_value <mfeat, pchi> <<<nBlocks,nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens,
+				ndata, p_logdens_function);
+		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+
+		thrust::fill(d_naccept.begin(), d_naccept.end(), 0);
+		current_iter = 1;
+	}
 
 	// launch the update kernel on the GPU
 	void Update() {
@@ -168,7 +169,7 @@ public:
 	}
 
 	// make sure that the data augmentation knows about the population parameters
-	void SetPopulationPtr(PopulationPar<mfeat, pchi, dtheta>* t) { p_Theta = t; }
+	void SetPopulationPtr(boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > t) { p_Theta = t; }
 
 	void SetLogDens(dvector& logdens) {
 		d_logdens = logdens;
@@ -213,7 +214,7 @@ public:
 	double* GetDevChiPtr() { return thrust::raw_pointer_cast(&d_chi[0]); }
 	int GetDataDim() { return ndata; }
 	int GetChiDim() { return pchi; }
-	PopulationPar<mfeat, pchi, dtheta>* GetPopulationPtr() { return p_Theta; }
+	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > GetPopulationPtr() { return p_Theta; }
 	pLogDensMeas GetLogDensMeasPtr() { return p_logdens_function; }
 	thrust::host_vector<int> GetNaccept() {
 		hvector h_naccept = d_naccept;
@@ -242,7 +243,7 @@ protected:
 	// characteristics
 	dvector d_chi;
 	// population-level parameters
-	PopulationPar<mfeat, pchi, dtheta>* p_Theta;
+	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > p_Theta;
 	// logarithm of conditional posterior densities, y | chi
 	dvector d_logdens;
 	// cholesky factors of Metropolis proposal covariance matrix
@@ -268,33 +269,6 @@ public:
 	// constructors
 	PopulationPar(dim3& nB, dim3& nT) : nBlocks(nB), nThreads(nT)
 	{
-		// don't do anything with the GPU for this constructor
-		h_theta.resize(dtheta);
-		snorm_deviate.resize(dtheta);
-		scaled_proposal.resize(dtheta);
-		const int dim_cholfact = dtheta * dtheta - ((dtheta - 1) * dtheta) / 2;
-		cholfact.resize(dim_cholfact);
-		// set initial value of theta to zero
-		thrust::fill(h_theta.begin(), h_theta.end(), 0.0);
-
-		// grab pointer to function that compute the log-density of characteristics|theta from device
-		// __constant__ memory
-		CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensPop, sizeof(c_LogDensPop)));
-
-		// set initial covariance matrix of the theta proposals as the identity matrix
-		thrust::fill(cholfact.begin(), cholfact.end(), 0.0);
-		int diag_index = 0;
-		for (int k=0; k<dtheta; k++) {
-			cholfact[diag_index] = 1.0;
-			diag_index += k + 2;
-		}
-		// reset the number of MCMC iterations
-		current_iter = 1;
-		naccept = 0;
-	}
-
-	PopulationPar(DataAugmentation<mfeat, pchi, dtheta>* D, dim3& nB, dim3& nT) : Daug(D), nBlocks(nB), nThreads(nT)
-	{
 		h_theta.resize(dtheta);
 		d_theta.resize(dtheta);
 		d_proposed_theta.resize(dtheta);
@@ -306,18 +280,10 @@ public:
 		// grab pointer to function that compute the log-density of characteristics|theta from device
 		// __constant__ memory
 	    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensPop, sizeof(c_LogDensPop)));
-
-		int ndata = Daug->GetDataDim();
-		d_logdens.resize(ndata);
-		d_proposed_logdens.resize(ndata);
-		InitialValue();
-
-		// make sure that the data augmentation object knows about the population parameter object
-		Daug->SetPopulationPtr(this);
 	}
 
 	// calculate the initial value of the population parameters
-	virtual void InitialValue() {
+	virtual void Initialize() {
 		// set initial value of theta to zero
 		thrust::fill(h_theta.begin(), h_theta.end(), 0.0);
 		thrust::copy(h_theta.begin(), h_theta.end(), d_theta.begin());
@@ -334,7 +300,6 @@ public:
 		double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
 		double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
 		double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
-		int ndata = Daug->GetDataDim();
 		logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, p_logdens_function, ndata);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
 	    CUDA_CHECK_RETURN(cudaDeviceSynchronize());
@@ -447,7 +412,12 @@ public:
 	void ResetAcceptance() { naccept = 0; }
 
 	// setters and getters
-	void SetDataAugPtr(DataAugmentation<mfeat, pchi, dtheta>* DataAug) { Daug = DataAug; }
+	void SetDataAugPtr(boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > DataAug) {
+		Daug = DataAug;
+		ndata = Daug->GetDataDim();
+		d_logdens.resize(ndata);
+		d_proposed_logdens.resize(ndata);
+	}
 
 	void SetTheta(dvector& theta, bool update_logdens = true) {
 		d_theta = theta;
@@ -457,8 +427,7 @@ public:
 			double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
 			double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
 			double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
-			logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, p_logdens_function,
-					Daug->GetDataDim());
+			logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, p_logdens_function, ndata);
 			CUDA_CHECK_RETURN(cudaPeekAtLastError());
 			current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
 		}
@@ -490,6 +459,7 @@ public:
 	hvector GetCholFactor() { return cholfact; }
 	int GetNaccept() { return naccept; }
 	pLogDensPop GetLogDensPopPtr() { return p_logdens_function; }
+	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > GetDataAugPtr() { return Daug; }
 
 protected:
 	// the value of the population parameter
@@ -501,7 +471,7 @@ protected:
 	dvector d_proposed_logdens;
 	double current_logdens;
 	// make sure that the population parameter knows about the characteristics
-	DataAugmentation<mfeat, pchi, dtheta>* Daug;
+	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > Daug;
 	// cholesky factors of Metropolis proposal covariance matrix
 	hvector cholfact;
 	// interval variables used in robust adaptive metropolis algorithm
@@ -515,6 +485,7 @@ protected:
 	// MCMC parameters
 	int naccept;
 	int current_iter;
+	int ndata;
 };
 
 #endif // _DATA_AUGMENTATION_HPP__ //

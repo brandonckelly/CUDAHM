@@ -108,7 +108,7 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 		// TODO: convert these arrays to shared memory
 		double snorm_deviate[pchi], scaled_proposal[pchi], proposed_chi[pchi], local_chi[pchi];
 		const int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
-		double local_cholfact[pchi];
+		double local_cholfact[dim_cholfact];
 		int cholfact_index = 0;
 		for (int j = 0; j < pchi; ++j) {
 			local_chi[j] = chi[j * ndata + idata];
@@ -131,9 +131,11 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 		double logpost_prop = logdens_meas_prop + logdens_pop_prop;
 
 //		if (idata == 0) {
-//			printf("current iter, idata: %i, %i\n", current_iter, idata);
+//			printf("current iter, idata, mfeat, pchi, dtheta: %i, %i, %i, %i, %i\n", current_iter, idata, mfeat, pchi, dtheta);
 //			printf("  measurements: %g, %g, %g\n", local_meas[0], local_meas[1], local_meas[2]);
 //			printf("  measurement sigmas: %g, %g, %g\n", local_meas_unc[0], local_meas_unc[1], local_meas_unc[2]);
+//			printf("  cholfact: %g, %g, %g, %g, %g, %g\n", local_cholfact[0], local_cholfact[1], local_cholfact[2], local_cholfact[3],
+//					local_cholfact[4], local_cholfact[5]);
 //			printf("  current chi: %g, %g, %g\n", local_chi[0], local_chi[1], local_chi[2]);
 //			printf("  proposed chi: %g, %g, %g\n", proposed_chi[0], proposed_chi[1], proposed_chi[2]);
 //			printf("  current logdens_meas, logdens_pop: %g, %g\n", logdens_meas[idata], logdens_pop[idata]);

@@ -46,6 +46,7 @@
  */
 extern __constant__ pLogDensMeas c_LogDensMeas;
 extern __constant__ pLogDensPop c_LogDensPop;
+extern __constant__ double c_theta[100];
 
 // Global constants for MCMC sampler
 const double target_rate = 0.4; // MCMC sampler target acceptance rate
@@ -126,16 +127,15 @@ public:
 		double* p_cholfact = thrust::raw_pointer_cast(&d_cholfact[0]);
 		double* p_logdens_meas = thrust::raw_pointer_cast(&d_logdens[0]);
 		double* p_logdens_pop = p_Theta->GetDevLogDensPtr();
-		double* p_devtheta = p_Theta->GetDevThetaPtr();
 		int* p_naccept = thrust::raw_pointer_cast(&d_naccept[0]);
 
 		// grab host-side pointer function that compute the conditional posterior of characteristics|population
 		pLogDensPop p_logdens_pop_function = p_Theta->GetLogDensPopPtr();
 
 		// launch the kernel to update the characteristics on the GPU
-		update_characteristic <mfeat, pchi, dtheta> <<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_devtheta, p_cholfact,
-				p_logdens_meas, p_logdens_pop, p_devStates, p_logdens_function, p_logdens_pop_function, current_iter, p_naccept,
-				ndata);
+		update_characteristic <mfeat, pchi, dtheta> <<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_cholfact,
+				p_logdens_meas, p_logdens_pop, p_devStates, p_logdens_function, p_logdens_pop_function, current_iter,
+				p_naccept, ndata);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
 	    CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 	    current_iter++;
@@ -158,11 +158,10 @@ public:
 			logdensity_meas <mfeat, pchi> <<<nBlocks,nThreads>>>(p_meas, p_meas_unc, p_chi, p_logdens_meas, p_logdens_function,
 					ndata);
 			CUDA_CHECK_RETURN(cudaPeekAtLastError());
-			double* p_theta = p_Theta->GetDevThetaPtr();
 			double* p_logdens_pop = p_Theta->GetDevLogDensPtr();
 			// no update the posteriors of the characteristics | population parameter
 			pLogDensPop p_LogDensPop = p_Theta->GetLogDensPopPtr();
-			logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens_pop, p_LogDensPop, ndata);
+			logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_chi, p_logdens_pop, p_LogDensPop, ndata);
 			CUDA_CHECK_RETURN(cudaPeekAtLastError());
 			CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 		}
@@ -270,8 +269,6 @@ public:
 	PopulationPar(dim3& nB, dim3& nT) : nBlocks(nB), nThreads(nT)
 	{
 		h_theta.resize(dtheta);
-		d_theta.resize(dtheta);
-		d_proposed_theta.resize(dtheta);
 		snorm_deviate.resize(dtheta);
 		scaled_proposal.resize(dtheta);
 		const int dim_cholfact = dtheta * dtheta - ((dtheta - 1) * dtheta) / 2;
@@ -286,7 +283,10 @@ public:
 	virtual void Initialize() {
 		// set initial value of theta to zero
 		thrust::fill(h_theta.begin(), h_theta.end(), 0.0);
-		thrust::copy(h_theta.begin(), h_theta.end(), d_theta.begin());
+
+		// transfer initial value of theta to GPU constant memory
+	    double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
+		CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_theta, dtheta*sizeof(*p_theta)));
 
 		// set initial covariance matrix of the theta proposals as the identity matrix
 		thrust::fill(cholfact.begin(), cholfact.end(), 0.0);
@@ -297,10 +297,9 @@ public:
 		}
 
 		// get initial value of conditional log-posterior for theta|chi
-		double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
 		double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
 		double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
-		logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, p_logdens_function, ndata);
+		logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_chi, p_logdens, p_logdens_function, ndata);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
 	    CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
@@ -376,15 +375,16 @@ public:
 
 		// propose new value of population parameter
 		hvector h_proposed_theta = Propose();
-		thrust::copy(h_proposed_theta.begin(), h_proposed_theta.end(), d_proposed_theta.begin());
-		double* p_proposed_theta = thrust::raw_pointer_cast(&d_proposed_theta[0]);
+
+		// copy proposed theta to GPU constant memory
+	    double* p_proposed_theta = thrust::raw_pointer_cast(&h_proposed_theta[0]);
+		CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_proposed_theta, dtheta*sizeof(*p_proposed_theta)));
 
 		// calculate log-posterior of new population parameter in parallel on the device
 		const int ndata = Daug->GetDataDim();
 		double* p_logdens_prop = thrust::raw_pointer_cast(&d_proposed_logdens[0]);
 
-		logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_proposed_theta, Daug->GetDevChiPtr(), p_logdens_prop,
-				p_logdens_function, ndata);
+		logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(Daug->GetDevChiPtr(), p_logdens_prop, p_logdens_function, ndata);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
 	    CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 		double logdens_prop = thrust::reduce(d_proposed_logdens.begin(), d_proposed_logdens.end());
@@ -396,11 +396,13 @@ public:
 		bool accept = AcceptProp(logdens_prop, logdens_current, metro_ratio);
 		if (accept) {
 			h_theta = h_proposed_theta;
-			thrust::copy(d_proposed_theta.begin(), d_proposed_theta.end(), d_theta.begin());
 			thrust::copy(d_proposed_logdens.begin(), d_proposed_logdens.end(), d_logdens.begin());
 			naccept++;
 			current_logdens = logdens_prop;
 		} else {
+			// proposal rejected, so need to copy current theta back to constant memory
+		    double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
+			CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_theta, dtheta*sizeof(*p_theta)));
 			current_logdens = logdens_current;
 		}
 
@@ -419,15 +421,15 @@ public:
 		d_proposed_logdens.resize(ndata);
 	}
 
-	void SetTheta(dvector& theta, bool update_logdens = true) {
-		d_theta = theta;
-		h_theta = d_theta;
+	void SetTheta(hvector& theta, bool update_logdens = true) {
+		h_theta = theta;
+	    double* p_theta = thrust::raw_pointer_cast(&theta[0]);
+		CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_theta, dtheta * sizeof(*p_theta)));
 		if (update_logdens) {
 			// update value of conditional log-posterior for theta|chi
-			double* p_theta = thrust::raw_pointer_cast(&d_theta[0]);
 			double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
 			double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
-			logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_theta, p_chi, p_logdens, p_logdens_function, ndata);
+			logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_chi, p_logdens, p_logdens_function, ndata);
 			CUDA_CHECK_RETURN(cudaPeekAtLastError());
 			current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
 		}
@@ -441,14 +443,33 @@ public:
 	void SetCurrentIter(int iter) { current_iter = iter; }
 
 	hvector GetHostTheta() { return h_theta; }
-	dvector GetDevTheta() { return d_theta; }
+
+	hvector GetDevTheta() {
+		// copy the current value of theta from constant GPU memory and return as a host-side vector
+		double* p_theta;
+		p_theta = GetDevThetaPtr();
+		hvector copied_h_theta(dtheta);
+		// c_theta array has 100 elements, but only need first dtheta elements
+		for (int j = 0; j < dtheta; ++j) {
+			copied_h_theta[j] = p_theta[j];
+		}
+		return copied_h_theta; }
+
 	std::vector<double> GetTheta() { // return the current value of theta as a std::vector
 		std::vector<double> std_theta(h_theta.size());
 		thrust::copy(h_theta.begin(), h_theta.end(), std_theta.begin());
 		return std_theta;
 	}
+
 	double GetLogDens() { return current_logdens; } // return the current value of summed log p(chi | theta);
-	double* GetDevThetaPtr() { return thrust::raw_pointer_cast(&d_theta[0]); }
+
+	double* GetDevThetaPtr() {
+		double* p_theta;
+		// copy values of theta from __constant__ memory to host memory
+		cudaMemcpyFromSymbol(p_theta, c_theta, sizeof(c_theta), 0, cudaMemcpyDeviceToHost);
+		return p_theta;
+	}
+
 	hvector GetHostLogDens() {
 		hvector h_logdens = d_logdens;
 		return h_logdens;
@@ -464,8 +485,6 @@ public:
 protected:
 	// the value of the population parameter
 	hvector h_theta;
-	dvector d_theta;
-	dvector d_proposed_theta;
 	// log of the value the probability of the characteristics given the population parameter, chi | theta
 	dvector d_logdens;
 	dvector d_proposed_logdens;

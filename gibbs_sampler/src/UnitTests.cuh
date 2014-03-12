@@ -100,7 +100,6 @@ private:
 	hvector h_true_chi;
 	dvector d_true_chi;
 	hvector h_true_theta;
-	dvector d_true_theta;
 	// parameters related to population covariance
 	double covar[3][3];
 	double covar_inv[9];

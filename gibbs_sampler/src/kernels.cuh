@@ -31,6 +31,10 @@ extern boost::random::mt19937 rng;
 extern boost::random::normal_distribution<> snorm; // Standard normal distribution
 extern boost::random::uniform_real_distribution<> uniform; // Uniform distribution from 0.0 to 1.0
 
+// Place population parameter array in constant memory since all threads access the same values. If more than 100 elements are
+// needed, just change this here and in kernels.cu.
+__constant__ extern double c_theta[100];
+
 /*
  * FUNCTION DEFINITIONS
  */
@@ -95,7 +99,7 @@ void initial_chi_value(double* chi, double* meas, double* meas_unc, double* chol
 
 // kernel to update the values of the characteristics in parallel on the GPU
 template<int mfeat, int pchi, int dtheta> __global__
-void update_characteristic(double* meas, double* meas_unc, double* chi, double* theta, double* cholfact,
+void update_characteristic(double* meas, double* meas_unc, double* chi, double* cholfact,
 		double* logdens_meas, double* logdens_pop, curandState* devStates, pLogDensMeas LogDensityMeas,
 		pLogDensPop LogDensityPop, int current_iter, int* naccept, int ndata)
 {
@@ -127,7 +131,7 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 
 		// get value of log-posterior for proposed chi value
 		double logdens_meas_prop = LogDensityMeas(proposed_chi, local_meas, local_meas_unc, mfeat, pchi);
-		double logdens_pop_prop = LogDensityPop(proposed_chi, theta, pchi, dtheta);
+		double logdens_pop_prop = LogDensityPop(proposed_chi, c_theta, pchi, dtheta);
 		double logpost_prop = logdens_meas_prop + logdens_pop_prop;
 
 //		if (idata == 0) {
@@ -196,7 +200,7 @@ void logdensity_meas(double* meas, double* meas_unc, double* chi, double* logden
 
 // compute the conditional log-posterior density of the characteristics given the population parameter
 template<int pchi, int dtheta> __global__
-void logdensity_pop(double* theta, double* chi, double* logdens, pLogDensPop LogDensityPop, int ndata)
+void logdensity_pop(double* chi, double* logdens, pLogDensPop LogDensityPop, int ndata)
 {
 	int idata = blockDim.x * blockIdx.x + threadIdx.x;
 	if (idata < ndata)
@@ -205,7 +209,7 @@ void logdensity_pop(double* theta, double* chi, double* logdens, pLogDensPop Log
 		for (int j = 0; j < pchi; ++j) {
 			chi_i[j] = chi[j * ndata + idata];
 		}
-		logdens[idata] = LogDensityPop(chi_i, theta, pchi, dtheta);
+		logdens[idata] = LogDensityPop(chi_i, c_theta, pchi, dtheta);
 	}
 }
 

@@ -6,6 +6,8 @@ boost::random::mt19937 rng;
 boost::random::normal_distribution<> snorm(0.0, 1.0); // Standard normal distribution
 boost::random::uniform_real_distribution<> uniform(0.0, 1.0); // Uniform distribution from 0.0 to 1.0
 
+__constant__ double c_theta[100];
+
 // Function to compute the rank-1 Cholesky update/downdate. Note that this is done in place.
 __device__ __host__
 void chol_update_r1(double* cholfactor, double* v, int dim_v, bool downdate) {

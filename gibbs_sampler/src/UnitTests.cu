@@ -19,6 +19,8 @@
 __constant__ pLogDensMeas c_LogDensMeas = LogDensityMeas;
 __constant__ pLogDensPop c_LogDensPop = LogDensityPop;
 
+extern __constant__ double c_theta[100];
+
 // calculate transpose(x) * covar_inv * x for an nx-element vector x and an (nx,nx)-element matrix covar_inv
 __host__ __device__
 double mahalanobis_distance(double** covar_inv, double* x, int nx) {
@@ -329,7 +331,6 @@ UnitTests::UnitTests(int n, dim3& nB, dim3& nT) : ndata(n), nBlocks(nB), nThread
 		}
 	}
 	d_true_chi = h_true_chi;
-	d_true_theta = h_true_theta;
 
 	// fill data arrays
     meas = new double* [ndata];
@@ -651,8 +652,7 @@ void UnitTests::ThetaPropose() {
     h_theta[0] = 1.2;
     h_theta[1] = 0.4;
     h_theta[2] = -0.7;
-    dvector d_theta = h_theta;
-    Theta.SetTheta(d_theta, false);
+    Theta.SetTheta(h_theta, false);
     Theta.SetCholFact(cholfact);
 
 	double chisqr[ntrials];
@@ -767,7 +767,6 @@ void UnitTests::ThetaAdapt() {
 	Theta.Initialize();
 
 	hvector h_theta = Theta.GetHostTheta();
-	dvector d_theta = h_theta;
 	double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
 
 	// run the MCMC sampler
@@ -794,9 +793,8 @@ void UnitTests::ThetaAdapt() {
 
 		if (accept) {
 			// accepted this proposal, so save new value of chi and log-densities
-			d_theta = theta_prop;
 			h_theta = theta_prop;
-			Theta.SetTheta(d_theta, false);
+			Theta.SetTheta(h_theta, false);
 			logdens_current = logdens_prop;
 			if (current_iter >= start_counting) {
 				// don't start counting # of accepted proposals until we've down start_counting iterations
@@ -881,7 +879,7 @@ void UnitTests::DaugLogDensPtr()
 	Theta->SetDataAugPtr(Daug);
 
 	// first test that pointer is set to point to LogDensityPop()
-	Theta->SetTheta(d_true_theta);
+	Theta->SetTheta(h_true_theta);
 	hvector h_logdens_from_theta = Theta->GetHostLogDens();
 	double logdens_from_theta = 0.0;
 	for (int i = 0; i < h_logdens_from_theta.size(); ++i) {
@@ -1236,7 +1234,7 @@ void UnitTests::DaugAcceptSame()
 	Theta->SetDataAugPtr(Daug);
 
 	Daug->SetChi(d_true_chi);
-	Theta->SetTheta(d_true_theta);
+	Theta->SetTheta(h_true_theta);
 
 	// set the cholesky factors to zero so that NormalPropose() just returns the same chi value
 	int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
@@ -1302,7 +1300,7 @@ void UnitTests::DaugAcceptBetter() {
 	Theta->Initialize();
 
 	Daug->SetChi(d_true_chi);
-	Theta->SetTheta(d_true_theta);
+	Theta->SetTheta(h_true_theta);
 
 	// artificially set the conditional log-posteriors to a really low value to make sure we accept the proposal
 	hvector h_logdens_meas(ndata);
@@ -1479,7 +1477,7 @@ void UnitTests::FixedChar() {
 	Sampler.FixChar();
 
 	// start at the true values
-	Sampler.GetThetaPtr()->SetTheta(d_true_theta);
+	Sampler.GetThetaPtr()->SetTheta(h_true_theta);
 	// run the MCMC sampler
 	Sampler.Run();
 
@@ -1633,7 +1631,7 @@ void UnitTests::FixedPopPar() {
 	GibbsSampler<3,3,3> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburn);
 
 	// keep the population parameter fixed
-	Sampler.GetThetaPtr()->SetTheta(d_true_theta);
+	Sampler.GetThetaPtr()->SetTheta(h_true_theta);
 	Sampler.FixPopPar();
 
 	// start at the true values

@@ -19,6 +19,8 @@
 __constant__ pLogDensMeas c_LogDensMeas = LogDensityMeas;
 __constant__ pLogDensPop c_LogDensPop = LogDensityPop;
 
+extern __constant__ double c_theta[100];
+
 // calculate transpose(x) * covar_inv * x for an nx-element vector x and an (nx,nx)-element matrix covar_inv
 __host__ __device__
 double mahalanobis_distance(double** covar_inv, double* x, int nx) {

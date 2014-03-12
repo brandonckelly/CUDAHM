@@ -46,7 +46,6 @@
  */
 extern __constant__ pLogDensMeas c_LogDensMeas;
 extern __constant__ pLogDensPop c_LogDensPop;
-extern __constant__ double c_theta[100];
 
 // Global constants for MCMC sampler
 const double target_rate = 0.4; // MCMC sampler target acceptance rate

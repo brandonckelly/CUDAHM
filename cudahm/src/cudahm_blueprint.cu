@@ -23,19 +23,15 @@
 // local CUDAHM include
 #include "GibbsSampler.hpp"
 
-/*
- * Pointer to the population parameter (theta), stored in constant memory on the GPU. Originally defined in
- * kernels.cu and kernels.cuh. Needed by LogDensityPop, which computes the conditional posterior of the
- * characteristics given the population parameters: log p(chi_i|theta). This assumes a maximum of 100 elements
- * in the theta parameter vector.
- *
- * If you need more than this, you will have to change this manually here and in
- * the kernels.cuh and kernels.cu files.
- *
- * YOU SHOULD NOT MODIFY THIS UNLESS YOU KNOW WHAT YOU ARE DOING.
- */
-extern __constant__ double c_theta[100];
 
+/*
+ * First you need to set the values of the parameter dimensions as const int types. These must be supplied
+ * at compile-time in order to efficiently make use of GPU memory. These also need to be placed before the
+ * functions LogDensityMeas and LogDensityPop if they need to know the dimensions of the features and parameters.
+ *
+ */
+
+			// set the parameter dimensions here //
 
 /*
  * This function returns the logarithm of the conditional density of the measurements given the
@@ -50,7 +46,7 @@ extern __constant__ double c_theta[100];
  *
  */
 __device__ __host__
-double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, int pchi)
+double LogDensityMeas(double* chi, double* meas, double* meas_unc)
 {
 	return 0.0;
 }
@@ -68,7 +64,7 @@ double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, in
  *
  */
 __device__ __host__
-double LogDensityPop(double* chi, double* theta, int pchi, int dim_theta)
+double LogDensityPop(double* chi, double* theta)
 {
 	return 0.0;
 }
@@ -85,18 +81,24 @@ double LogDensityPop(double* chi, double* theta, int pchi, int dim_theta)
 __constant__ pLogDensMeas c_LogDensMeas = LogDensityMeas;  // log p(y_i|chi_i)
 __constant__ pLogDensPop c_LogDensPop = LogDensityPop;  // log p(chi_i|theta)
 
+/*
+ * Pointer to the population parameter (theta), stored in constant memory on the GPU. Originally defined in
+ * kernels.cu and kernels.cuh. Needed by LogDensityPop, which computes the conditional posterior of the
+ * characteristics given the population parameters: log p(chi_i|theta). This assumes a maximum of 100 elements
+ * in the theta parameter vector.
+ *
+ * If you need more than this, you will have to change this manually here and in
+ * the kernels.cuh and kernels.cu files.
+ *
+ * YOU SHOULD NOT MODIFY THIS UNLESS YOU KNOW WHAT YOU ARE DOING.
+ */
+extern __constant__ double c_theta[100];
+
 
 int main(int argc, char** argv)
 {
 	std::cout << "This file provides a blueprint for using the CUDAHM API. On its own it does nothing except print this message."
 			<< std::endl;
-	/*
-	 * First you need to set the values of the parameter dimensions as const int types. These must be supplied
-	 * at compile-time in order to efficiently make use of GPU memory. See normnorm.cu for further details.
-	 */
-
-				// set the parameter dimensions here //
-
 	/*
 	 * Read in the data for the measurements, meas, and their standard deviations, meas_unc.
 	 */

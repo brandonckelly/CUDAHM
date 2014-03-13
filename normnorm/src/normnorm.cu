@@ -18,6 +18,11 @@
  * mean vector. We do this by using CUDAHM to construct a Metropolis-within-Gibbs MCMC sampler to sample from the posterior
  * probability distribution of chi_1, ..., chi_N, theta | {y_ij | i = 1, ..., N; j = 1, ..., M}.
  *
+ * The measurements and their standard deviations are contained within the file normnorm_example.dat. These were simulated using
+ * values of N = 10000 and M = 3. The values of chi used to simulate the data were generated using a value of
+ * theta = [1.2, -0.4, 3.4] and Covar = [[5.29, 0.3105, -15.41], [0.3105, 0.2025, 3.2562], [-15.41, 3.2562, 179.56]]. The chi values
+ * are provided in the file true_chi_values.dat.
+ *
  */
 
 // std includes
@@ -28,12 +33,17 @@
 // local includes
 #include "GibbsSampler.hpp"
 
+// known dimensions of features, characteristics and population parameter
+const int mfeat = 3;
+const int pchi = 3;
+const int dtheta = 3;
+
 /*
  * Pointer to the population parameter (theta), stored in constant memory on the GPU. Originally defined in
  * kernels.cu and kernels.cuh. Needed by LogDensityPop, which computes the conditional posterior of the
  * characteristics given the population parameters: log p(chi_i|theta).
  */
-extern __constant__ double c_theta[100];
+// extern __constant__ double c_theta[100];
 
 // calculate transpose(x) * covar_inv * x
 __device__ __host__
@@ -50,7 +60,7 @@ double ChiSqr(double* x, double* covar_inv, int nx)
 
 // compute the conditional log-posterior density of the measurements given the characteristic
 __device__ __host__
-double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, int pchi)
+double LogDensityMeas(double* chi, double* meas, double* meas_unc)
 {
 	double logdens = 0.0;
 	for (int i = 0; i < pchi; ++i) {
@@ -63,7 +73,7 @@ double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, in
 
 // compute the conditional log-posterior density of the characteristic given the population mean
 __device__ __host__
-double LogDensityPop(double* chi, double* theta, int pchi, int dim_theta)
+double LogDensityPop(double* chi, double* theta)
 {
 	// known inverse covariance matrix of the characteristics
 	double covar_inv[9] =
@@ -73,21 +83,22 @@ double LogDensityPop(double* chi, double* theta, int pchi, int dim_theta)
 			0.10406763, -0.55439855, 0.02455399
 	};
 	// subtract off the population mean
-	double chi_cent[3];
-	for (int i = 0; i < 3; ++i) {
+	double chi_cent[pchi];
+	for (int i = 0; i < pchi; ++i) {
 		chi_cent[i] = chi[i] - theta[i];
 	}
 
-	double logdens = -0.5 * ChiSqr(chi_cent, covar_inv, 3);
+	double logdens = -0.5 * ChiSqr(chi_cent, covar_inv, pchi);
 	return logdens;
 }
 
 /*
- * Pointers to the device-side functions used to compute the conditional log-densities. These must be defined by the user, as
- * illustrated below.
+ * Pointers to the device-side functions used to compute the conditional log-densities. These functions must be defined by the
+ * user, as above.
  */
 __constant__ pLogDensMeas c_LogDensMeas = LogDensityMeas;  // log p(y_i|chi_i)
 __constant__ pLogDensPop c_LogDensPop = LogDensityPop;  // log p(chi_i|theta)
+
 
 // return the number of lines in a text file
 int get_file_lines(std::string& filename) {
@@ -153,11 +164,6 @@ void write_chis(std::string& filename, std::vector<vecvec>& chi_samples) {
 
 int main(int argc, char** argv)
 {
-	// known dimensions of features, characteristics and population parameter
-	const int mfeat = 3;
-	const int pchi = 3;
-	const int dtheta = 3;
-
 	// allocate memory for measurement arrays
 	double** meas;
 	double** meas_unc;
@@ -188,9 +194,10 @@ int main(int argc, char** argv)
     int niter = 50000;
     int nburnin = niter / 2;
 
-    int nchi_samples = 1000;  // only keep 100 samples for the chi values since we have so many of them
+    int nchi_samples = 1000;  // only keep 1000 samples for the chi values to control memory usage and avoid numerous reads from GPU
     int nthin_chi = niter / nchi_samples;
 
+    // instantiate the Metropolis-within-Gibbs sampler object
     GibbsSampler<mfeat, pchi, dtheta> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburnin, nthin_chi);
 
     // launch the MCMC sampler
@@ -202,12 +209,12 @@ int main(int argc, char** argv)
 
     std::cout << "Writing results to text files..." << std::endl;
 
-    // write the sampled theta values to a file. output will have nsamples rows and dtheta columns.
+    // write the sampled theta values to a file. Output will have nsamples rows and dtheta columns.
     std::string thetafile("normnorm_thetas.dat");
     write_thetas(thetafile, theta_samples);
 
     // write the posterior means and standard deviations of the characteristics to a file. output will have ndata rows and
-    // 2 * pchi columns, where the columns format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
+    // 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
     std::string chifile("normnorm_chi_summary.dat");
     write_chis(chifile, chi_samples);
 

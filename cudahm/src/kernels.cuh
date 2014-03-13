@@ -22,8 +22,8 @@
 #include <boost/random/uniform_real_distribution.hpp>
 
 // pointers to functions that must be supplied by the user for computing the conditional log-densities
-typedef double (*pLogDensMeas)(double*, double*, double*, int, int);
-typedef double (*pLogDensPop)(double*, double*, int, int);
+typedef double (*pLogDensMeas)(double*, double*, double*);
+typedef double (*pLogDensPop)(double*, double*);
 
 // Global random number generator and distributions for generating random numbers on the host. The random number generator used
 // is the Mersenne Twister mt19937 from the BOOST library.
@@ -93,7 +93,7 @@ void initial_chi_value(double* chi, double* meas, double* meas_unc, double* chol
 			local_meas[j] = meas[j * ndata + idata];
 			local_meas_unc[j] = meas_unc[j * ndata + idata];
 		}
-		logdens[idata] = LogDensityMeas(this_chi, local_meas, local_meas_unc, pchi, mfeat);
+		logdens[idata] = LogDensityMeas(this_chi, local_meas, local_meas_unc);
 	}
 }
 
@@ -130,8 +130,8 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 		Propose(local_chi, local_cholfact, proposed_chi, snorm_deviate, scaled_proposal, pchi, &localState);
 
 		// get value of log-posterior for proposed chi value
-		double logdens_meas_prop = LogDensityMeas(proposed_chi, local_meas, local_meas_unc, mfeat, pchi);
-		double logdens_pop_prop = LogDensityPop(proposed_chi, c_theta, pchi, dtheta);
+		double logdens_meas_prop = LogDensityMeas(proposed_chi, local_meas, local_meas_unc);
+		double logdens_pop_prop = LogDensityPop(proposed_chi, c_theta);
 		double logpost_prop = logdens_meas_prop + logdens_pop_prop;
 
 //		if (idata == 0) {
@@ -194,7 +194,7 @@ void logdensity_meas(double* meas, double* meas_unc, double* chi, double* logden
 			meas_i[j] = meas[j * ndata + idata];
 			meas_unc_i[j] = meas_unc[j * ndata + idata];
 		}
-		logdens[idata] = LogDensityMeas(chi_i, meas_i, meas_unc_i, mfeat, pchi);
+		logdens[idata] = LogDensityMeas(chi_i, meas_i, meas_unc_i);
 	}
 }
 
@@ -209,7 +209,7 @@ void logdensity_pop(double* chi, double* logdens, pLogDensPop LogDensityPop, int
 		for (int j = 0; j < pchi; ++j) {
 			chi_i[j] = chi[j * ndata + idata];
 		}
-		logdens[idata] = LogDensityPop(chi_i, c_theta, pchi, dtheta);
+		logdens[idata] = LogDensityPop(chi_i, c_theta);
 	}
 }
 

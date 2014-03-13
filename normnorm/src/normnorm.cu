@@ -167,7 +167,7 @@ int main(int argc, char** argv)
 	// allocate memory for measurement arrays
 	double** meas;
 	double** meas_unc;
-	std::string filename("normnorm_example.dat");
+	std::string filename("normnorm_example.txt");
 	int ndata = get_file_lines(filename);
 
     meas = new double* [ndata];

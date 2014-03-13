@@ -1,8 +1,23 @@
 /*
- * normnorm.cpp
+ * normnorm.cu
  *
  *  Created on: Mar 12, 2014
- *      Author: brandonkelly
+ *      Author: Brandon C. Kelly
+ *
+ * This file illustrates how to setup a simple Normal-Normal and sample from this using CUDAHM. The model is:
+ *
+ * 		y_ij | chi_ij ~ N(chi_ij, sigma^2_ij), i = 1, ..., N; j = 1, ..., M   (measurement model)
+ * 		chi_i | theta ~ N(theta, Covar)										  (population model for unknown characteristics)
+ * 		theta ~ p(theta), p(theta) \propto 1								  (prior, uniform from -infinity to infinity)
+ *
+ * Under this model the N values of the unknown characteristics, chi, are drawn from a p-dimensional multivariate normal density
+ * with unknown mean, theta, and known covariance matrix Covar. We desire to infer the values of the characteristics (chi) and
+ * their mean (theta), but we do not observe them. Instead, we observe a measured feature vector of size M which is related to chi.
+ * In this simple example, the measured features y_ij are simple the chi-values contaminated with Gaussian noise of known standard
+ * deviation sigma_ij, and M = p. So, the goal is to use the measured features to constrain the unknown characteristics and their
+ * mean vector. We do this by using CUDAHM to construct a Metropolis-within-Gibbs MCMC sampler to sample from the posterior
+ * probability distribution of chi_1, ..., chi_N, theta | {y_ij | i = 1, ..., N; j = 1, ..., M}.
+ *
  */
 
 // std includes
@@ -11,9 +26,7 @@
 #include <string>
 
 // local includes
-#include "src/kernels.cuh"
-#include "src/parameters.cuh"
-#include "src/GibbsSampler.hpp"
+#include "GibbsSampler.hpp"
 
 /*
  * Pointer to the population parameter (theta), stored in constant memory on the GPU. Originally defined in
@@ -106,7 +119,7 @@ void write_thetas(std::string& filename, vecvec& theta_samples) {
 	int dtheta = theta_samples[0].size();
 	for (int i = 0; i < nsamples; ++i) {
 		for (int j = 0; j < dtheta; ++j) {
-			outfile << theta_samples[i][j];
+			outfile << theta_samples[i][j] << " ";
 		}
 		outfile << std::endl;
 	}
@@ -130,7 +143,7 @@ void write_chis(std::string& filename, std::vector<vecvec>& chi_samples) {
 		}
 		for (int k = 0; k < pchi; ++k) {
 			double post_sigma_ik = sqrt(post_msqr_i[k] - post_mean_i[k] * post_mean_i[k]);  // posterior standard deviation
-			outfile << post_mean_i[k] << " " << post_sigma_ik;
+			outfile << post_mean_i[k] << " " << post_sigma_ik <<" ";
 		}
 		outfile << std::endl;
 	}

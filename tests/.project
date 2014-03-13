@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>gibbs_sampler</name>
+	<name>tests</name>
 	<comment></comment>
 	<projects>
 	</projects>
@@ -84,4 +84,11 @@
 		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
 		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>src/kernels.cu</name>
+			<type>1</type>
+			<location>/Users/brandonkelly/Projects/CUDAHM/gibbs_sampler/src/kernels.cu</location>
+		</link>
+	</linkedResources>
 </projectDescription>

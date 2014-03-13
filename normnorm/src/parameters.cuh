@@ -178,6 +178,8 @@ public:
 
 	void SetSaveTrace(bool dosave) { save_trace = dosave; }
 
+	bool SaveTrace() { return save_trace; }
+
 	// return the value of the characteristic in a std::vector of std::vectors for convenience
 	vecvec GetChi() {
 		hvector h_chi = d_chi;  // first grab the values from the GPU

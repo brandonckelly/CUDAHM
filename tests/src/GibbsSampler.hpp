@@ -103,7 +103,7 @@ public:
 				LogDensPop_Samples_[ntheta_samples_] = PopPar_->GetLogDens();
 				ntheta_samples_++;
 			}
-			if (!fix_char && (current_iter_ % nthin_chi_ == 0)) {
+			if (!fix_char && (current_iter_ % nthin_chi_ == 0) && Daug_->SaveTrace()) {
 				// save the value of the characteristics
 				ChiSamples_[nchi_samples_] = Daug_->GetChi();
 				LogDensMeas_Samples_[nchi_samples_] = Daug_->GetLogDens();

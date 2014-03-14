@@ -13,6 +13,11 @@
 // local includes
 #include "UnitTests.cuh"
 
+// know parameter dimensions
+const int mfeat = 3;
+const int pchi = 3;
+const int dim_theta = 3;
+
 /*
  * Pointers to the device-side functions used to compute the conditional log-posteriors
  */
@@ -55,7 +60,7 @@ double ChiSqr(double* x, double* covar_inv, int nx)
 
 // compute the conditional log-posterior density of the measurements given the characteristic
 __device__ __host__
-double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, int pchi)
+double LogDensityMeas(double* chi, double* meas, double* meas_unc)
 {
 	double logdens = 0.0;
 	for (int i = 0; i < pchi; ++i) {
@@ -68,7 +73,7 @@ double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, in
 
 // compute the conditional log-posterior density of the characteristic given the population mean
 __device__ __host__
-double LogDensityPop(double* chi, double* theta, int pchi, int dim_theta)
+double LogDensityPop(double* chi, double* theta)
 {
 	// known inverse covariance matrix of the characteristics
 	double covar_inv[9] =
@@ -276,9 +281,6 @@ bool approx_equal(double a, double b, double eps) {
 // constructor for class that performs unit tests
 UnitTests::UnitTests(int n, dim3& nB, dim3& nT) : ndata(n), nBlocks(nB), nThreads(nT)
 {
-	mfeat = 3;
-	pchi = 3;
-	dim_theta = 3;
 	// known population parameters
     h_true_theta.resize(dim_theta);
 	double mu[3] = {1.2, -0.4, 3.4};
@@ -573,7 +575,7 @@ void UnitTests::ChiAdapt() {
 	double theta[3] = {1.2, 0.4, -0.7};
 	double snorm_deviate[p], scaled_proposal[p], proposed_chi[p];
 	double logdens;
-	logdens = LogDensityPop(chi, theta, pchi, dim_theta);
+	logdens = LogDensityPop(chi, theta);
 	int naccept = 0, start_counting = 10000;
 
 	curandState* p_state;
@@ -584,7 +586,7 @@ void UnitTests::ChiAdapt() {
 
 		// get value of log-posterior for proposed chi value
 		double logdens_prop;
-		logdens_prop = LogDensityPop(proposed_chi, theta, pchi, dim_theta);
+		logdens_prop = LogDensityPop(proposed_chi, theta);
 
 		// accept the proposed value of the characteristic?
 		double metro_ratio = 0.0;
@@ -770,7 +772,7 @@ void UnitTests::ThetaAdapt() {
 	double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
 
 	// run the MCMC sampler
-	double logdens_current = LogDensityPop(p_theta, mu, 3, 3);
+	double logdens_current = LogDensityPop(p_theta, mu);
 	int naccept = 0, start_counting = 10000;
 	int niter = 300000, current_iter = 1;
 	double target_rate = 0.4; // MCMC sampler target acceptance rate
@@ -782,7 +784,7 @@ void UnitTests::ThetaAdapt() {
 		double* p_theta_prop = thrust::raw_pointer_cast(&theta_prop[0]);
 		// get value of log-posterior for proposed theta value
 		double logdens_prop;
-		logdens_prop = LogDensityPop(p_theta_prop, mu, 3, 3);
+		logdens_prop = LogDensityPop(p_theta_prop, mu);
 
 		// accept the proposed value of the characteristic?
 		double metro_ratio = 0.0;
@@ -893,7 +895,7 @@ void UnitTests::DaugLogDensPtr()
 		for (int j = 0; j < pchi; ++j) {
 			local_chi[j] = h_chi[j * ndata + i];
 		}
-		logdens_from_host += LogDensityPop(local_chi, p_theta, pchi, dim_theta);
+		logdens_from_host += LogDensityPop(local_chi, p_theta);
 	}
 	double frac_diff = abs(logdens_from_theta - logdens_from_host) / abs(logdens_from_host);
 	if (frac_diff < 1e-8) {
@@ -922,7 +924,7 @@ void UnitTests::DaugLogDensPtr()
 			local_meas[j] = h_meas[j * ndata + i];
 			local_meas_unc[j] = h_meas_unc[j * ndata + i];
 		}
-		double logdens_from_host_i = LogDensityMeas(local_chi, local_meas, local_meas_unc, mfeat, pchi);
+		double logdens_from_host_i = LogDensityMeas(local_chi, local_meas, local_meas_unc);
 		logdens_from_host += logdens_from_host_i;
 	}
 
@@ -1486,13 +1488,13 @@ void UnitTests::FixedChar() {
 	double naccept = Sampler.GetThetaPtr()->GetNaccept();
 	double arate = naccept / double(niter);
 	double frac_diff = abs(arate - target_rate) / target_rate;
-	// make sure acceptance rate is within 5% of the target rate
-	if (frac_diff < 0.05) {
+	// make sure acceptance rate is within 10% of the target rate
+	if (frac_diff < 0.10) {
 		npassed++;
 		local_passed++;
 	} else {
 		std::cerr << "Test for GibbsSampler with fixed Characteristics failed: Acceptance rate "
-				<< "is not within 5% of the target rate." << std::endl;
+				<< "is not within 10% of the target rate." << std::endl;
 		std::cerr << arate << ", " << target_rate << std::endl;
 	}
 	nperformed++;
@@ -1565,7 +1567,7 @@ void UnitTests::FixedChar() {
 		}
 	}
 
-	// make sure estimated value and true value are within 5% of eachother
+	// make sure estimated value and true value are within 10% of eachother
 	frac_diff = 0.0;
 	for (int j = 0; j < dim_theta; ++j) {
 		for (int k = 0; k < dim_theta; ++k) {
@@ -1573,12 +1575,12 @@ void UnitTests::FixedChar() {
 		}
 	}
 	frac_diff /= (dim_theta * dim_theta) ;
-	if (frac_diff < 0.05) {
+	if (frac_diff < 0.10) {
 		npassed++;
 		local_passed++;
 	} else {
 		std::cerr << "Test for GibbsSampler with fixed Characteristics failed: Average fractional difference "
-				<< "between estimated posterior covariance in mean parameter and the true value is greater than 5%." << std::endl;
+				<< "between estimated posterior covariance in mean parameter and the true value is greater than 10%." << std::endl;
 		std::cerr << "Average fractional difference:" << frac_diff << std::endl;
 		std::cerr << "Estimated posterior covariance:" << std::endl;
 		for (int i = 0; i < 3; ++i) {
@@ -1647,8 +1649,8 @@ void UnitTests::FixedPopPar() {
 	for (int i = 0; i < naccept.size(); ++i) {
 		double arate = naccept[i] / double(niter);
 		frac_diff[i] = abs(arate - target_rate) / target_rate;
-		// make sure acceptance rate is within 5% of the target rate
-		if (frac_diff[i] < 0.05) {
+		// make sure acceptance rate is within 10% of the target rate
+		if (frac_diff[i] < 0.10) {
 			npass++;
 		}
 	}
@@ -1660,9 +1662,9 @@ void UnitTests::FixedPopPar() {
 	} else {
 		int nbad = ndata - npass;
 		std::cerr << "Test for GibbsSampler with fixed PopulationPar failed: Acceptance rate "
-				<< "is not within 5% of the target rate for " << nbad << " characteristics." << std::endl;
+				<< "is not within 10% of the target rate for " << nbad << " characteristics." << std::endl;
 		for (int i = 0; i < frac_diff.size(); ++i) {
-			if (frac_diff[i] > 0.05) {
+			if (frac_diff[i] > 0.10) {
 				std::cout << naccept[i] / double(niter) << ", " << target_rate << std::endl;
 			}
 		}
@@ -1713,15 +1715,15 @@ void UnitTests::FixedPopPar() {
 				chi_mean_true[k] += post_var[k * mfeat + l] * wchi_mean_true[l];
 			}
 		}
-		// make sure estimated and true posterior means are within 5% of each other
+		// make sure estimated and true posterior means are within 10% of each other
 		double frac_diff = 0.0;
 		for (int k = 0; k < mfeat; ++k) {
 			frac_diff += abs(chi_mean_true[k] - chi_mean[k]) / abs(chi_mean_true[k]) / dim_theta;
 		}
-		if (frac_diff < 0.05) {
+		if (frac_diff < 0.10) {
 			npass_mean++;
 		}
-		// make sure estimated and true posterior standard deviations are within 5% of eachother
+		// make sure estimated and true posterior standard deviations are within 10% of eachother
 		std::vector<double> post_covar_est = covariance(this_csamples);
 		frac_diff = 0.0;
 		for (int j = 0; j < pchi; ++j) {
@@ -1734,7 +1736,7 @@ void UnitTests::FixedPopPar() {
 			}
 		}
 		frac_diff /= (pchi);
-		if (frac_diff < 0.05) {
+		if (frac_diff < 0.10) {
 			npass_covar++;
 		}
 	}
@@ -1746,7 +1748,7 @@ void UnitTests::FixedPopPar() {
 	else {
 		int nfailed = ndata - npass_mean;
 		std::cerr << "Test for GibbsSampler with fixed PopulationPar failed: Average fractional difference "
-				<< "between estimated posterior mean and true value is greater than 5% for " << nfailed
+				<< "between estimated posterior mean and true value is greater than 10% for " << nfailed
 				<< " out of " << ndata << " characteristics." << std::endl;
 	}
 	nperformed++;
@@ -1757,7 +1759,7 @@ void UnitTests::FixedPopPar() {
 	else {
 		int nfailed = ndata - npass_covar;
 		std::cerr << "Test for GibbsSampler with fixed PopulationPar failed: Average fractional difference "
-				<< "between estimated posterior covariance and true value is greater than 5% for " << nfailed
+				<< "between estimated posterior covariance and true value is greater than 10% for " << nfailed
 				<< "out of " << ndata << " characteristics." << std::endl;
 	}
 	nperformed++;
@@ -1815,13 +1817,13 @@ void UnitTests::NormNorm()
 	double naccept_theta = Sampler.GetThetaPtr()->GetNaccept();
 	double arate = naccept_theta / double(niter);
 	double frac_diff_theta = abs(arate - target_rate) / target_rate;
-	// make sure acceptance rate is within 5% of the target rate
-	if (frac_diff_theta < 0.05) {
+	// make sure acceptance rate is within 10% of the target rate
+	if (frac_diff_theta < 0.10) {
 		npassed++;
 		local_passed++;
 	} else {
 		std::cerr << "Test for GibbsSampler under normal-normal model failed: Acceptance rate "
-				<< "is not within 5% of the target rate for the population parameter." << std::endl;
+				<< "is not within 10% of the target rate for the population parameter." << std::endl;
 		std::cerr << arate << ", " << target_rate << std::endl;
 	}
 	nperformed++;
@@ -1833,8 +1835,8 @@ void UnitTests::NormNorm()
 	for (int i = 0; i < naccept_chi.size(); ++i) {
 		arate = naccept_chi[i] / double(niter);
 		frac_diff_chi[i] = abs(arate - target_rate) / target_rate;
-		// make sure acceptance rate is within 5% of the target rate
-		if (frac_diff_chi[i] < 0.05) {
+		// make sure acceptance rate is within 10% of the target rate
+		if (frac_diff_chi[i] < 0.10) {
 			npass++;
 		}
 	}
@@ -1846,10 +1848,10 @@ void UnitTests::NormNorm()
 	} else {
 		int nbad = ndata - npass;
 		std::cerr << "Test for GibbsSampler under normal-normal model failed: Acceptance rate "
-				<< "is not within 5% of the target rate for " << nbad << " out of " << ndata <<
+				<< "is not within 10% of the target rate for " << nbad << " out of " << ndata <<
 				" characteristics." << std::endl;
 		for (int i = 0; i < frac_diff_chi.size(); ++i) {
-			if (frac_diff_chi[i] > 0.05) {
+			if (frac_diff_chi[i] > 0.10) {
 				std::cout << i << ", " << naccept_chi[i] / double(niter) << ", " << target_rate << std::endl;
 			}
 		}

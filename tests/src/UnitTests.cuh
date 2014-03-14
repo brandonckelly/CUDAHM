@@ -31,10 +31,10 @@
 
 // function definitions
 __device__ __host__
-double LogDensityMeas(double* chi, double* meas, double* meas_unc, int mfeat, int pchi);
+double LogDensityMeas(double* chi, double* meas, double* meas_unc);
 
 __device__ __host__
-double LogDensityPop(double* chi, double* theta, int pchi, int dim_theta);
+double LogDensityPop(double* chi, double* theta);
 
 // class definition for running the unit tests
 
@@ -90,7 +90,7 @@ public:
 
 private:
 	// array sizes
-	int ndata, pchi, mfeat, dim_theta;
+	int ndata;
 	// data
 	double** meas;
 	hvector h_meas;

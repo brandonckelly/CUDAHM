@@ -10,8 +10,6 @@
 
 // boost includes
 #include <boost/shared_ptr.hpp>
-//#include <boost/timer/timer.hpp>
-//#include <boost/progress.hpp>
 
 // local includes
 #include "parameters.cuh"
@@ -31,6 +29,7 @@ public:
 			Daug_->SetPopulationPtr(PopPar_);
 			PopPar_->SetDataAugPtr(Daug_);
 
+			// set container sizes
 			int nchi_samples = niter / nthin_chi;
 			int ntheta_samples = niter / nthin_theta;
 			ChiSamples_.resize(nchi_samples);
@@ -44,11 +43,14 @@ public:
 			fix_poppar = false; // default is to sample both the population parameters and characteristics
 			fix_char = false;
 
+			// Set the initial values of the characteristics and thetas, as well as their proposal covariances
 			Initialize();
 		}
 
 	// fix the population parameters throughout the sampler?
 	void FixPopPar(bool fix=true) { fix_poppar = fix; }
+
+	// fix the characteristics throughout the sampler?
 	void FixChar(bool fix=true) { fix_char = fix; }
 
 	// perform a single iterations of the Gibbs Sampler
@@ -58,38 +60,36 @@ public:
 		current_iter_++;
 	}
 
+	// Initialize the parameter values, their proposal covariances, and the log-densities
 	void Initialize() {
-		// Initialize the parameter values and the log-densities
 		if (!fix_char) Daug_->Initialize();
 		if (!fix_poppar) PopPar_->Initialize();
 	}
 
 	// run the MCMC sampler
 	void Run() {
-		// start the timer, will report on timing automatically Run() is finished
-		//boost::timer::auto_cpu_timer auto_timer;
-
 		// first run for a burn-in period
 		std::cout << "Doing " << nburnin_ << " iterations of burnin..." << std::endl;
-		//boost::progress_display progress_bar(nburnin_); // show a progress bar
+
 		for (int i = 0; i < nburnin_; ++i) {
 			if (i % 1000 == 0) {
 				std::cout << i << "..." << std::endl;
 			}
 			Iterate();
-			//progress_bar++;
 		}
-		// TODO: print out acceptance rates during burnin
+		// TODO: add timer
+		// TODO: add a progress bar
+		// TODO: print out acceptance rates during burn-in
 
-		// reset the current iteration and acceptance rates
+		// Burn-in stage is finished, so reset the current iteration and acceptance rates
+		std::cout << "Burnin finished." << std::endl;
+
 		current_iter_ = 1;
 		Daug_->ResetAcceptance();
 		PopPar_->ResetAcceptance();
 
 		// run the main MCMC sampler
-		std::cout << "Burnin finished." << std::endl;
 		std::cout << "Now doing " << niter_ << " iterations of the Gibbs Sampler..." << std::endl;
-		//progress_bar.restart(niter_);
 
 		for (int i = 0; i < niter_; ++i) {
 			if (i % 1000 == 0) {
@@ -103,21 +103,21 @@ public:
 				LogDensPop_Samples_[ntheta_samples_] = PopPar_->GetLogDens();
 				ntheta_samples_++;
 			}
-			if (!fix_char && (current_iter_ % nthin_chi_ == 0)) {
+			if (!fix_char && (current_iter_ % nthin_chi_ == 0) && Daug_->SaveTrace()) {
 				// save the value of the characteristics
 				ChiSamples_[nchi_samples_] = Daug_->GetChi();
 				LogDensMeas_Samples_[nchi_samples_] = Daug_->GetLogDens();
 				nchi_samples_++;
 			}
-			//progress_bar++;
 		}
 		// report on the results
 		Report();
 	}
 
 	// print out useful information on the MCMC sampler results
+	// TODO: Report on Acceptance Rates
 	virtual void Report() {
-		std::cout << "MCMC Report: " << std::endl;
+		std::cout << "Report Currently Not Supported" << std::endl;
 	}
 
 	// save the sampled characteristic values? not saving them can speed up the sampler since we do not need to
@@ -130,6 +130,7 @@ public:
 		}
 	}
 
+	// grab the pointers to the DataAugmentation and PopulationPar objects
 	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > GetDaugPtr() { return Daug_; }
 	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > GetThetaPtr() { return PopPar_; }
 

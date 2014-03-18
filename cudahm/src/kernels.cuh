@@ -109,7 +109,6 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 		curandState localState = devStates[idata]; // grab state of this random number generator
 
 		// copy values for this data point to registers for speed
-		// TODO: convert these arrays to shared memory
 		double snorm_deviate[pchi], scaled_proposal[pchi], proposed_chi[pchi], local_chi[pchi];
 		const int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
 		double local_cholfact[dim_cholfact];

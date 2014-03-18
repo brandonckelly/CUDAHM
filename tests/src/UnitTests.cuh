@@ -43,9 +43,6 @@ public:
 	// constructor
 	UnitTests(int n, dim3& nB, dim3& nT);
 
-	// destructor
-	virtual ~UnitTests();
-
 	// save the measurement values to a text file
 	void SaveMeasurements();
 
@@ -92,9 +89,9 @@ private:
 	// array sizes
 	int ndata;
 	// data
-	double** meas;
+	vecvec meas;
 	hvector h_meas;
-	double** meas_unc;
+	vecvec meas_unc;
 	hvector h_meas_unc;
 	// true values of parameters
 	hvector h_true_chi;

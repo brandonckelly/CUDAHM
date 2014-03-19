@@ -8,6 +8,10 @@
 #ifndef GIBBSSAMPLER_HPP_
 #define GIBBSSAMPLER_HPP_
 
+// std includes
+#include <exception>
+#include <sstream>
+
 // boost includes
 #include <boost/shared_ptr.hpp>
 
@@ -19,13 +23,27 @@ class GibbsSampler
 {
 public:
 	// constructor
-	GibbsSampler(double** meas, double** meas_unc, int ndata, dim3& nB, dim3& nT, int niter, int nburnin,
-			int nthin_chi=100, int nthin_theta=1) :
+	GibbsSampler(vecvec& meas, vecvec& meas_unc, int niter, int nburnin, int nthin_chi=100, int nthin_theta=1,
+			int nThreads=256) :
 				niter_(niter), nburnin_(nburnin), nthin_theta_(nthin_theta), nthin_chi_(nthin_chi)
 		{
+			int ndata = meas.size();
+			// first do CUDA grid launch
+			dim3 nT(nThreads);
+			nT_ = nT;
+			dim3 nB((ndata + nT.x-1) / nT.x);
+			nB_ = nB;
+			if (nB.x > 65535)
+			{
+				std::stringstream errmsg;
+				errmsg << "ERROR: Block is too large:\n";
+				errmsg << nB.x << " blocks. Max is 65535.\n";
+				throw std::runtime_error(errmsg.str());
+			}
+
 			// construct DataAugmentation and PopulationPar objects
-			Daug_.reset(new DataAugmentation<mfeat, pchi, dtheta>(meas, meas_unc, ndata, nB, nT));
-			PopPar_.reset(new PopulationPar<mfeat, pchi, dtheta>(nB, nT));
+			Daug_.reset(new DataAugmentation<mfeat, pchi, dtheta>(meas, meas_unc, nB_, nT_));
+			PopPar_.reset(new PopulationPar<mfeat, pchi, dtheta>(nB_, nT_));
 			Daug_->SetPopulationPtr(PopPar_);
 			PopPar_->SetDataAugPtr(Daug_);
 
@@ -79,10 +97,11 @@ public:
 		}
 		// TODO: add timer
 		// TODO: add a progress bar
-		// TODO: print out acceptance rates during burn-in
 
 		// Burn-in stage is finished, so reset the current iteration and acceptance rates
 		std::cout << "Burnin finished." << std::endl;
+		Report();
+		std::cout << std::endl;
 
 		current_iter_ = 1;
 		Daug_->ResetAcceptance();
@@ -115,9 +134,23 @@ public:
 	}
 
 	// print out useful information on the MCMC sampler results
-	// TODO: Report on Acceptance Rates
 	virtual void Report() {
-		std::cout << "Report Currently Not Supported" << std::endl;
+		int naccept_theta = PopPar_->GetNaccept();
+		double arate_theta = double(naccept_theta) / (current_iter_ - 1);
+		std::cout << "Acceptance rate for Population Parameter is " << arate_theta << std::endl;
+		thrust::host_vector<int> naccept_chi = Daug_->GetNaccept();
+		double arate_mean = 0.0;
+		double arate_max = 0.0;
+		double arate_min = 1.0;
+		for (int i = 0; i < naccept_chi.size(); ++i) {
+			double this_arate = double(naccept_chi[i]) / (current_iter_ - 1.0);
+			arate_mean += this_arate / naccept_chi.size();
+			arate_min = std::min(this_arate, arate_min);
+			arate_max = std::max(this_arate, arate_max);
+		}
+		std::cout << "Mean acceptance rate for characteristics is " << arate_mean << std::endl;
+		std::cout << "Minimum acceptance rate for characteristics is " << arate_min << std::endl;
+		std::cout << "Maximum acceptance rate for characteristics is " << arate_max << std::endl;
 	}
 
 	// save the sampled characteristic values? not saving them can speed up the sampler since we do not need to
@@ -141,6 +174,7 @@ public:
 	const std::vector<double>& GetLogDensMeas() const { return LogDensMeas_Samples_; }
 
 protected:
+	dim3 nB_, nT_;  // CUDA grid launch parameters
 	int niter_, nburnin_, nthin_chi_, nthin_theta_; // total # of iterations, # of burnin iterations, and thinning amount
 	int current_iter_, ntheta_samples_, nchi_samples_;
 	bool fix_poppar, fix_char; // is set to true, then keep the values fixed throughout the MCMC sampler

@@ -58,7 +58,6 @@ typedef thrust::device_vector<double> dvector;
 
 template <int mfeat, int pchi, int dtheta> class PopulationPar; // forward declaration
 
-// TODO: Convert class pointers to boost::shared_ptr
 
 // class for a data augmentation.
 template <int mfeat, int pchi, int dtheta>
@@ -66,7 +65,7 @@ class DataAugmentation
 {
 public:
 	// Constructor
-	DataAugmentation(double** meas, double** meas_unc, int n, dim3& nB, dim3& nT) : ndata(n), nBlocks(nB), nThreads(nT)
+	DataAugmentation(vecvec& meas, vecvec& meas_unc, dim3& nB, dim3& nT) : ndata(meas.size()), nBlocks(nB), nThreads(nT)
 		{
 			_SetArraySizes();
 
@@ -274,7 +273,9 @@ public:
 		scaled_proposal.resize(dtheta);
 		const int dim_cholfact = dtheta * dtheta - ((dtheta - 1) * dtheta) / 2;
 		cholfact.resize(dim_cholfact);
-
+		current_logdens = -1e300;
+		current_iter = 0;
+		naccept = 0;
 		// grab pointer to function that compute the log-density of characteristics|theta from device
 		// __constant__ memory
 	    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensPop, sizeof(c_LogDensPop)));

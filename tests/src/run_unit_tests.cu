@@ -93,8 +93,8 @@ int main(int argc, char** argv)
 		Tests.DaugAcceptBetter();
 //
 //		// tests for the MCMC sampler
-		// Tests.FixedChar();
-		// Tests.FixedPopPar();
+		Tests.FixedChar();
+		Tests.FixedPopPar();
 		time_t timer1, timer2;
 		time(&timer1);
 		Tests.NormNorm();

@@ -113,12 +113,18 @@ int get_file_lines(std::string& filename) {
 }
 
 // read in the data
-void read_data(std::string& filename, double** meas, double** meas_unc, int ndata, int mfeat) {
+void read_data(std::string& filename, vecvec& meas, vecvec& meas_unc, int ndata, int mfeat) {
 	std::ifstream input_file(filename.c_str());
+	meas.resize(ndata);
+	meas_unc.resize(ndata);
 	for (int i = 0; i < ndata; ++i) {
+		std::vector<double> this_meas(mfeat);
+		std::vector<double> this_meas_unc(mfeat);
 		for (int j = 0; j < mfeat; ++j) {
-			input_file >> meas[i][j] >> meas_unc[i][j];
+			input_file >> this_meas[j] >> this_meas_unc[j];
 		}
+		meas[i] = this_meas;
+		meas_unc[i] = this_meas;
 	}
 	input_file.close();
 }
@@ -165,30 +171,13 @@ void write_chis(std::string& filename, std::vector<vecvec>& chi_samples) {
 int main(int argc, char** argv)
 {
 	// allocate memory for measurement arrays
-	double** meas;
-	double** meas_unc;
-	std::string filename("normnorm_example.txt");
+	vecvec meas;
+	vecvec meas_unc;
+	std::string filename("../data/normnorm_example.txt");
 	int ndata = get_file_lines(filename);
-
-    meas = new double* [ndata];
-    meas_unc = new double* [ndata];
-    for (int i = 0; i < ndata; ++i) {
-		meas[i] = new double [mfeat];
-		meas_unc[i] = new double [mfeat];
-	}
 
     // read in measurement data from text file
     read_data(filename, meas, meas_unc, ndata, mfeat);
-
-	// Cuda grid launch, TODO: should move this to within the GibbsSampler constructor
-    dim3 nThreads(256);
-    dim3 nBlocks((ndata + nThreads.x-1) / nThreads.x);
-    printf("nBlocks: %d\n", nBlocks.x);  // no more than 64k blocks!
-    if (nBlocks.x > 65535)
-    {
-        std::cerr << "ERROR: Block is too large" << std::endl;
-        return 2;
-    }
 
     // build the MCMC sampler
     int niter = 50000;
@@ -198,7 +187,7 @@ int main(int argc, char** argv)
     int nthin_chi = niter / nchi_samples;
 
     // instantiate the Metropolis-within-Gibbs sampler object
-    GibbsSampler<mfeat, pchi, dtheta> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburnin, nthin_chi);
+    GibbsSampler<mfeat, pchi, dtheta> Sampler(meas, meas_unc, niter, nburnin, nthin_chi);
 
     // launch the MCMC sampler
     Sampler.Run();
@@ -218,11 +207,4 @@ int main(int argc, char** argv)
     std::string chifile("normnorm_chi_summary.dat");
     write_chis(chifile, chi_samples);
 
-	// free memory
-	for (int i = 0; i < ndata; ++i) {
-		delete [] meas[i];
-		delete [] meas_unc[i];
-	}
-	delete meas;
-	delete meas_unc;
 }

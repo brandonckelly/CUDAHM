@@ -109,7 +109,6 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 		curandState localState = devStates[idata]; // grab state of this random number generator
 
 		// copy values for this data point to registers for speed
-		// TODO: convert these arrays to shared memory
 		double snorm_deviate[pchi], scaled_proposal[pchi], proposed_chi[pchi], local_chi[pchi];
 		const int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
 		double local_cholfact[dim_cholfact];
@@ -148,7 +147,9 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 //		}
 
 		// accept the proposed value of the characteristic?
-		double logpost_current = logdens_meas[idata] + logdens_pop[idata];
+		double logdens_meas_i = logdens_meas[idata];
+		double logdens_pop_i = logdens_pop[idata];
+		double logpost_current = logdens_meas_i + logdens_pop_i;
 		double metro_ratio = 0.0;
 		bool accept = AcceptProp(logpost_prop, logpost_current, 0.0, 0.0, metro_ratio, &localState);
 
@@ -162,18 +163,14 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 
 		// copy local RNG state back to global memory
 		devStates[idata] = localState;
-
-		// TODO: try to avoid branching statement
 		// printf("current iter, Accept, idata: %d, %d, %d\n", current_iter, accept, idata);
-		if (accept) {
-			// accepted this proposal, so save new value of chi and log-densities
-			for (int j=0; j<pchi; j++) {
-				chi[ndata * j + idata] = proposed_chi[j];
-			}
-			logdens_meas[idata] = logdens_meas_prop;
-			logdens_pop[idata] = logdens_pop_prop;
-			naccept[idata] += 1;
+		for (int j=0; j<pchi; j++) {
+			chi[ndata * j + idata] = accept ? proposed_chi[j] : local_chi[j];
 		}
+		logdens_meas[idata] = accept ? logdens_meas_prop : logdens_meas_i;
+		logdens_pop[idata] = accept ? logdens_pop_prop : logdens_pop_i;
+		naccept[idata] += accept;
+
 	}
 
 }

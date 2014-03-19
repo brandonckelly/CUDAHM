@@ -147,7 +147,6 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 //		}
 
 		// accept the proposed value of the characteristic?
-		// double logpost_current = logdens_meas[idata] + logdens_pop[idata];
 		double logdens_meas_i = logdens_meas[idata];
 		double logdens_pop_i = logdens_pop[idata];
 		double logpost_current = logdens_meas_i + logdens_pop_i;
@@ -164,7 +163,6 @@ void update_characteristic(double* meas, double* meas_unc, double* chi, double* 
 
 		// copy local RNG state back to global memory
 		devStates[idata] = localState;
-		// TODO: try to avoid branching statement
 		// printf("current iter, Accept, idata: %d, %d, %d\n", current_iter, accept, idata);
 		for (int j=0; j<pchi; j++) {
 			chi[ndata * j + idata] = accept ? proposed_chi[j] : local_chi[j];

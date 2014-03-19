@@ -7,6 +7,8 @@
 
 // standard includes
 #include <iostream>
+#include <time.h>
+
 // local includes
 #include "UnitTests.cuh"
 
@@ -91,9 +93,14 @@ int main(int argc, char** argv)
 		Tests.DaugAcceptBetter();
 //
 //		// tests for the MCMC sampler
-		Tests.FixedChar();
-		Tests.FixedPopPar();
+		// Tests.FixedChar();
+		// Tests.FixedPopPar();
+		time_t timer1, timer2;
+		time(&timer1);
 		Tests.NormNorm();
+		time(&timer2);
+		double seconds = difftime(timer2, timer1);
+		std::cout << "MCMC sampler for normal-normal model took " << seconds << " seconds." << std::endl;
 
 		// print results
 		Tests.Finish();

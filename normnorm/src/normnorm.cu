@@ -175,10 +175,8 @@ int main(int argc, char** argv)
 	vecvec meas_unc;
 	std::string filename("../data/normnorm_example.txt");
 	int ndata = get_file_lines(filename);
-
     // read in measurement data from text file
     read_data(filename, meas, meas_unc, ndata, mfeat);
-
     // build the MCMC sampler
     int niter = 50000;
     int nburnin = niter / 2;

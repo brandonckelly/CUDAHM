@@ -32,7 +32,7 @@
 
 int main(int argc, char** argv)
 {
-	int ndata = 25000;
+	int ndata = 100000;
 
 	bool check_memory = false;  // set to true if you want to check how much memory is available without running the tests
 	if (check_memory) {

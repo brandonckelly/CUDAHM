@@ -335,35 +335,26 @@ UnitTests::UnitTests(int n, dim3& nB, dim3& nT) : ndata(n), nBlocks(nB), nThread
 	d_true_chi = h_true_chi;
 
 	// fill data arrays
-    meas = new double* [ndata];
-    meas_unc = new double* [ndata];
     h_meas.resize(ndata * mfeat);
     h_meas_unc.resize(ndata * mfeat);
     double meas_err[3] = {1.2, 0.4, 0.24};
+    meas.resize(ndata);
+    meas_unc.resize(ndata);
     for (int i = 0; i < ndata; ++i) {
-		meas[i] = new double [mfeat];
-		meas_unc[i] = new double [mfeat];
+		std::vector<double> this_meas(mfeat);
+		std::vector<double> this_meas_unc(mfeat);
 		for (int j = 0; j < mfeat; ++j) {
 			// y_ij|chi_ij ~ N(chi_ij, meas_err_j^2)
-			meas[i][j] = h_true_chi[j * ndata + i] + meas_err[j] * snorm(rng);
-			h_meas[ndata * j + i] = meas[i][j];
-			meas_unc[i][j] = meas_err[j];
+			this_meas[j] = h_true_chi[j * ndata + i] + meas_err[j] * snorm(rng);
+			h_meas[ndata * j + i] = this_meas[j];
+			this_meas_unc[j] = meas_err[j];
 			h_meas_unc[ndata * j + i] = meas_err[j];
 		}
+		meas[i] = this_meas;
+		meas_unc[i] = this_meas_unc;
 	}
     nperformed = 0;
     npassed = 0;
-}
-
-// destructor
-UnitTests::~UnitTests() {
-	// free memory used by data arrays
-	for (int i = 0; i < ndata; ++i) {
-		delete [] meas[i];
-		delete [] meas_unc[i];
-	}
-	delete meas;
-	delete meas_unc;
 }
 
 // save measurements to "measurement.txt"
@@ -763,7 +754,7 @@ void UnitTests::ThetaAdapt() {
 	double mu[3] = {1.2, 0.4, -0.7};
 
 	PopulationPar<3,3,3> Theta(nBlocks, nThreads);
-	boost::shared_ptr<DataAugmentation<3,3,3> > DaugPtr(new DataAugmentation<3,3,3>(meas, meas_unc, ndata, nBlocks, nThreads));
+	boost::shared_ptr<DataAugmentation<3,3,3> > DaugPtr(new DataAugmentation<3,3,3>(meas, meas_unc, nBlocks, nThreads));
 	Theta.SetDataAugPtr(DaugPtr);
 
 	Theta.Initialize();
@@ -824,7 +815,7 @@ void UnitTests::DaugGetChi() {
 
 	std::cout << "Testing DataAugmentation::GetChi..." << std::endl;
 
-	DataAugmentation<3,3,3> Daug(meas, meas_unc, ndata, nBlocks, nThreads);
+	DataAugmentation<3,3,3> Daug(meas, meas_unc, nBlocks, nThreads);
 	hvector h_chi = Daug.GetHostChi();
 
 	assert(h_chi.size() == ndata * pchi);
@@ -874,7 +865,7 @@ void UnitTests::DaugLogDensPtr()
 	std::cout << "Testing that pointers to log density functions are properly set..." << std::endl;
 	int local_passed = 0;
 
-	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc, ndata, nBlocks, nThreads));
+	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc, nBlocks, nThreads));
 	boost::shared_ptr<PopulationPar<3,3,3> > Theta(new PopulationPar<3,3,3> (nBlocks, nThreads));
 
 	Daug->SetPopulationPtr(Theta);
@@ -1229,7 +1220,7 @@ void UnitTests::DaugAcceptSame()
 	std::cout << "Testing that update for DataAugmentation always accepts when chi values are unchanged...." << std::endl;
 	int local_passed = 0;
 
-	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc, ndata, nBlocks, nThreads));
+	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc, nBlocks, nThreads));
 	boost::shared_ptr<PopulationPar<3,3,3> > Theta(new PopulationPar<3,3,3> (nBlocks, nThreads));
 
 	Daug->SetPopulationPtr(Theta);
@@ -1292,7 +1283,7 @@ void UnitTests::DaugAcceptBetter() {
 	std::cout << "Testing DaugAccept.Update() always accepts a better proposal...." << std::endl;
 	int local_passed = 0;
 
-	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc, ndata, nBlocks, nThreads));
+	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc, nBlocks, nThreads));
 	boost::shared_ptr<PopulationPar<3,3,3> > Theta(new PopulationPar<3,3,3> (nBlocks, nThreads));
 
 	Daug->SetPopulationPtr(Theta);
@@ -1433,7 +1424,7 @@ void UnitTests::GibbsSamplerPtr() {
 
 	int niter = 10;
 	int nburn = 10;
-	GibbsSampler<3, 3, 3> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburn);
+	GibbsSampler<3, 3, 3> Sampler(meas, meas_unc, niter, nburn);
 
 	boost::shared_ptr<DataAugmentation<3,3,3> > DaugPtr = Sampler.GetDaugPtr();
 	boost::shared_ptr<PopulationPar<3,3,3> > ThetaPtr = Sampler.GetThetaPtr();
@@ -1472,7 +1463,7 @@ void UnitTests::FixedChar() {
 
 	// setup the Gibbs sampler object
 	int niter(50000), nburn(25000);
-	GibbsSampler<3,3,3> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburn);
+	GibbsSampler<3,3,3> Sampler(meas, meas_unc, niter, nburn);
 
 	// keep the characteristics fixed
 	Sampler.GetDaugPtr()->SetChi(d_true_chi);
@@ -1630,7 +1621,7 @@ void UnitTests::FixedPopPar() {
 
 	// setup the Gibbs sampler object
 	int niter(50000), nburn(25000);
-	GibbsSampler<3,3,3> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburn);
+	GibbsSampler<3,3,3> Sampler(meas, meas_unc, niter, nburn);
 
 	// keep the population parameter fixed
 	Sampler.GetThetaPtr()->SetTheta(h_true_theta);
@@ -1803,7 +1794,7 @@ void UnitTests::NormNorm()
 
 	// setup the Gibbs sampler object
 	int niter(50000), nburn(25000);
-	GibbsSampler<3,3,3> Sampler(meas, meas_unc, ndata, nBlocks, nThreads, niter, nburn);
+	GibbsSampler<3,3,3> Sampler(meas, meas_unc, niter, nburn);
 
 	// run the MCMC sampler
 	Sampler.Run();

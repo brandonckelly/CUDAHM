@@ -7,6 +7,8 @@
 
 // standard includes
 #include <iostream>
+#include <time.h>
+
 // local includes
 #include "UnitTests.cuh"
 
@@ -32,7 +34,7 @@
 
 int main(int argc, char** argv)
 {
-	int ndata = 25000;
+	int ndata = 100000;
 
 	bool check_memory = false;  // set to true if you want to check how much memory is available without running the tests
 	if (check_memory) {
@@ -93,7 +95,12 @@ int main(int argc, char** argv)
 //		// tests for the MCMC sampler
 		Tests.FixedChar();
 		Tests.FixedPopPar();
+		time_t timer1, timer2;
+		time(&timer1);
 		Tests.NormNorm();
+		time(&timer2);
+		double seconds = difftime(timer2, timer1);
+		std::cout << "MCMC sampler for normal-normal model took " << seconds << " seconds." << std::endl;
 
 		// print results
 		Tests.Finish();

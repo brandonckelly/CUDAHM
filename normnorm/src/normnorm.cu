@@ -106,10 +106,17 @@ int get_file_lines(std::string& filename) {
     std::string line;
     std::ifstream inputfile(filename.c_str());
 
-    while (std::getline(inputfile, line))
-        ++number_of_lines;
-    inputfile.close();
-    return number_of_lines;
+    if (inputfile.good()) {
+        while (std::getline(inputfile, line))
+            ++number_of_lines;
+        inputfile.close();
+        return number_of_lines;
+	} else {
+		std::string errmsg("File ");
+		errmsg.append(filename);
+		errmsg.append(" does not exist.\n");
+		throw std::runtime_error(errmsg);
+	}
 }
 
 // read in the data

@@ -122,6 +122,11 @@ double chisqr(double* x, double* covar_inv, int nx)
 	return chisqr;
 }
 
+__device__ __host__
+double tanh(double x) {
+	return (exp(2.0 * x) - 1.0) / (exp(2.0 * x) + 1.0);
+}
+
 /*
  * This function returns the logarithm of the conditional density of the characteristics given the
  * population parameter theta for a single data point, log p(chi_i | theta). This function must be supplied by
@@ -136,11 +141,22 @@ double chisqr(double* x, double* covar_inv, int nx)
 __device__ __host__
 double LogDensityPop(double* chi, double* theta)
 {
+	double covar[pchi * pchi - ((pchi - 1) * pchi) / 2];
 	double covar_inv[pchi * pchi - ((pchi - 1) * pchi) / 2];
 	double cov_determ_inv;
 
-	// theta + pchi + 1 : set the pointer to the initial address of the covariance matrix part of theta
-	cov_determ_inv = matrix_invert3d(theta + pchi + 1, covar_inv);
+	// transform theta values to covariance matrix of (log C, beta, log T)
+	covar[0] = exp(2.0 * theta[pchi]);  // Covar[0,0], variance in log C
+	covar[1] = tanh(theta[2 * pchi]) * exp(theta[pchi] + theta[pchi+1]);  // Covar[0,1] = cov(log C, beta)
+	covar[2] = tanh(theta[2 * pchi + 1]) * exp(theta[pchi] + theta[pchi+2]);  // Covar[0,2] = cov(log C, log T)
+	covar[3] = covar[1];  // Covar[1,0]
+	covar[4] = exp(2.0 * theta[pchi + 1]);  // Covar[1,1], variance in beta
+	covar[5] = tanh(theta[2 * pchi + 2]) * exp(theta[pchi+1] + theta[pchi+2]);  // Covar[1,2] = cov(beta, log T)
+	covar[6] = covar[2];  // Covar[2,0]
+	covar[7] = covar[5];  // Covar[2,1]
+	covar[8] = exp(2.0 * theta[pchi + 2]);  // Covar[2,2], variance in log T
+
+	cov_determ_inv = matrix_invert3d(covar, covar_inv);
 	double chi_cent[pchi];
 	for (int j = 0; j < pchi; ++j) {
 		chi_cent[j] = chi[j] - theta[j];

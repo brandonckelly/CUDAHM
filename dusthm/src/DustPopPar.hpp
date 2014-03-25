@@ -22,6 +22,7 @@ class DustPopPar: public PopulationPar<mfeat, 3, 9>
 	// constructor
 	DustPopPar(dim3& nB, dim3& nT) : PopulationPar<mfeat, 3, 9>(nB, nT), pchi_(3), dtheta_(9)
 	{
+		// set the hyperprior parameters
 		prior_mu_mean.resize(pchi_);
 		prior_mu_mean[0] = 15.0;  // prior mean on the centroid for the log C distribution
 		prior_mu_mean[1] = 2.0;  // prior mean on the centroid for the beta distribution
@@ -96,6 +97,7 @@ class DustPopPar: public PopulationPar<mfeat, 3, 9>
 	}
 
 private:
+	// hyperprior parameters
 	std::vector<double> prior_mu_mean;
 	std::vector<double> prior_mu_var;
 	std::vector<double> prior_sigma_mean;

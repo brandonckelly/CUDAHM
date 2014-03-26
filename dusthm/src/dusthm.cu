@@ -23,6 +23,8 @@
 // local CUDAHM includes
 #include "GibbsSampler.hpp"
 #include "input_output.hpp"
+#include "ConstBetaTemp.cuh"
+#include "DustPopPar.hpp"
 
 /*
  * First you need to set the values of the parameter dimensions as const int types. These must be supplied
@@ -51,7 +53,7 @@ const int kboltz = 1.380658e-16;
 __const__ int c_kboltz = kboltz;
 
 // Compute the model dust SED, a modified blackbody
-__device__ __host__
+__device__
 double modified_blackbody(double nu, double C, double beta, double T) {
 	double sed = 2.0 * c_hplanck * nu * nu * nu / (c_clight * c_clight) / (exp(c_hplanck * nu / (c_kboltz * T)) - 1.0);
 	sed *= C * pow(nu / c_nu_ref, beta);
@@ -71,7 +73,7 @@ double modified_blackbody(double nu, double C, double beta, double T) {
  *
  */
 
-__device__ __host__
+__device__
 double LogDensityMeas(double* chi, double* meas, double* meas_unc)
 {
 	double C = exp(chi[0]);
@@ -138,7 +140,7 @@ double tanh(double x) {
  *  dim_theta - The dimension of the population parameter vector theta, i.e., the length of the theta array.
  *
  */
-__device__ __host__
+__device__
 double LogDensityPop(double* chi, double* theta)
 {
 	double covar[pchi * pchi - ((pchi - 1) * pchi) / 2];
@@ -196,13 +198,16 @@ extern __constant__ double c_theta[100];
 
 int main(int argc, char** argv)
 {
-	std::cout << "This file provides a blueprint for using the CUDAHM API. On its own it does nothing except print this message."
-			<< std::endl;
 	/*
 	 * Read in the data for the measurements, meas, and their standard deviations, meas_unc.
 	 */
 
-				// read in the measured feature data here //
+	std::string datafile = "data/cb244.txt"
+	int ndata = get_file_lines(datafile)
+
+	vecvec fnu(ndata);
+	vecvec fnu_sig(ndata);
+	read_data(datafile, fnu, fnu_sig, ndata, mfeat);
 
 	/*
 	 * Set the number of MCMC iterations and the amount of thinning for the chi and theta samples.
@@ -211,7 +216,9 @@ int main(int argc, char** argv)
 	 * YOU DO NOT RUN OUR OF MEMORY.
 	 */
 
-				// choose the number of MCMC iterations and the amount of thinning //
+	int nmcmc_iter = 50000;
+	int nchi_samples = 100;
+	int nthin_chi = nmcmc_iter / nchi_samples;
 
 	/*
 	 * Instantiate the GibbsSampler<mfeat, pchi, dtheta> object here. Once you've instantiated it, use the

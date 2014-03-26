@@ -81,14 +81,14 @@ void initial_chi_value(double* chi, double* meas, double* meas_unc, double* chol
 		int diag_index = 0;
 		for (int j=0; j<pchi; j++) {
 			cholfact[idata + ndata * diag_index] = 1.0;
-			diag_index += j + 2;
+			diag_index += j + 2;  // cholesky factor is lower diagonal
 		}
 		// copy value to registers
-		double this_chi[3];
+		double this_chi[pchi];
 		for (int j = 0; j < pchi; ++j) {
 			this_chi[j] = chi[j * ndata + idata];
 		}
-		double local_meas[3], local_meas_unc[3];
+		double local_meas[mfeat], local_meas_unc[mfeat];
 		for (int j = 0; j < mfeat; ++j) {
 			local_meas[j] = meas[j * ndata + idata];
 			local_meas_unc[j] = meas_unc[j * ndata + idata];

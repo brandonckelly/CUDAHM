@@ -29,8 +29,13 @@ public:
 		{
 			_InitializeMembers(meas.size(), nThreads)
 			// construct DataAugmentation and PopulationPar objects
-			Daug_.reset(new DataAugmentation<mfeat, pchi, dtheta>(meas, meas_unc, nB_, nT_));
-			PopPar_.reset(new PopulationPar<mfeat, pchi, dtheta>(nB_, nT_));
+			Daug_.reset(new DataAugmentation<mfeat, pchi, dtheta>(meas, meas_unc));
+			PopPar_.reset(new PopulationPar<mfeat, pchi, dtheta>);
+			// set the CUDA grid launch parameters and initialize the random number generator on the GPU
+			Daug_->SetCudaGrid(nB_, nT_);
+			Daug_->InitializeRNG();
+			PopPar_->SetCudaGrid(nB_, nT_);
+			// make sure the parameter objects can talk to eachother
 			Daug_->SetPopulationPtr(PopPar_);
 			PopPar_->SetDataAugPtr(Daug_);
 
@@ -50,6 +55,11 @@ public:
 			// construct DataAugmentation and PopulationPar objects
 			Daug_ = Daug;
 			PopPar_ = Theta;
+			// set the CUDA grid launch parameters and initialize the random number generator on the GPU
+			Daug_->SetCudaGrid(nB_, nT_);
+			Daug_->InitializeRNG();
+			PopPar_->SetCudaGrid(nB_, nT_);
+			// make sure the parameter objects can talk to eachother
 			Daug_->SetPopulationPtr(PopPar_);
 			PopPar_->SetDataAugPtr(Daug_);
 

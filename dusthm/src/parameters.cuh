@@ -65,39 +65,49 @@ class DataAugmentation
 {
 public:
 	// Constructor
-	DataAugmentation(vecvec& meas, vecvec& meas_unc, dim3& nB, dim3& nT) : ndata(meas.size()), nBlocks(nB), nThreads(nT)
-		{
-			_SetArraySizes();
+	DataAugmentation(vecvec& meas, vecvec& meas_unc) : ndata(meas.size()) {
+		// set sizes of arrays
+		h_meas.resize(ndata * mfeat);
+		d_meas.resize(ndata * mfeat);
+		h_meas_unc.resize(ndata * mfeat);
+		d_meas_unc.resize(ndata * mfeat);
+		d_logdens.resize(ndata);
+		d_chi.resize(ndata * pchi);
+		int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
+		d_cholfact.resize(ndata * dim_cholfact);
+		d_naccept.resize(ndata);
 
-			// copy input data to data members
-			for (int j = 0; j < mfeat; ++j) {
-				for (int i = 0; i < ndata; ++i) {
-					h_meas[ndata * j + i] = meas[i][j];
-					h_meas_unc[ndata * j + i] = meas_unc[i][j];
-				}
+		// copy input data to data members
+		for (int j = 0; j < mfeat; ++j) {
+			for (int i = 0; i < ndata; ++i) {
+				h_meas[ndata * j + i] = meas[i][j];
+				h_meas_unc[ndata * j + i] = meas_unc[i][j];
 			}
-			// copy data from host to device
-			d_meas = h_meas;
-			d_meas_unc = h_meas_unc;
-
-			thrust::fill(d_cholfact.begin(), d_cholfact.end(), 0.0);
-
-			// Allocate memory on GPU for RNG states
-			CUDA_CHECK_RETURN(cudaMalloc((void **)&p_devStates, nThreads.x * nBlocks.x * sizeof(curandState)));
-			// Initialize the random number generator states on the GPU
-			initialize_rng<<<nBlocks,nThreads>>>(p_devStates);
-			CUDA_CHECK_RETURN(cudaPeekAtLastError());
-			// Wait until RNG stuff is done running on the GPU, make sure everything went OK
-			CUDA_CHECK_RETURN(cudaDeviceSynchronize());
-
-			// grab pointer to function that compute the log-density of measurements|characteristics from device
-			// __constant__ memory
-		    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensMeas, sizeof(c_LogDensMeas)));
-
-			save_trace = true;
 		}
+		// copy data from host to device
+		d_meas = h_meas;
+		d_meas_unc = h_meas_unc;
+
+		thrust::fill(d_cholfact.begin(), d_cholfact.end(), 0.0);
+
+		// grab pointer to function that compute the log-density of measurements|characteristics from device
+		// __constant__ memory
+		CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensMeas, sizeof(c_LogDensMeas)));
+
+		save_trace = true;
+	}
 
 	virtual ~DataAugmentation() { cudaFree(p_devStates); }
+
+	void InitializeDeviceRNG() {
+		// Allocate memory on GPU for RNG states
+		CUDA_CHECK_RETURN(cudaMalloc((void ** )&p_devStates, nThreads.x * nBlocks.x * sizeof(curandState)));
+		// Initialize the random number generator states on the GPU
+		initialize_rng<<<nBlocks, nThreads>>>(p_devStates);
+		CUDA_CHECK_RETURN(cudaPeekAtLastError());
+		// Wait until RNG stuff is done running on the GPU, make sure everything went OK
+		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+	}
 
 	void Initialize() {
 		// grab pointers to the device vector memory locations
@@ -175,6 +185,13 @@ public:
 		d_cholfact = cholfact;
 	}
 
+	void SetCudaGrid(dim3& nB, dim3& nT) {
+		nBlocks = nB;
+		nThreads = nT;
+		//
+		InitializeDeviceRNG();
+	}
+
 	void SetSaveTrace(bool dosave) { save_trace = dosave; }
 
 	bool SaveTrace() { return save_trace; }
@@ -221,18 +238,6 @@ public:
 	}
 
 protected:
-	// set the sizes of the data members
-	void _SetArraySizes() {
-		h_meas.resize(ndata * mfeat);
-		d_meas.resize(ndata * mfeat);
-		h_meas_unc.resize(ndata * mfeat);
-		d_meas_unc.resize(ndata * mfeat);
-		d_logdens.resize(ndata);
-		d_chi.resize(ndata * pchi);
-		int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
-		d_cholfact.resize(ndata * dim_cholfact);
-		d_naccept.resize(ndata);
-	}
 	// measurements and their uncertainties
 	hvector h_meas;
 	hvector h_meas_unc;
@@ -250,8 +255,8 @@ protected:
 	// state of parallel random number generator on the device
 	curandState* p_devStates;
 	// CUDA kernel launch specifications
-	dim3& nBlocks;
-	dim3& nThreads;
+	dim3 nBlocks;
+	dim3 nThreads;
 	// pointer to device-side function that compute the conditional log-posterior of measurements|characteristics
 	pLogDensMeas p_logdens_function;
 	// MCMC sampler parameters
@@ -266,8 +271,7 @@ class PopulationPar
 {
 public:
 	// constructors
-	PopulationPar(dim3& nB, dim3& nT) : nBlocks(nB), nThreads(nT)
-	{
+	PopulationPar() {
 		h_theta.resize(dtheta);
 		snorm_deviate.resize(dtheta);
 		scaled_proposal.resize(dtheta);
@@ -449,6 +453,11 @@ public:
 	void SetCholFact(hvector cholfact_new) { cholfact = cholfact_new; }
 	void SetCurrentIter(int iter) { current_iter = iter; }
 
+	void SetCudaGrid(dim3& nB, dim3& nT) {
+		nBlocks = nB;
+		nThreads = nT;
+	}
+
 	hvector GetHostTheta() { return h_theta; }
 
 	hvector GetDevTheta() {
@@ -504,8 +513,8 @@ protected:
 	hvector snorm_deviate;
 	hvector scaled_proposal;
 	// CUDA kernel launch specifications
-	dim3& nBlocks;
-	dim3& nThreads;
+	dim3 nBlocks;
+	dim3 nThreads;
 	// pointer to device-side function that compute the conditional log-posterior of characteristics|population
 	pLogDensPop p_logdens_function;
 	// MCMC parameters

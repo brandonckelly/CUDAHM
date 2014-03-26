@@ -13,7 +13,8 @@
 #include "parameters.cuh"
 
 /*
- * Override PopulationPar's LogPrior method, since we do not want a uniform prior on theta.
+ * Override PopulationPar's LogPrior method, since we do not want a uniform prior on theta. Also override the InitialValue method
+ * to compute mean, variances, and correlations from the initial values for chi = (log C, beta, log T).
  */
 
 template <int mfeat>
@@ -36,6 +37,35 @@ class DustPopPar: public PopulationPar<mfeat, 3, 9>
 		// place very broad log-normal prior on scale parameters
 		prior_sigma_mean.assign(pchi_, 0.0);
 		prior_sigma_var.assign(pchi_, 25.0);
+	}
+
+	// Set the initial values to the sample mean and covariance matrix
+	void InitialValue() {
+		vecvec chi = Daug_->GetChi();
+		thrust::fill(h_theta.begin(), h_theta.end(), 0.0);
+		// first compute sample mean
+		int ndata = chi.size();
+		for (int i = 0; i < ndata; ++i) {
+			for (int j = 0; j < pchi_; ++j) {
+				h_theta[j] += chi[i][j] / double(ndata);
+			}
+		}
+		// now compute sample variances and covariances
+		std::vector<double> chi_covar(pchi_ * pchi_, 0.0);
+		for (int i = 0; i < ndata; ++i) {
+			for (int j = 0; j < pchi_; ++j) {
+				for (int k = 0; k < pchi_; ++k) {
+					chi_covar[j * pchi_ + k] += (chi[i][j] - h_theta[j]) * (chi[i][k] - h_theta[k]) / ndata;
+				}
+			}
+		}
+		// finally, convert to variances and correlations
+		h_theta[3] = sqrt(chi_covar[0]);
+		h_theta[4] = sqrt(chi_covar[4]);
+		h_theta[5] = sqrt(chi_covar[8]);
+		h_theta[6] = chi_covar[1] / sqrt(chi_covar[0] * chi_covar[4]);
+		h_theta[7] = chi_covar[2] / sqrt(chi_covar[0] * chi_covar[8]);
+		h_theta[8] = chi_covar[5] / sqrt(chi_covar[4] * chi_covar[8]);
 	}
 
 	// return the log-density of the prior for the mean parameter

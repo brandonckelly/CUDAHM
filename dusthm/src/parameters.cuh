@@ -281,10 +281,15 @@ public:
 	    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensPop, sizeof(c_LogDensPop)));
 	}
 
-	// calculate the initial value of the population parameters
-	virtual void Initialize() {
+	virtual void InitialValue() {
 		// set initial value of theta to zero
 		thrust::fill(h_theta.begin(), h_theta.end(), 0.0);
+	}
+
+	// calculate the initial value of the population parameters
+	virtual void Initialize() {
+		// first set initial values
+		InitialValue();
 
 		// transfer initial value of theta to GPU constant memory
 	    double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);

@@ -217,6 +217,7 @@ int main(int argc, char** argv)
 	 */
 
 	int nmcmc_iter = 50000;
+	int nburnin = nmcmc_iter / 2;
 	int nchi_samples = 100;
 	int nthin_chi = nmcmc_iter / nchi_samples;
 
@@ -229,12 +230,28 @@ int main(int argc, char** argv)
 	 * dimensions nsamples x dtheta) object.
 	 */
 
-				// Instantiate the GibbSampler object, run the MCMC sampler, and retrieve the samples. //
+	// first intantiate the subclassed DataAugmentation and PopulationPar objects
+	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > CBT(new ConstBetaTemp<mfeat, pchi, dtheta>(fnu, fnu_sig));
+	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > Theta(new DustPopPar<mfeat, pchi, dtheta>());
 
-	/*
-	 * Finally, do calculations with the MCMC samples or dump them to a file.
-	 */
+	// instantiate the GibbsSampler object and run the sampler
+	GibbsSampler<pchi, mfeat, dtheta> Sampler(CBT, Theta, nmcmc_iter, nburnin, nthin_chi);
+	Sampler.Run();
 
-				// use MCMC samples or dump them to a file //
+   // grab the samples
+	vecvec theta_samples = Sampler.GetPopSamples();
+	std::vector<vecvec> chi_samples = Sampler.GetCharSamples();
+
+	std::cout << "Writing results to text files..." << std::endl;
+
+	// write the sampled theta values to a file. Output will have nsamples rows and dtheta columns.
+	std::string thetafile("dusthm_thetas.dat");
+	write_thetas(thetafile, theta_samples);
+
+	// write the posterior means and standard deviations of the characteristics to a file. output will have ndata rows and
+	// 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
+	std::string chifile("dusthm_chi_summary.dat");
+	write_chis(chifile, chi_samples);
+
 }
 

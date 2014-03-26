@@ -17,11 +17,11 @@
  * to compute mean, variances, and correlations from the initial values for chi = (log C, beta, log T).
  */
 
-template <int mfeat>
-class DustPopPar: public PopulationPar<mfeat, 3, 9>
+template <int mfeat, int pchi, int dtheta>
+class DustPopPar: public PopulationPar<mfeat, pchi, dtheta>
 {
 	// constructor
-	DustPopPar(dim3& nB, dim3& nT) : PopulationPar<mfeat, 3, 9>(nB, nT), pchi_(3), dtheta_(9)
+	DustPopPar() : PopulationPar<mfeat, pchi, dtheta>(), pchi_(pchi), dtheta_(dtheta)
 	{
 		// set the hyperprior parameters
 		prior_mu_mean.resize(pchi_);

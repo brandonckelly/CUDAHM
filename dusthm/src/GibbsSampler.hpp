@@ -30,7 +30,7 @@ public:
 			_InitializeMembers(meas.size(), nThreads)
 			// construct DataAugmentation and PopulationPar objects
 			Daug_.reset(new DataAugmentation<mfeat, pchi, dtheta>(meas, meas_unc));
-			PopPar_.reset(new PopulationPar<mfeat, pchi, dtheta>);
+			PopPar_.reset(new PopulationPar<mfeat, pchi, dtheta>());
 			// set the CUDA grid launch parameters and initialize the random number generator on the GPU
 			Daug_->SetCudaGrid(nB_, nT_);
 			Daug_->InitializeRNG();

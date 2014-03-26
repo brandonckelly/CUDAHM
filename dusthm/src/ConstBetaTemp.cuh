@@ -52,8 +52,8 @@ void initial_cbt_value(double* chi, double* meas, double* meas_unc, double* chol
 }
 
 // Subclass the DataAugmentation class to override the method to generate the initial values of chi = (log C, beta, log T)
-template <mfeat>
-class ConstBetaTemp: public DataAugmentation<mfeat, 3, 6> {
+template <mfeat, pchi, dtheta>
+class ConstBetaTemp: public DataAugmentation<mfeat, pchi, dtheta> {
 public:
 	void Initialize() {
 		// grab pointers to the device vector memory locations

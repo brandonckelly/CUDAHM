@@ -36,20 +36,20 @@
 const int mfeat = 5;
 const int pchi = 3;  // chi = {log C, beta, log T}, where C \propto N_H
 const int dtheta = 9;
-__const__ const double c_nu[mfeat] = {6.0e11, 8.571e11, 1.2e11, 1.765e12, 4.286e12};  // {500, 350, 250, 170, 70} microns, Herschel bands
+__constant__ const double c_nu[mfeat] = {6.0e11, 8.571e11, 1.2e11, 1.765e12, 4.286e12};  // {500, 350, 250, 170, 70} microns, Herschel bands
 const double nu_ref = 2.3e11;  // 230 GHz
-__const__ double c_nu_ref = nu_ref;
+__constant__ double c_nu_ref = nu_ref;
 
 const int dof = 8;  // population-level model is a multivariate student's t-distribution with dof degrees of freedom
-__const__ int c_dof = dof;
+__constant__ int c_dof = dof;
 
 // physical constants, cgs
 const double clight = 2.99792458e10;
-__const__ double c_clight = clight;
+__constant__ double c_clight = clight;
 const double hplanck = 6.6260755e-27;
-__const__ double c_hplanck = hplanck;
+__constant__ double c_hplanck = hplanck;
 const double kboltz = 1.380658e-16;
-__const__ double c_kboltz = kboltz;
+__constant__ double c_kboltz = kboltz;
 
 // Compute the model dust SED, a modified blackbody
 __device__
@@ -75,14 +75,12 @@ double modified_blackbody(double nu, double C, double beta, double T) {
 __device__
 double LogDensityMeas(double* chi, double* meas, double* meas_unc)
 {
-	double nu[5] = {6.0e11, 8.571e11, 1.2e11, 1.765e12, 4.286e12};
-
 	double C = exp(chi[0]);
 	double T = exp(chi[2]);
 	double logdens_meas = 0.0;
 	for (int j = 0; j < mfeat; ++j) {
 		// p(y_ij | chi_ij) is a normal density centered at the model SED
-		double model_sed = modified_blackbody(nu[j], C, chi[1], T);
+		double model_sed = modified_blackbody(c_nu[j], C, chi[1], T);
 		logdens_meas += -0.5 * (meas[j] - model_sed) * (meas[j] - model_sed) / (meas_unc[j] * meas_unc[j]);
 	}
 	return logdens_meas;
@@ -203,8 +201,9 @@ int main(int argc, char** argv)
 	 * Read in the data for the measurements, meas, and their standard deviations, meas_unc.
 	 */
 
-	std::string datafile = "data/cb244.txt";
+	std::string datafile = "../data/cbt1000.dat";
 	int ndata = get_file_lines(datafile);
+	std::cout << "Loaded " << ndata << " data points." << std::endl;
 
 	vecvec fnu(ndata);
 	vecvec fnu_sig(ndata);

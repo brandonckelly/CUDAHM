@@ -6,6 +6,8 @@
  */
 
 #include "input_output.hpp"
+#include <cmath>
+#include <stdexcept>
 
 // return the number of lines in a text file
 int get_file_lines(std::string& filename) {

@@ -27,7 +27,7 @@ public:
 			int nThreads=256) :
 				niter_(niter), nburnin_(nburnin), nthin_theta_(nthin_theta), nthin_chi_(nthin_chi)
 		{
-			_InitializeMembers(meas.size(), nThreads)
+			_InitializeMembers(meas.size(), nThreads);
 			// construct DataAugmentation and PopulationPar objects
 			Daug_.reset(new DataAugmentation<mfeat, pchi, dtheta>(meas, meas_unc));
 			PopPar_.reset(new PopulationPar<mfeat, pchi, dtheta>());
@@ -45,8 +45,8 @@ public:
 
 	// Constructor for subclassed DataAugmentation and PopulationPar classes. In this case the user must supply the
 	// pointers to the instantiated subclasses of DataAugmentation and PopulatinPar.
-	GibbsSampler(boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> >& Daug,
-			boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> >& Theta,
+	GibbsSampler(boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > Daug,
+			boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > Theta,
 			int niter, int nburnin, int nthin_chi=100, int nthin_theta=1, int nThreads=256) :
 				niter_(niter), nburnin_(nburnin), nthin_theta_(nthin_theta), nthin_chi_(nthin_chi)
 		{
@@ -57,7 +57,7 @@ public:
 			PopPar_ = Theta;
 			// set the CUDA grid launch parameters and initialize the random number generator on the GPU
 			Daug_->SetCudaGrid(nB_, nT_);
-			Daug_->InitializeRNG();
+			Daug_->InitializeDeviceRNG();
 			PopPar_->SetCudaGrid(nB_, nT_);
 			// make sure the parameter objects can talk to eachother
 			Daug_->SetPopulationPtr(PopPar_);

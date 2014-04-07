@@ -109,7 +109,7 @@ public:
 		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 	}
 
-	void Initialize() {
+	virtual void Initialize() {
 		// grab pointers to the device vector memory locations
 		double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
 		double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
@@ -127,7 +127,7 @@ public:
 	}
 
 	// launch the update kernel on the GPU
-	void Update() {
+	virtual void Update() {
 		// grab the pointers to the device memory locations
 		double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
 		double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
@@ -291,7 +291,7 @@ public:
 	}
 
 	// calculate the initial value of the population parameters
-	virtual void Initialize() {
+	void Initialize() {
 		// first set initial values
 		InitialValue();
 

@@ -10,6 +10,11 @@
 
 // standard includes
 #include <fstream>
+#include <string>
+#include <vector>
+
+typedef std::vector<std::vector<double> > vecvec;
+
 
 // return the number of lines in a text file
 int get_file_lines(std::string& filename);

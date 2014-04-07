@@ -20,6 +20,7 @@
 template <int mfeat, int pchi, int dtheta>
 class DustPopPar: public PopulationPar<mfeat, pchi, dtheta>
 {
+public:
 	// constructor
 	DustPopPar() : PopulationPar<mfeat, pchi, dtheta>(), pchi_(pchi), dtheta_(dtheta)
 	{
@@ -41,13 +42,13 @@ class DustPopPar: public PopulationPar<mfeat, pchi, dtheta>
 
 	// Set the initial values to the sample mean and covariance matrix
 	void InitialValue() {
-		vecvec chi = Daug_->GetChi();
-		thrust::fill(h_theta.begin(), h_theta.end(), 0.0);
+		vecvec chi = this->Daug->GetChi();
+		thrust::fill(this->h_theta.begin(), this->h_theta.end(), 0.0);
 		// first compute sample mean
 		int ndata = chi.size();
 		for (int i = 0; i < ndata; ++i) {
 			for (int j = 0; j < pchi_; ++j) {
-				h_theta[j] += chi[i][j] / double(ndata);
+				this->h_theta[j] += chi[i][j] / double(ndata);
 			}
 		}
 		// now compute sample variances and covariances
@@ -55,17 +56,17 @@ class DustPopPar: public PopulationPar<mfeat, pchi, dtheta>
 		for (int i = 0; i < ndata; ++i) {
 			for (int j = 0; j < pchi_; ++j) {
 				for (int k = 0; k < pchi_; ++k) {
-					chi_covar[j * pchi_ + k] += (chi[i][j] - h_theta[j]) * (chi[i][k] - h_theta[k]) / ndata;
+					chi_covar[j * pchi_ + k] += (chi[i][j] - this->h_theta[j]) * (chi[i][k] - this->h_theta[k]) / ndata;
 				}
 			}
 		}
 		// finally, convert to variances and correlations
-		h_theta[3] = sqrt(chi_covar[0]);
-		h_theta[4] = sqrt(chi_covar[4]);
-		h_theta[5] = sqrt(chi_covar[8]);
-		h_theta[6] = chi_covar[1] / sqrt(chi_covar[0] * chi_covar[4]);
-		h_theta[7] = chi_covar[2] / sqrt(chi_covar[0] * chi_covar[8]);
-		h_theta[8] = chi_covar[5] / sqrt(chi_covar[4] * chi_covar[8]);
+		this->h_theta[3] = sqrt(chi_covar[0]);
+		this->h_theta[4] = sqrt(chi_covar[4]);
+		this->h_theta[5] = sqrt(chi_covar[8]);
+		this->h_theta[6] = chi_covar[1] / sqrt(chi_covar[0] * chi_covar[4]);
+		this->h_theta[7] = chi_covar[2] / sqrt(chi_covar[0] * chi_covar[8]);
+		this->h_theta[8] = chi_covar[5] / sqrt(chi_covar[4] * chi_covar[8]);
 	}
 
 	// return the log-density of the prior for the mean parameter

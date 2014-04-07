@@ -36,21 +36,20 @@
 const int mfeat = 5;
 const int pchi = 3;  // chi = {log C, beta, log T}, where C \propto N_H
 const int dtheta = 9;
-const double nu[mfeat] = {6.0e11, 8.571e11, 1.2e11, 1.765e12, 4.286e12};  // {500, 350, 250, 170, 70} microns, Herschel bands
-__const__ const double c_nu[mfeat] = {6.0e11, 8.571e11, 1.2e11, 1.765e12, 4.286e12};  // also need to store these values on the GPU
+__const__ const double c_nu[mfeat] = {6.0e11, 8.571e11, 1.2e11, 1.765e12, 4.286e12};  // {500, 350, 250, 170, 70} microns, Herschel bands
 const double nu_ref = 2.3e11;  // 230 GHz
-__const__ const double c_nu_ref = nu_ref;
+__const__ double c_nu_ref = nu_ref;
 
 const int dof = 8;  // population-level model is a multivariate student's t-distribution with dof degrees of freedom
-__const__ const int c_dof = dof;
+__const__ int c_dof = dof;
 
 // physical constants, cgs
-const int clight = 2.99792458e10;
-__const__ int c_clight = clight;
-const int hplanck = 6.6260755e-27;
-__const__ int c_hplanck = hplanck;
-const int kboltz = 1.380658e-16;
-__const__ int c_kboltz = kboltz;
+const double clight = 2.99792458e10;
+__const__ double c_clight = clight;
+const double hplanck = 6.6260755e-27;
+__const__ double c_hplanck = hplanck;
+const double kboltz = 1.380658e-16;
+__const__ double c_kboltz = kboltz;
 
 // Compute the model dust SED, a modified blackbody
 __device__
@@ -76,13 +75,15 @@ double modified_blackbody(double nu, double C, double beta, double T) {
 __device__
 double LogDensityMeas(double* chi, double* meas, double* meas_unc)
 {
+	double nu[5] = {6.0e11, 8.571e11, 1.2e11, 1.765e12, 4.286e12};
+
 	double C = exp(chi[0]);
 	double T = exp(chi[2]);
 	double logdens_meas = 0.0;
 	for (int j = 0; j < mfeat; ++j) {
 		// p(y_ij | chi_ij) is a normal density centered at the model SED
-		double model_sed = modified_blackbody(c_nu[j], C, chi[1], T);
-		logdens_meas += -0.5 * (meas[j] - model_sed) * (meas[j] - model_sed) / (meas_unc[j] * * meas_unc[j]);
+		double model_sed = modified_blackbody(nu[j], C, chi[1], T);
+		logdens_meas += -0.5 * (meas[j] - model_sed) * (meas[j] - model_sed) / (meas_unc[j] * meas_unc[j]);
 	}
 	return logdens_meas;
 }
@@ -124,10 +125,10 @@ double chisqr(double* x, double* covar_inv, int nx)
 	return chisqr;
 }
 
-__device__ __host__
-double tanh(double x) {
-	return (exp(2.0 * x) - 1.0) / (exp(2.0 * x) + 1.0);
-}
+//__device__ __host__
+//double tanh(double x) {
+//	return (exp(2.0 * x) - 1.0) / (exp(2.0 * x) + 1.0);
+//}
 
 /*
  * This function returns the logarithm of the conditional density of the characteristics given the
@@ -143,8 +144,8 @@ double tanh(double x) {
 __device__
 double LogDensityPop(double* chi, double* theta)
 {
-	double covar[pchi * pchi - ((pchi - 1) * pchi) / 2];
-	double covar_inv[pchi * pchi - ((pchi - 1) * pchi) / 2];
+	double covar[pchi * pchi];
+	double covar_inv[pchi * pchi];
 	double cov_determ_inv;
 
 	// transform theta values to covariance matrix of (log C, beta, log T)
@@ -202,8 +203,8 @@ int main(int argc, char** argv)
 	 * Read in the data for the measurements, meas, and their standard deviations, meas_unc.
 	 */
 
-	std::string datafile = "data/cb244.txt"
-	int ndata = get_file_lines(datafile)
+	std::string datafile = "data/cb244.txt";
+	int ndata = get_file_lines(datafile);
 
 	vecvec fnu(ndata);
 	vecvec fnu_sig(ndata);
@@ -230,12 +231,12 @@ int main(int argc, char** argv)
 	 * dimensions nsamples x dtheta) object.
 	 */
 
-	// first intantiate the subclassed DataAugmentation and PopulationPar objects
+	// first instantiate the subclassed DataAugmentation and PopulationPar objects
 	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > CBT(new ConstBetaTemp<mfeat, pchi, dtheta>(fnu, fnu_sig));
-	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > Theta(new DustPopPar<mfeat, pchi, dtheta>());
+	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > Theta(new DustPopPar<mfeat, pchi, dtheta>);
 
 	// instantiate the GibbsSampler object and run the sampler
-	GibbsSampler<pchi, mfeat, dtheta> Sampler(CBT, Theta, nmcmc_iter, nburnin, nthin_chi);
+	GibbsSampler<mfeat, pchi, dtheta> Sampler(CBT, Theta, nmcmc_iter, nburnin, nthin_chi);
 	Sampler.Run();
 
    // grab the samples

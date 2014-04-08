@@ -34,13 +34,16 @@ cbt_cov = np.dot(np.diag(cbt_sigma), cbt_corr.dot(np.diag(cbt_sigma)))
 
 cbt = np.random.multivariate_normal(cbt_mean, cbt_cov, ndata)
 
+data_dir = os.environ['HOME'] + '/Projects/CUDAHM/dusthm/data/'
+np.savetxt(data_dir + 'true_cbt_' + str(ndata) + '.dat', cbt, fmt='%10.6e')
+
 sed = np.zeros((ndata, len(nu)))
 
 for j in range(len(nu)):
     sed[:, j] = modified_bbody(nu[j], np.exp(cbt[:, 0]), cbt[:, 1], np.exp(cbt[:, 2]))
 
 # generate noise assuming a median S/N of 200
-fnu_sig = np.median(sed, axis=0) / 200.0
+fnu_sig = np.median(sed, axis=0) / 1000.0
 fnu_sig = np.outer(np.ones(ndata), fnu_sig)
 
 fnu = sed + fnu_sig * np.random.standard_normal(fnu_sig.shape)
@@ -58,7 +61,7 @@ data[:, 8] = fnu[:, 4]
 data[:, 9] = fnu_sig[:, 4]
 
 data_dir = os.environ['HOME'] + '/Projects/CUDAHM/dusthm/data/'
-np.savetxt(data_dir + 'cbt' + str(ndata) + '.dat', data, fmt='%10.6e')
+np.savetxt(data_dir + 'cbt_sed_' + str(ndata) + '.dat', data, fmt='%10.6e')
 
 idx = np.random.random_integers(0, fnu.shape[0]-1)
 plt.errorbar(nu, fnu[idx], yerr=fnu_sig[idx])

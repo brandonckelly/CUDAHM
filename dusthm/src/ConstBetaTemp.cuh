@@ -31,7 +31,7 @@ void initial_cbt_value(double* chi, double* meas, double* meas_unc, double* chol
 		// set initial covariance matrix of the chi proposals as the identity matrix
 		int diag_index = 0;
 		for (int j=0; j<pchi; j++) {
-			cholfact[idata + ndata * diag_index] = 1.0;
+			cholfact[idata + ndata * diag_index] = 0.01;
 			diag_index += j + 2;  // cholesky factor is lower diagonal
 		}
 		// copy value to registers before computing initial log-density

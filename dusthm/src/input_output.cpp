@@ -48,6 +48,10 @@ void read_data(std::string& filename, vecvec& meas, vecvec& meas_unc, int ndata,
 // dump the sampled values of the population parameter to a text file
 void write_thetas(std::string& filename, vecvec& theta_samples) {
 	std::ofstream outfile(filename.c_str());
+
+	outfile << "# log(C) mean, beta mean, log(T) mean, log(log(C) sigma), log(beta sigma), log(log(T) sigma), tanh(log(C) corr), "
+			<< "tanh(beta corr), tanh(log(T) corr)" << std::endl;
+
 	int nsamples = theta_samples.size();
 	int dtheta = theta_samples[0].size();
 	for (int i = 0; i < nsamples; ++i) {
@@ -64,6 +68,8 @@ void write_chis(std::string& filename, std::vector<vecvec>& chi_samples) {
 	int nsamples = chi_samples.size();
 	int ndata = chi_samples[0].size();
 	int pchi = chi_samples[0][0].size();
+
+	outfile << "# log(C_i) mean, log(C_i) sigma, beta_i mean, beta_i sigma, log(T_i) mean, log(T_i) sigma" << std::endl;
 
 	for (int i = 0; i < ndata; ++i) {
 		std::vector<double> post_mean_i(pchi, 0.0);

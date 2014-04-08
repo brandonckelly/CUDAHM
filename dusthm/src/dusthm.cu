@@ -216,10 +216,10 @@ int main(int argc, char** argv)
 	 * YOU DO NOT RUN OUR OF MEMORY.
 	 */
 
-	int nmcmc_iter = 10;
-	// int nburnin = nmcmc_iter / 2;
-	int nburnin = 1;
-	int nchi_samples = 10;
+	int nmcmc_iter = 50000;
+	int nburnin = nmcmc_iter / 2;
+	// int nburnin = 1;
+	int nchi_samples = 100;
 	int nthin_chi = nmcmc_iter / nchi_samples;
 
 	/*

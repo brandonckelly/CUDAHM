@@ -58,9 +58,19 @@ public:
 				chi_var[j] += (chi[i][j] - this->h_theta[j]) * (chi[i][j] - this->h_theta[j]) / ndata;
 			}
 		}
-		this->h_theta[3] = sqrt(chi_var[0]);
-		this->h_theta[4] = sqrt(chi_var[1]);
-		this->h_theta[5] = sqrt(chi_var[2]);
+		this->h_theta[3] = log(sqrt(chi_var[0]));
+		this->h_theta[4] = log(sqrt(chi_var[1]));
+		this->h_theta[5] = log(sqrt(chi_var[2]));
+	}
+
+	void InitialCholFactor() {
+		// set initial covariance matrix of the theta proposals as a diagonal matrix
+		thrust::fill(this->cholfact.begin(), this->cholfact.end(), 0.0);
+		int diag_index = 0;
+		for (int k=0; k<dtheta; k++) {
+			this->cholfact[diag_index] = 0.01;
+			diag_index += k + 2;
+		}
 	}
 
 	// return the log-density of the prior for the mean parameter
@@ -68,10 +78,10 @@ public:
 		double logprior = 0.0;
 		for (int j = 0; j < pchi; ++j) {
 			// prior for mu is independent and normal
-			std::cout << "mu[" << j << "]: " << mu[j] << ", ";
+			//std::cout << "mu[" << j << "]: " << mu[j] << ", ";
 			logprior += -0.5 * log(prior_mu_var[j]) - 0.5 * (mu[j] - prior_mu_mean[j]) * (mu[j] - prior_mu_mean[j]) / prior_mu_var[j];
 		}
-		std::cout << std::endl;
+		//std::cout << std::endl;
 		return logprior;
 	}
 
@@ -80,11 +90,11 @@ public:
 		double logprior = 0.0;
 		for (int j = 0; j < pchi; ++j) {
 			// prior for scale parameters is independent and log-normal
-			std::cout << "logsigma[" << j << "]: " << logsigma[j] << ", ";
+			//std::cout << "logsigma[" << j << "]: " << logsigma[j] << ", ";
 			logprior += -0.5 * log(prior_sigma_var[j]) -
 					0.5 * (logsigma[j] - prior_sigma_mean[j]) * (logsigma[j] - prior_sigma_mean[j]) / prior_sigma_var[j];
 		}
-		std::cout << std::endl;
+		//std::cout << std::endl;
 		return logprior;
 	}
 
@@ -93,9 +103,9 @@ public:
 		std::vector<double> corr(pchi);
 		for (int j = 0; j < pchi; ++j) {
 			corr[j] = (exp(2.0 * arctanh_corr[j]) - 1.0) / (exp(2.0 * arctanh_corr[j]) + 1.0);
-			std::cout << "corr[" << j << "]: " << corr[j] << ", ";
+			//std::cout << "corr[" << j << "]: " << corr[j] << ", ";
 		}
-		std::cout << std::endl;
+		//std::cout << std::endl;
 		// make sure correlation matrix is positive definite
 		double determ =
 				(1.0 - corr[2] * corr[2]) - corr[0] * (corr[0] - corr[2] * corr[3]) + corr[1] * (corr[0] * corr[2] - corr[1]);
@@ -121,7 +131,7 @@ public:
 		double mean_prior = MeanPrior(mu);
 		double sigma_prior = SigmaPrior(logsigma);
 		double corr_prior = CorrPrior(arctanh_corr);
-		std::cout << "Priors: " << mean_prior << ", " << sigma_prior << ", " << corr_prior << std::endl;
+		//std::cout << "Priors: " << mean_prior << ", " << sigma_prior << ", " << corr_prior << std::endl;
 		return MeanPrior(mu) + SigmaPrior(logsigma) + CorrPrior(arctanh_corr);
 	}
 

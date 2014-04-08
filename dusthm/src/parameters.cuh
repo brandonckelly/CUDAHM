@@ -290,15 +290,7 @@ public:
 		thrust::fill(h_theta.begin(), h_theta.end(), 0.0);
 	}
 
-	// calculate the initial value of the population parameters
-	void Initialize() {
-		// first set initial values
-		InitialValue();
-
-		// transfer initial value of theta to GPU constant memory
-	    double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
-		CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_theta, dtheta*sizeof(*p_theta)));
-
+	virtual void InitialCholFactor() {
 		// set initial covariance matrix of the theta proposals as the identity matrix
 		thrust::fill(cholfact.begin(), cholfact.end(), 0.0);
 		int diag_index = 0;
@@ -306,6 +298,16 @@ public:
 			cholfact[diag_index] = 1.0;
 			diag_index += k + 2;
 		}
+	}
+
+	// calculate the initial value of the population parameters
+	void Initialize() {
+		// first set initial values
+		InitialValue();
+		InitialCholFactor();
+		// transfer initial value of theta to GPU constant memory
+	    double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
+		CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_theta, dtheta*sizeof(*p_theta)));
 
 		// get initial value of conditional log-posterior for theta|chi
 		double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi

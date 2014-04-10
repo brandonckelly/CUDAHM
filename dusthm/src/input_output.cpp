@@ -33,6 +33,8 @@ void read_data(std::string& filename, vecvec& meas, vecvec& meas_unc, int ndata,
 	std::ifstream input_file(filename.c_str());
 	meas.resize(ndata);
 	meas_unc.resize(ndata);
+	std::string header_line;
+	std::getline(input_file, header_line);  // read the header line
 	for (int i = 0; i < ndata; ++i) {
 		std::vector<double> this_meas(mfeat);
 		std::vector<double> this_meas_unc(mfeat);
@@ -45,12 +47,27 @@ void read_data(std::string& filename, vecvec& meas, vecvec& meas_unc, int ndata,
 	input_file.close();
 }
 
+// load in a set of (const, beta, temp) values
+void load_cbt(std::string& filename, vecvec& cbt, int ndata) {
+	std::ifstream input_file(filename.c_str());
+	cbt.resize(ndata);
+	for (int i = 0; i < ndata; ++i) {
+		std::vector<double> this_cbt(3);
+		for (int j = 0; j < 3; ++j) {
+			input_file >> this_cbt[j];
+		}
+		cbt[i] = this_cbt;
+	}
+	input_file.close();
+}
+
+
 // dump the sampled values of the population parameter to a text file
 void write_thetas(std::string& filename, vecvec& theta_samples) {
 	std::ofstream outfile(filename.c_str());
 
-	outfile << "# log(C) mean, beta mean, log(T) mean, log(log(C) sigma), log(beta sigma), log(log(T) sigma), tanh(log(C) corr), "
-			<< "tanh(beta corr), tanh(log(T) corr)" << std::endl;
+	outfile << "# log(C) mean, beta mean, log(T) mean, log(log(C) sigma), log(beta sigma), log(log(T) sigma), arctanh(log(C) corr), "
+			<< "arctanh(beta corr), arctanh(log(T) corr)" << std::endl;
 
 	int nsamples = theta_samples.size();
 	int dtheta = theta_samples[0].size();

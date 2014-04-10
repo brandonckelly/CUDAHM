@@ -102,7 +102,7 @@ public:
 	double CorrPrior(std::vector<double> arctanh_corr) {
 		std::vector<double> corr(pchi);
 		for (int j = 0; j < pchi; ++j) {
-			corr[j] = (exp(2.0 * arctanh_corr[j]) - 1.0) / (exp(2.0 * arctanh_corr[j]) + 1.0);
+			corr[j] = tanh(arctanh_corr[j]);
 			//std::cout << "corr[" << j << "]: " << corr[j] << ", ";
 		}
 		//std::cout << std::endl;

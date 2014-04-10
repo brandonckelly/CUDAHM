@@ -36,11 +36,12 @@
 const int mfeat = 5;
 const int pchi = 3;  // chi = {log C, beta, log T}, where C \propto N_H
 const int dtheta = 9;
-__constant__ const double c_nu[mfeat] = {6.0e11, 8.571e11, 1.2e11, 1.765e12, 4.286e12};  // {500, 350, 250, 170, 70} microns, Herschel bands
+// frequencies correspond to {500, 350, 250, 170, 70} microns, the Herschel bands
+__constant__ const double c_nu[mfeat] = {5.99584916e11, 8.56549880e11, 1.19916983e12, 1.87370286e12, 2.99792458e12};
 const double nu_ref = 2.3e11;  // 230 GHz
 __constant__ double c_nu_ref = nu_ref;
 
-const int dof = 8;  // population-level model is a multivariate student's t-distribution with dof degrees of freedom
+const int dof = 8000;  // population-level model is a multivariate student's t-distribution with dof degrees of freedom
 __constant__ int c_dof = dof;
 
 // physical constants, cgs
@@ -165,7 +166,7 @@ double LogDensityPop(double* chi, double* theta)
 	double zsqr = chisqr(chi_cent, covar_inv, pchi);
 
 	// multivariate student's t-distribution with DOF degrees of freedom
-	double logdens_pop = 0.5 * log(cov_determ_inv) - (pchi + c_dof) / 2.0 * log(1.0 + zsqr / pchi);
+	double logdens_pop = 0.5 * log(cov_determ_inv) - (pchi + c_dof) / 2.0 * log(1.0 + zsqr / c_dof);
 
 	return logdens_pop;
 }
@@ -202,7 +203,7 @@ int main(int argc, char** argv)
 	 */
 
 	std::string datafile = "../data/cbt_sed_1000.dat";
-	int ndata = get_file_lines(datafile);
+	int ndata = get_file_lines(datafile) - 1;  // subtract off one line for the header
 	std::cout << "Loaded " << ndata << " data points." << std::endl;
 
 	vecvec fnu(ndata);
@@ -216,9 +217,9 @@ int main(int argc, char** argv)
 	 * YOU DO NOT RUN OUR OF MEMORY.
 	 */
 
-	int nmcmc_iter = 50000;
-	int nburnin = nmcmc_iter / 2;
-	// int nburnin = 1;
+	int nmcmc_iter = 10000;
+	// int nburnin = nmcmc_iter / 2;
+	int nburnin = 1;
 	int nchi_samples = 100;
 	int nthin_chi = nmcmc_iter / nchi_samples;
 
@@ -237,6 +238,30 @@ int main(int argc, char** argv)
 
 	// instantiate the GibbsSampler object and run the sampler
 	GibbsSampler<mfeat, pchi, dtheta> Sampler(CBT, Theta, nmcmc_iter, nburnin, nthin_chi);
+
+	/*
+	 * DEBUGGING
+	 */
+	vecvec cbt_true(ndata);
+	std::string cbtfile = "../data/true_cbt_1000.dat";
+	load_cbt(cbtfile, cbt_true, ndata);
+
+	// copy input data to data members
+	hvector h_cbt(ndata * pchi);
+	dvector d_cbt;
+	for (int j = 0; j < pchi; ++j) {
+		for (int i = 0; i < ndata; ++i) {
+			h_cbt[ndata * j + i] = cbt_true[i][j];
+		}
+	}
+	// copy data from host to device
+	d_cbt = h_cbt;
+
+	Sampler.GetDaugPtr()->SetChi(d_cbt, true);
+	// Sampler.FixChar();
+
+	Sampler.GetThetaPtr()->InitialValue();
+
 	Sampler.Run();
 
    // grab the samples

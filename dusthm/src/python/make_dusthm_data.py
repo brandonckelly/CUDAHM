@@ -12,11 +12,12 @@ kboltz = 1.380658e-16
 wavelength = np.asarray([100.0, 160.0, 250.0, 350.0, 500.0])  # observational wavelengths in microns
 nu = clight / (wavelength / 1e4)
 nu.sort()
+print nu
 nu_ref = 2.3e11  # 230 GHz
 
 
 def modified_bbody(nu, const, beta, temp):
-    sed = 2.0 * hplanck * nu ** 3/ (clight * clight) / (np.exp(hplanck * nu / (kboltz * temp)) - 1.0)
+    sed = 2.0 * hplanck * nu ** 3 / (clight * clight) / (np.exp(hplanck * nu / (kboltz * temp)) - 1.0)
     sed *= const * (nu / nu_ref) ** beta
     return sed
 
@@ -61,7 +62,10 @@ data[:, 8] = fnu[:, 4]
 data[:, 9] = fnu_sig[:, 4]
 
 data_dir = os.environ['HOME'] + '/Projects/CUDAHM/dusthm/data/'
-np.savetxt(data_dir + 'cbt_sed_' + str(ndata) + '.dat', data, fmt='%10.6e')
+header = 'nu = '
+for j in range(len(nu)):
+    header += str(nu[j]) + ', '
+np.savetxt(data_dir + 'cbt_sed_' + str(ndata) + '.dat', data, fmt='%10.6e', header=header)
 
 idx = np.random.random_integers(0, fnu.shape[0]-1)
 plt.errorbar(nu, fnu[idx], yerr=fnu_sig[idx])

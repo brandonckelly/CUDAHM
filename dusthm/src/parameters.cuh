@@ -377,6 +377,10 @@ public:
 	    ratio = exp(lograt);
 	    double unif = uniform(rng);
 	    bool accept = (unif < ratio) && isfinite(ratio);
+	    if (!isfinite(ratio)) {
+			// metropolis ratio is not finite, so make it equal to zero to not screw up the proposal cholesky factor update
+	    	ratio = 0.0;
+		}
 	    return accept;
 	}
 

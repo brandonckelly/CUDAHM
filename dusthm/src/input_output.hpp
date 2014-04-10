@@ -22,6 +22,9 @@ int get_file_lines(std::string& filename);
 // read in the data
 void read_data(std::string& filename, vecvec& meas, vecvec& meas_unc, int ndata, int mfeat);
 
+// load in a set of (const, beta, temp) values
+void load_cbt(std::string& filename, vecvec& cbt, int ndata);
+
 // dump the sampled values of the population parameter to a text file
 void write_thetas(std::string& filename, vecvec& theta_samples);
 

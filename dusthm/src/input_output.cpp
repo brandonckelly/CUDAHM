@@ -42,7 +42,7 @@ void read_data(std::string& filename, vecvec& meas, vecvec& meas_unc, int ndata,
 			input_file >> this_meas[j] >> this_meas_unc[j];
 		}
 		meas[i] = this_meas;
-		meas_unc[i] = this_meas;
+		meas_unc[i] = this_meas_unc;
 	}
 	input_file.close();
 }

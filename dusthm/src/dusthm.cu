@@ -41,7 +41,7 @@ __constant__ const double c_nu[mfeat] = {5.99584916e11, 8.56549880e11, 1.1991698
 const double nu_ref = 2.3e11;  // 230 GHz
 __constant__ double c_nu_ref = nu_ref;
 
-const int dof = 8000;  // population-level model is a multivariate student's t-distribution with dof degrees of freedom
+const int dof = 8;  // population-level model is a multivariate student's t-distribution with dof degrees of freedom
 __constant__ int c_dof = dof;
 
 // physical constants, cgs
@@ -57,6 +57,7 @@ __device__
 double modified_blackbody(double nu, double C, double beta, double T) {
 	double sed = 2.0 * c_hplanck * nu * nu * nu / (c_clight * c_clight) / (exp(c_hplanck * nu / (c_kboltz * T)) - 1.0);
 	sed *= C * pow(nu / c_nu_ref, beta);
+
 	return sed;
 }
 
@@ -217,9 +218,8 @@ int main(int argc, char** argv)
 	 * YOU DO NOT RUN OUR OF MEMORY.
 	 */
 
-	int nmcmc_iter = 10000;
-	// int nburnin = nmcmc_iter / 2;
-	int nburnin = 1;
+	int nmcmc_iter = 50000;
+	int nburnin = nmcmc_iter / 2;
 	int nchi_samples = 100;
 	int nthin_chi = nmcmc_iter / nchi_samples;
 
@@ -242,25 +242,35 @@ int main(int argc, char** argv)
 	/*
 	 * DEBUGGING
 	 */
-	vecvec cbt_true(ndata);
-	std::string cbtfile = "../data/true_cbt_1000.dat";
-	load_cbt(cbtfile, cbt_true, ndata);
-
-	// copy input data to data members
-	hvector h_cbt(ndata * pchi);
-	dvector d_cbt;
-	for (int j = 0; j < pchi; ++j) {
-		for (int i = 0; i < ndata; ++i) {
-			h_cbt[ndata * j + i] = cbt_true[i][j];
-		}
-	}
-	// copy data from host to device
-	d_cbt = h_cbt;
-
-	Sampler.GetDaugPtr()->SetChi(d_cbt, true);
-	// Sampler.FixChar();
-
-	Sampler.GetThetaPtr()->InitialValue();
+//	vecvec cbt_true(ndata);
+//	std::string cbtfile = "../data/true_cbt_1000.dat";
+//	load_cbt(cbtfile, cbt_true, ndata);
+//
+//	// copy input data to data members
+//	hvector h_cbt(ndata * pchi);
+//	dvector d_cbt;
+//	for (int j = 0; j < pchi; ++j) {
+//		for (int i = 0; i < ndata; ++i) {
+//			h_cbt[ndata * j + i] = cbt_true[i][j];
+//		}
+//	}
+//	// copy data from host to device
+//	d_cbt = h_cbt;
+//
+//	hvector h_theta(dtheta);
+//	h_theta[0] = 15.0;
+//	h_theta[1] = 2.0;
+//	h_theta[2] = log(15.0);
+//	h_theta[3] = log(1.0);
+//	h_theta[4] = log(0.1);
+//	h_theta[5] = log(0.3);
+//	h_theta[6] = atanh(-0.5);
+//	h_theta[7] = atanh(0.0);
+//	h_theta[8] = atanh(0.25);
+//
+//	Sampler.GetDaugPtr()->SetChi(d_cbt, true);
+//	Sampler.GetThetaPtr()->SetTheta(h_theta, true);
+//	Sampler.FixPopPar();
 
 	Sampler.Run();
 

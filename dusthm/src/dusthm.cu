@@ -19,6 +19,7 @@
 
 // standard library includes
 #include <iostream>
+#include <time.h>
 
 // local CUDAHM includes
 #include "GibbsSampler.hpp"
@@ -125,11 +126,6 @@ double chisqr(double* x, double* covar_inv, int nx)
 	return chisqr;
 }
 
-//__device__ __host__
-//double tanh(double x) {
-//	return (exp(2.0 * x) - 1.0) / (exp(2.0 * x) + 1.0);
-//}
-
 /*
  * This function returns the logarithm of the conditional density of the characteristics given the
  * population parameter theta for a single data point, log p(chi_i | theta). This function must be supplied by
@@ -199,10 +195,11 @@ extern __constant__ double c_theta[100];
 
 int main(int argc, char** argv)
 {
+	time_t timer1, timer2;  // keep track of how long the program takes to run
+	time(&timer1);
 	/*
 	 * Read in the data for the measurements, meas, and their standard deviations, meas_unc.
 	 */
-
 	std::string datafile = "../data/cbt_sed_1000.dat";
 	int ndata = get_file_lines(datafile) - 1;  // subtract off one line for the header
 	std::cout << "Loaded " << ndata << " data points." << std::endl;
@@ -288,6 +285,11 @@ int main(int argc, char** argv)
 	// 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
 	std::string chifile("dusthm_chi_summary.dat");
 	write_chis(chifile, chi_samples);
+
+	time(&timer2);
+	double seconds = difftime(timer2, timer1);
+
+	std::cout << "Program took " << seconds << " seconds." << std::endl;
 
 }
 

@@ -22,44 +22,46 @@ template<int mfeat, int pchi, int dtheta>
 class GibbsSampler
 {
 public:
-	// constructor
+	// constructor for default DataAugmentation and PopulationPar classes
 	GibbsSampler(vecvec& meas, vecvec& meas_unc, int niter, int nburnin, int nthin_chi=100, int nthin_theta=1,
 			int nThreads=256) :
 				niter_(niter), nburnin_(nburnin), nthin_theta_(nthin_theta), nthin_chi_(nthin_chi)
 		{
-			int ndata = meas.size();
-			// first do CUDA grid launch
-			dim3 nT(nThreads);
-			nT_ = nT;
-			dim3 nB((ndata + nT.x-1) / nT.x);
-			nB_ = nB;
-			if (nB.x > 65535)
-			{
-				std::stringstream errmsg;
-				errmsg << "ERROR: Block is too large:\n";
-				errmsg << nB.x << " blocks. Max is 65535.\n";
-				throw std::runtime_error(errmsg.str());
-			}
-
+			_InitializeMembers(meas.size(), nThreads);
 			// construct DataAugmentation and PopulationPar objects
-			Daug_.reset(new DataAugmentation<mfeat, pchi, dtheta>(meas, meas_unc, nB_, nT_));
-			PopPar_.reset(new PopulationPar<mfeat, pchi, dtheta>(nB_, nT_));
+			Daug_.reset(new DataAugmentation<mfeat, pchi, dtheta>(meas, meas_unc));
+			PopPar_.reset(new PopulationPar<mfeat, pchi, dtheta>());
+			// set the CUDA grid launch parameters and initialize the random number generator on the GPU
+			Daug_->SetCudaGrid(nB_, nT_);
+			Daug_->InitializeDeviceRNG();
+			PopPar_->SetCudaGrid(nB_, nT_);
+			// make sure the parameter objects can talk to eachother
 			Daug_->SetPopulationPtr(PopPar_);
 			PopPar_->SetDataAugPtr(Daug_);
 
-			// set container sizes
-			int nchi_samples = niter / nthin_chi;
-			int ntheta_samples = niter / nthin_theta;
-			ChiSamples_.resize(nchi_samples);
-			ThetaSamples_.resize(ntheta_samples);
-			LogDensMeas_Samples_.resize(nchi_samples);
-			LogDensPop_Samples_.resize(ntheta_samples);
+			// Set the initial values of the characteristics and thetas, as well as their proposal covariances
+			Initialize();
+		}
 
-			ntheta_samples_ = 0;
-			nchi_samples_ = 0;
-			current_iter_ = 1;
-			fix_poppar = false; // default is to sample both the population parameters and characteristics
-			fix_char = false;
+	// Constructor for subclassed DataAugmentation and PopulationPar classes. In this case the user must supply the
+	// pointers to the instantiated subclasses of DataAugmentation and PopulatinPar.
+	GibbsSampler(boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > Daug,
+			boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > Theta,
+			int niter, int nburnin, int nthin_chi=100, int nthin_theta=1, int nThreads=256) :
+				niter_(niter), nburnin_(nburnin), nthin_theta_(nthin_theta), nthin_chi_(nthin_chi)
+		{
+			int ndata = Daug->GetDataDim();
+			_InitializeMembers(ndata, nThreads);
+			// construct DataAugmentation and PopulationPar objects
+			Daug_ = Daug;
+			PopPar_ = Theta;
+			// set the CUDA grid launch parameters and initialize the random number generator on the GPU
+			Daug_->SetCudaGrid(nB_, nT_);
+			Daug_->InitializeDeviceRNG();
+			PopPar_->SetCudaGrid(nB_, nT_);
+			// make sure the parameter objects can talk to eachother
+			Daug_->SetPopulationPtr(PopPar_);
+			PopPar_->SetDataAugPtr(Daug_);
 
 			// Set the initial values of the characteristics and thetas, as well as their proposal covariances
 			Initialize();
@@ -184,6 +186,35 @@ protected:
 	vecvec ThetaSamples_;
 	std::vector<double> LogDensMeas_Samples_;
 	std::vector<double> LogDensPop_Samples_;
+
+	// initialize the values and sizes of the data members, called by the constructor
+	void _InitializeMembers(int ndata, int nThreads) {
+		// first do CUDA grid launch
+		dim3 nT(nThreads);
+		nT_ = nT;
+		dim3 nB((ndata + nT.x-1) / nT.x);
+		nB_ = nB;
+		if (nB.x > 65535)
+		{
+			std::stringstream errmsg;
+			errmsg << "ERROR: Block is too large:\n";
+			errmsg << nB.x << " blocks. Max is 65535.\n";
+			throw std::runtime_error(errmsg.str());
+		}
+		// set container sizes
+		int nchi_samples = niter_ / nthin_chi_;
+		int ntheta_samples = niter_ / nthin_theta_;
+		ChiSamples_.resize(nchi_samples);
+		ThetaSamples_.resize(ntheta_samples);
+		LogDensMeas_Samples_.resize(nchi_samples);
+		LogDensPop_Samples_.resize(ntheta_samples);
+
+		ntheta_samples_ = 0;
+		nchi_samples_ = 0;
+		current_iter_ = 1;
+		fix_poppar = false; // default is to sample both the population parameters and characteristics
+		fix_char = false;
+	}
 };
 
 #endif /* GIBBSSAMPLER_HPP_ */

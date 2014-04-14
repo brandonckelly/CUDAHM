@@ -26,8 +26,8 @@
 
 // standard includes
 #include <vector>
-// local includes
-#include "GibbsSampler.hpp"
+// CUDAHM includes
+#include "../../cudahm/src/GibbsSampler.hpp"
 
 // function definitions
 __device__ __host__

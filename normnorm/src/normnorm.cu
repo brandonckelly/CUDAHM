@@ -31,7 +31,7 @@
 #include <string>
 
 // local includes
-#include "GibbsSampler.hpp"
+#include "../../cudahm/src/GibbsSampler.hpp"
 
 // known dimensions of features, characteristics and population parameter
 const int mfeat = 3;

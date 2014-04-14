@@ -38,7 +38,7 @@
 #include <time.h>
 
 // local CUDAHM includes
-#include "GibbsSampler.hpp"
+#include "../../cudahm/src/GibbsSampler.hpp"
 #include "input_output.hpp"
 #include "ConstBetaTemp.cuh"
 #include "DustPopPar.hpp"

@@ -639,7 +639,8 @@ void UnitTests::ThetaPropose() {
 
 	int ntrials = 100000;
 	int current_iter = 1;
-    PopulationPar<3,3,3> Theta(nBlocks, nThreads);
+    PopulationPar<3,3,3> Theta;
+    Theta.SetCudaGrid(nBlocks, nThreads);
 
     hvector h_theta(3);
     h_theta[0] = 1.2;
@@ -724,7 +725,8 @@ void UnitTests::ThetaAcceptSame() {
 	std::cout << "Testing that population parameter updates always accept when posterior are the same." << std::endl;
 
 	int ntrials = 100000;
-    PopulationPar<3,3,3> Theta(nBlocks, nThreads);
+    PopulationPar<3,3,3> Theta;
+    Theta.SetCudaGrid(nBlocks, nThreads);
 
 	bool accept;
 	int naccept = 0;
@@ -753,8 +755,10 @@ void UnitTests::ThetaAdapt() {
 
 	double mu[3] = {1.2, 0.4, -0.7};
 
-	PopulationPar<3,3,3> Theta(nBlocks, nThreads);
-	boost::shared_ptr<DataAugmentation<3,3,3> > DaugPtr(new DataAugmentation<3,3,3>(meas, meas_unc, nBlocks, nThreads));
+	PopulationPar<3,3,3> Theta;
+	Theta.SetCudaGrid(nBlocks, nThreads);
+	boost::shared_ptr<DataAugmentation<3,3,3> > DaugPtr(new DataAugmentation<3,3,3>(meas, meas_unc));
+	DaugPtr->SetCudaGrid(nBlocks, nThreads);
 	Theta.SetDataAugPtr(DaugPtr);
 
 	Theta.Initialize();
@@ -815,7 +819,8 @@ void UnitTests::DaugGetChi() {
 
 	std::cout << "Testing DataAugmentation::GetChi..." << std::endl;
 
-	DataAugmentation<3,3,3> Daug(meas, meas_unc, nBlocks, nThreads);
+	DataAugmentation<3,3,3> Daug(meas, meas_unc);
+    Daug.SetCudaGrid(nBlocks, nThreads);
 	hvector h_chi = Daug.GetHostChi();
 
 	assert(h_chi.size() == ndata * pchi);
@@ -865,8 +870,10 @@ void UnitTests::DaugLogDensPtr()
 	std::cout << "Testing that pointers to log density functions are properly set..." << std::endl;
 	int local_passed = 0;
 
-	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc, nBlocks, nThreads));
-	boost::shared_ptr<PopulationPar<3,3,3> > Theta(new PopulationPar<3,3,3> (nBlocks, nThreads));
+	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc));
+	Daug->SetCudaGrid(nBlocks, nThreads);
+	boost::shared_ptr<PopulationPar<3,3,3> > Theta(new PopulationPar<3,3,3> ());
+	Theta->SetCudaGrid(nBlocks, nThreads);
 
 	Daug->SetPopulationPtr(Theta);
 	Theta->SetDataAugPtr(Daug);
@@ -1220,8 +1227,10 @@ void UnitTests::DaugAcceptSame()
 	std::cout << "Testing that update for DataAugmentation always accepts when chi values are unchanged...." << std::endl;
 	int local_passed = 0;
 
-	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc, nBlocks, nThreads));
-	boost::shared_ptr<PopulationPar<3,3,3> > Theta(new PopulationPar<3,3,3> (nBlocks, nThreads));
+	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc));
+	Daug->SetCudaGrid(nBlocks, nThreads);
+	boost::shared_ptr<PopulationPar<3,3,3> > Theta(new PopulationPar<3,3,3> ());
+	Theta->SetCudaGrid(nBlocks, nThreads);
 
 	Daug->SetPopulationPtr(Theta);
 	Theta->SetDataAugPtr(Daug);
@@ -1283,8 +1292,10 @@ void UnitTests::DaugAcceptBetter() {
 	std::cout << "Testing DaugAccept.Update() always accepts a better proposal...." << std::endl;
 	int local_passed = 0;
 
-	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc, nBlocks, nThreads));
-	boost::shared_ptr<PopulationPar<3,3,3> > Theta(new PopulationPar<3,3,3> (nBlocks, nThreads));
+	boost::shared_ptr<DataAugmentation<3,3,3> > Daug(new DataAugmentation<3,3,3> (meas, meas_unc));
+	Daug->SetCudaGrid(nBlocks, nThreads);
+	boost::shared_ptr<PopulationPar<3,3,3> > Theta(new PopulationPar<3,3,3> ());
+	Theta->SetCudaGrid(nBlocks, nThreads);
 
 	Daug->SetPopulationPtr(Theta);
 	Theta->SetDataAugPtr(Daug);

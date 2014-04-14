@@ -88,7 +88,7 @@
 		<link>
 			<name>src/kernels.cu</name>
 			<type>1</type>
-			<location>/Users/brandonkelly/Projects/CUDAHM/tests/src/kernels.cu</location>
+			<location>/Users/brandonkelly/Projects/CUDAHM/cudahm/src/kernels.cu</location>
 		</link>
 	</linkedResources>
 </projectDescription>

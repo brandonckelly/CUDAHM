@@ -26,19 +26,9 @@
 	</natures>
 	<linkedResources>
 		<link>
-			<name>src/GibbsSampler.hpp</name>
-			<type>1</type>
-			<location>/Users/brandonkelly/Projects/CUDAHM/normnorm/src/GibbsSampler.hpp</location>
-		</link>
-		<link>
 			<name>src/kernels.cu</name>
 			<type>1</type>
-			<location>/Users/brandonkelly/Projects/CUDAHM/normnorm/src/kernels.cu</location>
-		</link>
-		<link>
-			<name>src/kernels.cuh</name>
-			<type>1</type>
-			<location>/Users/brandonkelly/Projects/CUDAHM/normnorm/src/kernels.cuh</location>
+			<location>/Users/brandonkelly/Projects/CUDAHM/cudahm/src/kernels.cu</location>
 		</link>
 		<link>
 			<name>src/parameters.cuh</name>

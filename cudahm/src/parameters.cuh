@@ -65,41 +65,51 @@ class DataAugmentation
 {
 public:
 	// Constructor
-	DataAugmentation(vecvec& meas, vecvec& meas_unc, dim3& nB, dim3& nT) : ndata(meas.size()), nBlocks(nB), nThreads(nT)
-		{
-			_SetArraySizes();
+	DataAugmentation(vecvec& meas, vecvec& meas_unc) : ndata(meas.size()) {
+		// set sizes of arrays
+		h_meas.resize(ndata * mfeat);
+		d_meas.resize(ndata * mfeat);
+		h_meas_unc.resize(ndata * mfeat);
+		d_meas_unc.resize(ndata * mfeat);
+		d_logdens.resize(ndata);
+		d_chi.resize(ndata * pchi);
+		int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
+		d_cholfact.resize(ndata * dim_cholfact);
+		d_naccept.resize(ndata);
 
-			// copy input data to data members
-			for (int j = 0; j < mfeat; ++j) {
-				for (int i = 0; i < ndata; ++i) {
-					h_meas[ndata * j + i] = meas[i][j];
-					h_meas_unc[ndata * j + i] = meas_unc[i][j];
-				}
+		// copy input data to data members
+		for (int j = 0; j < mfeat; ++j) {
+			for (int i = 0; i < ndata; ++i) {
+				h_meas[ndata * j + i] = meas[i][j];
+				h_meas_unc[ndata * j + i] = meas_unc[i][j];
 			}
-			// copy data from host to device
-			d_meas = h_meas;
-			d_meas_unc = h_meas_unc;
-
-			thrust::fill(d_cholfact.begin(), d_cholfact.end(), 0.0);
-
-			// Allocate memory on GPU for RNG states
-			CUDA_CHECK_RETURN(cudaMalloc((void **)&p_devStates, nThreads.x * nBlocks.x * sizeof(curandState)));
-			// Initialize the random number generator states on the GPU
-			initialize_rng<<<nBlocks,nThreads>>>(p_devStates);
-			CUDA_CHECK_RETURN(cudaPeekAtLastError());
-			// Wait until RNG stuff is done running on the GPU, make sure everything went OK
-			CUDA_CHECK_RETURN(cudaDeviceSynchronize());
-
-			// grab pointer to function that compute the log-density of measurements|characteristics from device
-			// __constant__ memory
-		    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensMeas, sizeof(c_LogDensMeas)));
-
-			save_trace = true;
 		}
+		// copy data from host to device
+		d_meas = h_meas;
+		d_meas_unc = h_meas_unc;
 
-	virtual ~DataAugmentation() { cudaFree(p_devStates); }
+		thrust::fill(d_cholfact.begin(), d_cholfact.end(), 0.0);
 
-	void Initialize() {
+		// grab pointer to function that compute the log-density of measurements|characteristics from device
+		// __constant__ memory
+		CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensMeas, sizeof(c_LogDensMeas)));
+
+		save_trace = true;
+	}
+
+	virtual ~DataAugmentation() { CUDA_CHECK_RETURN(cudaFree(p_devStates)); }
+
+	void InitializeDeviceRNG() {
+		// Allocate memory on GPU for RNG states
+		CUDA_CHECK_RETURN(cudaMalloc((void ** )&p_devStates, nThreads.x * nBlocks.x * sizeof(curandState)));
+		// Initialize the random number generator states on the GPU
+		initialize_rng<<<nBlocks, nThreads>>>(p_devStates);
+		CUDA_CHECK_RETURN(cudaPeekAtLastError());
+		// Wait until RNG stuff is done running on the GPU, make sure everything went OK
+		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+	}
+
+	virtual void Initialize() {
 		// grab pointers to the device vector memory locations
 		double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
 		double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
@@ -117,7 +127,7 @@ public:
 	}
 
 	// launch the update kernel on the GPU
-	void Update() {
+	virtual void Update() {
 		// grab the pointers to the device memory locations
 		double* p_chi = thrust::raw_pointer_cast(&d_chi[0]);
 		double* p_meas = thrust::raw_pointer_cast(&d_meas[0]);
@@ -175,6 +185,13 @@ public:
 		d_cholfact = cholfact;
 	}
 
+	void SetCudaGrid(dim3& nB, dim3& nT) {
+		nBlocks = nB;
+		nThreads = nT;
+		//
+		InitializeDeviceRNG();
+	}
+
 	void SetSaveTrace(bool dosave) { save_trace = dosave; }
 
 	bool SaveTrace() { return save_trace; }
@@ -221,18 +238,6 @@ public:
 	}
 
 protected:
-	// set the sizes of the data members
-	void _SetArraySizes() {
-		h_meas.resize(ndata * mfeat);
-		d_meas.resize(ndata * mfeat);
-		h_meas_unc.resize(ndata * mfeat);
-		d_meas_unc.resize(ndata * mfeat);
-		d_logdens.resize(ndata);
-		d_chi.resize(ndata * pchi);
-		int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
-		d_cholfact.resize(ndata * dim_cholfact);
-		d_naccept.resize(ndata);
-	}
 	// measurements and their uncertainties
 	hvector h_meas;
 	hvector h_meas_unc;
@@ -250,8 +255,8 @@ protected:
 	// state of parallel random number generator on the device
 	curandState* p_devStates;
 	// CUDA kernel launch specifications
-	dim3& nBlocks;
-	dim3& nThreads;
+	dim3 nBlocks;
+	dim3 nThreads;
 	// pointer to device-side function that compute the conditional log-posterior of measurements|characteristics
 	pLogDensMeas p_logdens_function;
 	// MCMC sampler parameters
@@ -266,8 +271,7 @@ class PopulationPar
 {
 public:
 	// constructors
-	PopulationPar(dim3& nB, dim3& nT) : nBlocks(nB), nThreads(nT)
-	{
+	PopulationPar() {
 		h_theta.resize(dtheta);
 		snorm_deviate.resize(dtheta);
 		scaled_proposal.resize(dtheta);
@@ -281,15 +285,12 @@ public:
 	    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensPop, sizeof(c_LogDensPop)));
 	}
 
-	// calculate the initial value of the population parameters
-	virtual void Initialize() {
+	virtual void InitialValue() {
 		// set initial value of theta to zero
 		thrust::fill(h_theta.begin(), h_theta.end(), 0.0);
+	}
 
-		// transfer initial value of theta to GPU constant memory
-	    double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
-		CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_theta, dtheta*sizeof(*p_theta)));
-
+	virtual void InitialCholFactor() {
 		// set initial covariance matrix of the theta proposals as the identity matrix
 		thrust::fill(cholfact.begin(), cholfact.end(), 0.0);
 		int diag_index = 0;
@@ -297,6 +298,16 @@ public:
 			cholfact[diag_index] = 1.0;
 			diag_index += k + 2;
 		}
+	}
+
+	// calculate the initial value of the population parameters
+	void Initialize() {
+		// first set initial values
+		InitialValue();
+		InitialCholFactor();
+		// transfer initial value of theta to GPU constant memory
+	    double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
+		CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_theta, dtheta*sizeof(*p_theta)));
 
 		// get initial value of conditional log-posterior for theta|chi
 		double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
@@ -366,6 +377,10 @@ public:
 	    ratio = exp(lograt);
 	    double unif = uniform(rng);
 	    bool accept = (unif < ratio) && isfinite(ratio);
+	    if (!isfinite(ratio)) {
+			// metropolis ratio is not finite, so make it equal to zero to not screw up the proposal cholesky factor update
+	    	ratio = 0.0;
+		}
 	    return accept;
 	}
 
@@ -444,6 +459,11 @@ public:
 	void SetCholFact(hvector cholfact_new) { cholfact = cholfact_new; }
 	void SetCurrentIter(int iter) { current_iter = iter; }
 
+	void SetCudaGrid(dim3& nB, dim3& nT) {
+		nBlocks = nB;
+		nThreads = nT;
+	}
+
 	hvector GetHostTheta() { return h_theta; }
 
 	hvector GetDevTheta() {
@@ -468,7 +488,7 @@ public:
 	double* GetDevThetaPtr() {
 		double* p_theta;
 		// copy values of theta from __constant__ memory to host memory
-		cudaMemcpyFromSymbol(p_theta, c_theta, sizeof(c_theta), 0, cudaMemcpyDeviceToHost);
+		CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(p_theta, c_theta, sizeof(c_theta), 0));
 		return p_theta;
 	}
 
@@ -499,8 +519,8 @@ protected:
 	hvector snorm_deviate;
 	hvector scaled_proposal;
 	// CUDA kernel launch specifications
-	dim3& nBlocks;
-	dim3& nThreads;
+	dim3 nBlocks;
+	dim3 nThreads;
 	// pointer to device-side function that compute the conditional log-posterior of characteristics|population
 	pLogDensPop p_logdens_function;
 	// MCMC parameters

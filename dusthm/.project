@@ -26,11 +26,6 @@
 	</natures>
 	<linkedResources>
 		<link>
-			<name>src/GibbsSampler.hpp</name>
-			<type>1</type>
-			<location>/Users/brandonkelly/Projects/CUDAHM/dusthm/src/GibbsSampler.hpp</location>
-		</link>
-		<link>
 			<name>src/dusthm.cu</name>
 			<type>1</type>
 			<location>/Users/brandonkelly/Projects/CUDAHM/dusthm/src/dusthm.cu</location>
@@ -38,17 +33,7 @@
 		<link>
 			<name>src/kernels.cu</name>
 			<type>1</type>
-			<location>/Users/brandonkelly/Projects/CUDAHM/dusthm/src/kernels.cu</location>
-		</link>
-		<link>
-			<name>src/kernels.cuh</name>
-			<type>1</type>
-			<location>/Users/brandonkelly/Projects/CUDAHM/dusthm/src/kernels.cuh</location>
-		</link>
-		<link>
-			<name>src/parameters.cuh</name>
-			<type>1</type>
-			<location>/Users/brandonkelly/Projects/CUDAHM/dusthm/src/parameters.cuh</location>
+			<location>/Users/brandonkelly/Projects/CUDAHM/cudahm/src/kernels.cu</location>
 		</link>
 	</linkedResources>
 </projectDescription>

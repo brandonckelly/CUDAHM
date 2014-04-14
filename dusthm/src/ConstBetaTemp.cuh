@@ -51,7 +51,9 @@ void initial_cbt_value(double* chi, double* meas, double* meas_unc, double* chol
 	}
 }
 
-// Subclass the DataAugmentation class to override the method to generate the initial values of chi = (log C, beta, log T)
+// Subclass the DataAugmentation class to override the method to generate the initial values of chi = (log C, beta, log T).
+// Note that because the classes are templated, we need to use the 'this' pointer in order to access the data members from
+// the base class.
 template <int mfeat,int pchi,int dtheta>
 class ConstBetaTemp: public DataAugmentation<mfeat, pchi, dtheta> {
 public:
@@ -74,7 +76,6 @@ public:
 		thrust::fill(this->d_naccept.begin(), this->d_naccept.end(), 0);
 		this->current_iter = 1;
 	}
-protected:
 };
 
 #endif /* CONSTBETATEMP_CUH_ */

@@ -1,20 +1,36 @@
 /*
- * cudahm_blueprint.cu
+ * dusthm.cu
  *
- *  Created on: Mar 13, 2014
+ *  Created on: Mar 26, 2014
  *      Author: Brandon C. Kelly
  *
- * This file provides a blueprint for using the CUDAHM API. In order to use CUDAHM the user must supply a function
- * to compute the logarithm of the conditional probability densities of the measurements (y) given the
- * characteristics (chi), and the characteristics given the population parameter theta. The user must also set
- * the pointers c_pLogDensMeas and c_pLogDensPop to these functions, in order to correctly place these functions
- * in GPU constant memory. The purpose of this file is to provide an easy way of setting the pointers and stream-line
- * the use of CUDAHM to build MCMC sampler. Using this blueprint, the user need only modify the LogDensityMeas and
- * LogDensityPop functions to ensure that the pointers are set correctly.
+ * This file illustrates how to setup a hierarchical model for parameters of spectral energy distributions (SEDs) of astronomical dust
+ * in the far-IR and sample from this using CUDAHM. The model is:
  *
- * The MCMC sampler should be constructed within the main function using the GibbSampler class. Further details
- * are provided below. A complete working example is provided in normnorm.cu.
+ * 		y_ij | chi_i ~ N(SED_j(chi_i), sigma^2_ij), i = 1, ..., N; j = 1, ..., 5   (measurement model)
+ * 		SED_j(chi_i) = C_i * (nu_j / nu_0)^beta_i * BlackBody_{nu_j}(T_i),   chi = (log C, beta, log T)
+ * 		chi_i | theta ~ t_8(mu, Covar),   theta = (mu, Covar)  					   (population model for unknown characteristics)
  *
+ * 	Prior:
+ *
+ * 		mu ~ N(mu_0, V_0)
+ * 		p(Covar) = 'Separation Strategy Prior' of Barnard, McCulloch, & Meng 2000, Statistical Sinica, 10, 1281-1311
+ *
+ * Under this model the N values of the unknown SED parameters, chi, are drawn from a 3-dimensional multivariate student's t density
+ * with 8 degrees of freedom and unknown mean, mu, and covariance matrix, Covar. The prior on mu is Normal, broad, and centered at
+ * values that are reasonable based on previous scientific investigations. The prior on the covariance matrix is the 'separation strategy'
+ * prior of Barnard et al. (2000). This prior places independent prior distributions on the standard deviations and correlations. The
+ * prior on the correlations is marginally uniform and given by Equation (8) of Barnard et al. (2000), while the prior on the standard
+ * deviations are independent broad log-normal distributions with geometric means of 1.0. This is a simplified verson of the model described
+ * in Kelly et al. (2012, The Astrophysical Journal, 752, 55).
+ *
+ * We desire to infer the values of the characteristics (chi) and their mean and covariance (theta) from a set of SEDs contaminated with
+ * Gaussian measurement noise with known variances. We do this by using CUDAHM to construct a Metropolis-within-Gibbs MCMC sampler to sample
+ * from the posterior probability distribution of chi_1, ..., chi_N, theta | {y_ij | i = 1, ..., N; j = 1, ..., 5}. In order to accomplish this
+ * we subclass the PopulationPar class to create a new class DustPopPar which overrides the uninformative prior distribution of PopulationPar.
+ * In addition, we also override the methods that set the initial values of theta and chi, which in the base classes are just set to zero. In
+ * order to set the initial values of the chis to anything other than zero we also need to subclass the DataAugmentation class, which we do here
+ * with the ConstBetaTemp class.
  */
 
 // standard library includes
@@ -30,12 +46,12 @@
 /*
  * First you need to set the values of the parameter dimensions as const int types. These must be supplied
  * at compile-time in order to efficiently make use of GPU memory. These also need to be placed before the
- * functions LogDensityMeas and LogDensityPop if they need to know the dimensions of the features and parameters.
+ * functions LogDensityMeas and LogDensityPop since they need to know the dimensions of the features and parameters.
  *
  */
 
 const int mfeat = 5;
-const int pchi = 3;  // chi = {log C, beta, log T}, where C \propto N_H
+const int pchi = 3;  // chi = {log C, beta, log T}, where C \propto N_H (column density)
 const int dtheta = 9;
 // frequencies correspond to {500, 350, 250, 170, 70} microns, the Herschel bands
 __constant__ const double c_nu[mfeat] = {5.99584916e11, 8.56549880e11, 1.19916983e12, 1.87370286e12, 2.99792458e12};
@@ -64,14 +80,15 @@ double modified_blackbody(double nu, double C, double beta, double T) {
 
 /*
  * This function returns the logarithm of the conditional density of the measurements given the
- * characteristics for a single data point, log p(y_i | chi_i). This function must be supplied by the user
- * and written in CUDA. The input parameters are:
+ * characteristics for a single data point, log p(y_i | chi_i). For this model p(y_i | chi_i) is a product of
+ * 5 independent normal distributions with means given by the SED values at the j^th observational bandpass and
+ * known variances.
  *
- * 	chi      - Pointer to the values of the characteristics for the i^th data point.
+ * The input parameters are:
+ *
+ * 	chi      - Pointer to the values of the characteristics (log C, beta, log T) for the i^th data point.
  * 	meas     - Pointer to the measurements for the i^th data point.
  * 	meas_unc - Pointer to the standard deviations in the measurement errors for y_ij.
- * 	mfeat    - The number of features measured for each data point, i.e., the length of the meas array.
- *  pchi     - The number of characteristics for each data point, i.e., the length of the chi array.
  *
  */
 
@@ -90,7 +107,7 @@ double LogDensityMeas(double* chi, double* meas, double* meas_unc)
 }
 
 /*
- * Helper functions used by the function that computes the log-density of log C, beta, log T | theta
+ * Helper functions used by LogDensityPop to compute the log-density of log C, beta, log T | theta
  */
 
 // calculate the inverse of a 3 x 3 matrix
@@ -113,7 +130,7 @@ double matrix_invert3d(double* A, double* A_inv) {
 	return determ_inv;
 }
 
-// calculate transpose(x) * covar_inv * x
+// calculate chisqr = transpose(x) * covar_inv * x
 __device__ __host__
 double chisqr(double* x, double* covar_inv, int nx)
 {
@@ -128,13 +145,13 @@ double chisqr(double* x, double* covar_inv, int nx)
 
 /*
  * This function returns the logarithm of the conditional density of the characteristics given the
- * population parameter theta for a single data point, log p(chi_i | theta). This function must be supplied by
- * the user and written in CUDA. The input parameters are:
+ * population parameter theta for a single data point, log p(chi_i | theta). For this model p(chi_i | theta) is
+ * a 3-dimensional student's t-distribution of c_dof (= 8) degrees of freedom.
+ *
+ * The input parameters are:
  *
  * 	chi       - Pointer to the values of the characteristics for the i^th data point.
  * 	theta     - Pointer to the population parameter.
- *  pchi      - The number of characteristics for each data point, i.e., the length of the chi array.
- *  dim_theta - The dimension of the population parameter vector theta, i.e., the length of the theta array.
  *
  */
 __device__
@@ -144,7 +161,8 @@ double LogDensityPop(double* chi, double* theta)
 	double covar_inv[pchi * pchi];
 	double cov_determ_inv;
 
-	// transform theta values to covariance matrix of (log C, beta, log T)
+	// theta = (mu, log(sigma), arctanh(corr)) to allow more efficient sampling, so we need to transform theta values to
+	// the values of the covariance matrix of (log C, beta, log T)
 	covar[0] = exp(2.0 * theta[pchi]);  // Covar[0,0], variance in log C
 	covar[1] = tanh(theta[2 * pchi]) * exp(theta[pchi] + theta[pchi+1]);  // Covar[0,1] = cov(log C, beta)
 	covar[2] = tanh(theta[2 * pchi + 1]) * exp(theta[pchi] + theta[pchi+2]);  // Covar[0,2] = cov(log C, log T)
@@ -204,8 +222,8 @@ int main(int argc, char** argv)
 	int ndata = get_file_lines(datafile) - 1;  // subtract off one line for the header
 	std::cout << "Loaded " << ndata << " data points." << std::endl;
 
-	vecvec fnu(ndata);
-	vecvec fnu_sig(ndata);
+	vecvec fnu(ndata);  // the measured SEDs
+	vecvec fnu_sig(ndata);  // the standard deviation in the measurement errors
 	read_data(datafile, fnu, fnu_sig, ndata, mfeat);
 
 	/*
@@ -220,16 +238,8 @@ int main(int argc, char** argv)
 	int nchi_samples = 100;
 	int nthin_chi = nmcmc_iter / nchi_samples;
 
-	/*
-	 * Instantiate the GibbsSampler<mfeat, pchi, dtheta> object here. Once you've instantiated it, use the
-	 * GibbSampler::Run() method to run the MCMC sampler. Finally, use GibbSampler::GetCharSampler() to get
-	 * the sampled characteristics as a std::vector<std::vector<std::vector<double> > > (three nested vectors,
-	 * dimensions nchi_samples x ndata x pchi) object. Similarly, use the GibbsSampler::GetPopSamples() to
-	 * retrieve the sampled theta values as a std::vector<std::vector<double> > (two nested vectors,
-	 * dimensions nsamples x dtheta) object.
-	 */
-
-	// first instantiate the subclassed DataAugmentation and PopulationPar objects
+	// first create pointers to instantiated subclassed DataAugmentation and PopulationPar objects, since we need to give them to the
+	// constructor for the GibbsSampler class.
 	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > CBT(new ConstBetaTemp<mfeat, pchi, dtheta>(fnu, fnu_sig));
 	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > Theta(new DustPopPar<mfeat, pchi, dtheta>);
 
@@ -269,9 +279,10 @@ int main(int argc, char** argv)
 //	Sampler.GetThetaPtr()->SetTheta(h_theta, true);
 //	Sampler.FixPopPar();
 
+	// run the MCMC sampler
 	Sampler.Run();
 
-   // grab the samples
+    // grab the samples
 	vecvec theta_samples = Sampler.GetPopSamples();
 	std::vector<vecvec> chi_samples = Sampler.GetCharSamples();
 

@@ -15,6 +15,9 @@
 /*
  * Override PopulationPar's LogPrior method, since we do not want a uniform prior on theta. Also override the InitialValue method
  * to compute mean, variances, and correlations from the initial values for chi = (log C, beta, log T).
+ *
+ * Note that because the classes are templated, we need to use the 'this' pointer in order to access the data members from
+ * the base class.
  */
 
 template <int mfeat, int pchi, int dtheta>

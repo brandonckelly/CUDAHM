@@ -8,7 +8,7 @@ Description
 
 `CUDAHM` enables one to easily and rapidly construct an MCMC sampler for a three-level hierarchical model, requiring the user to supply only a minimimal amount of CUDA code. `CUDAHM` assumes that a set of measurements are available for a sample of objects, and that these measurements are related to an unobserved set of characteristics for each object. For example, the measurements could be the spectral energy distributions of a sample of galaxies, and the unknown characteristics could be the physical quantities of the galaxies, such as mass, distance, age, etc. The measured spectral energy distributions depend on the unknown physical quantities, which enables one to derive their values from the measurements. The characteristics are also assumed to be independently and identically sampled from a parent population with unknown parameters (e.g., a Normal distribution with unknown mean and variance). `CUDAHM` enables one to simultaneously sample the values of the characteristics and the parameters of their parent population from their joint posterior probability distribution.
 
-CUDAHM uses a Metropolis-within-Gibbs sampler. Each iteration of the MCMC sampler performs the following steps:
+`CUDAHM` uses a Metropolis-within-Gibbs sampler. Each iteration of the MCMC sampler performs the following steps:
 
 1. For each object, update the characteristics given the measured data and the current value of the parent population parameters.
 2. Update the parent population parameters given the current values of the characteristics.
@@ -24,7 +24,7 @@ There are three main classes in CUDAHM:
 * `PopulationPar`- This class controls the calculations involving the parent population parameters.
 * `GibbsSampler`- This class runs the MCMC sampler.
 
-The simplest use case involves only instantiating the `GibbsSampler` class, since this will internally construct a `DataAugmentation` and `PopulationPar` object. However, if one wants to subclass the `DataAugmentation` or `PopulationPar` classes then pointers to the instances of these classes must be provided to the `GibbsSampler` constructore. In general this is only needed if one wants to override the default methods for setting the initial values, or if one wants to override the default prior on the parent population parameters (which is an uninformative uniform distribution).
+The simplest use case involves only instantiating the `GibbsSampler` class, since this will internally construct a `DataAugmentation` and `PopulationPar` object. However, if one wants to subclass the `DataAugmentation` or `PopulationPar` classes then pointers to the instances of these classes must be provided to the `GibbsSampler` constructor. In general this is only needed if one wants to override the default methods for setting the initial values, or if one wants to override the default prior on the parent population parameters (which is an uninformative uniform distribution).
 
 There are two functions that the user must provide: a function that compute the logarithm of the probability density of the measurements given the characteristics for each object in the sample, and a function that computes the logarithm of the probability density of the characteristics given the parent population parameters. These functions live on the GPU and must be written in CUDA. The file `cudahm_blueprint.cu` under the `cudahm` directory contains a blueprint with documentation that the user may use when constructing their own MCMC sampler. In addition, the following examples provide additional guidance:
 

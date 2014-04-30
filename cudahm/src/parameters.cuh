@@ -316,7 +316,7 @@ public:
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
 	    CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
-	    current_logdens = thrust::reduce(d_proposed_logdens.begin(), d_proposed_logdens.end());
+	    current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
 
 		// reset the number of MCMC iterations
 		current_iter = 1;
@@ -449,6 +449,7 @@ public:
 			logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_chi, p_logdens, p_logdens_function, ndata);
 			CUDA_CHECK_RETURN(cudaPeekAtLastError());
 			current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
+            current_logdens += LogPrior(h_theta);
 		}
 	}
 

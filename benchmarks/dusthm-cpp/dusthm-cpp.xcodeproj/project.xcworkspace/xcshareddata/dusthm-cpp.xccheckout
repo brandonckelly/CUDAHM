@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectFavoriteDictionaryKey</key>
+	<false/>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>51268262-4B6D-46AB-B6B6-876C90A1D588</string>
+	<key>IDESourceControlProjectName</key>
+	<string>dusthm-cpp</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>EA7063A9-FE96-4395-80CD-CADF7B6C7D36</key>
+		<string>https://github.com/bckelly80/CUDAHM.git</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>benchmarks/dusthm-cpp/dusthm-cpp.xcodeproj/project.xcworkspace</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>EA7063A9-FE96-4395-80CD-CADF7B6C7D36</key>
+		<string>../../../..</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>https://github.com/bckelly80/CUDAHM.git</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>110</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>EA7063A9-FE96-4395-80CD-CADF7B6C7D36</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>EA7063A9-FE96-4395-80CD-CADF7B6C7D36</string>
+			<key>IDESourceControlWCCName</key>
+			<string>CUDAHM</string>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -7,12 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		DFE9EB9619116595007B215F /* src in Sources */ = {isa = PBXBuildFile; fileRef = DFE9EB9519116595007B215F /* src */; };
-		DFE9EB9819116595007B215F /* dusthm_cpp.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = DFE9EB9719116595007B215F /* dusthm_cpp.1 */; };
-		DFE9EBA2191177F2007B215F /* chol_update_r1.cpp in Sources */ = {isa = PBXBuildFile; fileRef = DFE9EBA1191177F2007B215F /* chol_update_r1.cpp */; };
-		DFE9EBA719119E61007B215F /* ConstBetaTemp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = DFE9EBA619119E61007B215F /* ConstBetaTemp.cpp */; };
-		DFE9EBA91911A0DF007B215F /* DustPopPar.cpp in Sources */ = {isa = PBXBuildFile; fileRef = DFE9EBA81911A0DF007B215F /* DustPopPar.cpp */; };
 		DFE9EBAC1911A161007B215F /* input_output.cpp in Sources */ = {isa = PBXBuildFile; fileRef = DFE9EBAA1911A161007B215F /* input_output.cpp */; };
+		DFE9EBBA1911A314007B215F /* chol_update_r1.cpp in Sources */ = {isa = PBXBuildFile; fileRef = DFE9EBAF1911A314007B215F /* chol_update_r1.cpp */; };
+		DFE9EBBB1911A314007B215F /* ConstBetaTemp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = DFE9EBB11911A314007B215F /* ConstBetaTemp.cpp */; };
+		DFE9EBBC1911A314007B215F /* dusthm-cpp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = DFE9EBB51911A314007B215F /* dusthm-cpp.cpp */; };
+		DFE9EBBD1911A314007B215F /* DustPopPar.cpp in Sources */ = {isa = PBXBuildFile; fileRef = DFE9EBB61911A314007B215F /* DustPopPar.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -22,7 +21,6 @@
 			dstPath = /usr/share/man/man1/;
 			dstSubfolderSpec = 0;
 			files = (
-				DFE9EB9819116595007B215F /* dusthm_cpp.1 in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 		};
@@ -30,19 +28,19 @@
 
 /* Begin PBXFileReference section */
 		DFE9EB9219116595007B215F /* dusthm-cpp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "dusthm-cpp"; sourceTree = BUILT_PRODUCTS_DIR; };
-		DFE9EB9519116595007B215F /* src */ = {isa = PBXFileReference; lastKnownFileType = folder; name = src; path = ../src; sourceTree = "<group>"; };
-		DFE9EB9719116595007B215F /* dusthm_cpp.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = dusthm_cpp.1; sourceTree = "<group>"; };
-		DFE9EB9E191166FF007B215F /* DataAugmentation.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = DataAugmentation.hpp; sourceTree = "<group>"; };
-		DFE9EB9F19116866007B215F /* PopulationPar.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = PopulationPar.hpp; sourceTree = "<group>"; };
-		DFE9EBA0191177CF007B215F /* chol_update_r1.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = chol_update_r1.hpp; sourceTree = "<group>"; };
-		DFE9EBA1191177F2007B215F /* chol_update_r1.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = chol_update_r1.cpp; sourceTree = "<group>"; };
-		DFE9EBA31911945F007B215F /* GibbsSampler.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = GibbsSampler.hpp; sourceTree = "<group>"; };
-		DFE9EBA419119A7B007B215F /* DustPopPar.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = DustPopPar.hpp; sourceTree = "<group>"; };
-		DFE9EBA519119B12007B215F /* ConstBetaTemp.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = ConstBetaTemp.hpp; sourceTree = "<group>"; };
-		DFE9EBA619119E61007B215F /* ConstBetaTemp.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ConstBetaTemp.cpp; sourceTree = "<group>"; };
-		DFE9EBA81911A0DF007B215F /* DustPopPar.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DustPopPar.cpp; sourceTree = "<group>"; };
 		DFE9EBAA1911A161007B215F /* input_output.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = input_output.cpp; path = ../../../dusthm/src/input_output.cpp; sourceTree = "<group>"; };
 		DFE9EBAB1911A161007B215F /* input_output.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = input_output.hpp; path = ../../../dusthm/src/input_output.hpp; sourceTree = "<group>"; };
+		DFE9EBAF1911A314007B215F /* chol_update_r1.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = chol_update_r1.cpp; path = src/chol_update_r1.cpp; sourceTree = "<group>"; };
+		DFE9EBB01911A314007B215F /* chol_update_r1.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = chol_update_r1.hpp; path = src/chol_update_r1.hpp; sourceTree = "<group>"; };
+		DFE9EBB11911A314007B215F /* ConstBetaTemp.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ConstBetaTemp.cpp; path = src/ConstBetaTemp.cpp; sourceTree = "<group>"; };
+		DFE9EBB21911A314007B215F /* ConstBetaTemp.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = ConstBetaTemp.hpp; path = src/ConstBetaTemp.hpp; sourceTree = "<group>"; };
+		DFE9EBB31911A314007B215F /* DataAugmentation.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = DataAugmentation.hpp; path = src/DataAugmentation.hpp; sourceTree = "<group>"; };
+		DFE9EBB41911A314007B215F /* dusthm_cpp.1 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.man; name = dusthm_cpp.1; path = src/dusthm_cpp.1; sourceTree = "<group>"; };
+		DFE9EBB51911A314007B215F /* dusthm-cpp.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = "dusthm-cpp.cpp"; path = "src/dusthm-cpp.cpp"; sourceTree = "<group>"; };
+		DFE9EBB61911A314007B215F /* DustPopPar.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = DustPopPar.cpp; path = src/DustPopPar.cpp; sourceTree = "<group>"; };
+		DFE9EBB71911A314007B215F /* DustPopPar.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = DustPopPar.hpp; path = src/DustPopPar.hpp; sourceTree = "<group>"; };
+		DFE9EBB81911A314007B215F /* GibbsSampler.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = GibbsSampler.hpp; path = src/GibbsSampler.hpp; sourceTree = "<group>"; };
+		DFE9EBB91911A314007B215F /* PopulationPar.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = PopulationPar.hpp; path = src/PopulationPar.hpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -59,7 +57,8 @@
 		DFE9EB8919116595007B215F = {
 			isa = PBXGroup;
 			children = (
-				DFE9EB9419116595007B215F /* src */,
+				DFE9EBAE1911A2FD007B215F /* src */,
+				DFE9EB9419116595007B215F /* cudahm */,
 				DFE9EB9319116595007B215F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -72,25 +71,32 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		DFE9EB9419116595007B215F /* src */ = {
+		DFE9EB9419116595007B215F /* cudahm */ = {
 			isa = PBXGroup;
 			children = (
-				DFE9EB9519116595007B215F /* src */,
 				DFE9EBAA1911A161007B215F /* input_output.cpp */,
 				DFE9EBAB1911A161007B215F /* input_output.hpp */,
-				DFE9EB9719116595007B215F /* dusthm_cpp.1 */,
-				DFE9EB9E191166FF007B215F /* DataAugmentation.hpp */,
-				DFE9EB9F19116866007B215F /* PopulationPar.hpp */,
-				DFE9EBA0191177CF007B215F /* chol_update_r1.hpp */,
-				DFE9EBA1191177F2007B215F /* chol_update_r1.cpp */,
-				DFE9EBA31911945F007B215F /* GibbsSampler.hpp */,
-				DFE9EBA419119A7B007B215F /* DustPopPar.hpp */,
-				DFE9EBA81911A0DF007B215F /* DustPopPar.cpp */,
-				DFE9EBA519119B12007B215F /* ConstBetaTemp.hpp */,
-				DFE9EBA619119E61007B215F /* ConstBetaTemp.cpp */,
+			);
+			name = cudahm;
+			path = "dusthm-cpp";
+			sourceTree = "<group>";
+		};
+		DFE9EBAE1911A2FD007B215F /* src */ = {
+			isa = PBXGroup;
+			children = (
+				DFE9EBAF1911A314007B215F /* chol_update_r1.cpp */,
+				DFE9EBB01911A314007B215F /* chol_update_r1.hpp */,
+				DFE9EBB11911A314007B215F /* ConstBetaTemp.cpp */,
+				DFE9EBB21911A314007B215F /* ConstBetaTemp.hpp */,
+				DFE9EBB31911A314007B215F /* DataAugmentation.hpp */,
+				DFE9EBB41911A314007B215F /* dusthm_cpp.1 */,
+				DFE9EBB51911A314007B215F /* dusthm-cpp.cpp */,
+				DFE9EBB61911A314007B215F /* DustPopPar.cpp */,
+				DFE9EBB71911A314007B215F /* DustPopPar.hpp */,
+				DFE9EBB81911A314007B215F /* GibbsSampler.hpp */,
+				DFE9EBB91911A314007B215F /* PopulationPar.hpp */,
 			);
 			name = src;
-			path = "dusthm-cpp";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -144,11 +150,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DFE9EB9619116595007B215F /* src in Sources */,
-				DFE9EBA91911A0DF007B215F /* DustPopPar.cpp in Sources */,
+				DFE9EBBD1911A314007B215F /* DustPopPar.cpp in Sources */,
+				DFE9EBBC1911A314007B215F /* dusthm-cpp.cpp in Sources */,
 				DFE9EBAC1911A161007B215F /* input_output.cpp in Sources */,
-				DFE9EBA719119E61007B215F /* ConstBetaTemp.cpp in Sources */,
-				DFE9EBA2191177F2007B215F /* chol_update_r1.cpp in Sources */,
+				DFE9EBBB1911A314007B215F /* ConstBetaTemp.cpp in Sources */,
+				DFE9EBBA1911A314007B215F /* chol_update_r1.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

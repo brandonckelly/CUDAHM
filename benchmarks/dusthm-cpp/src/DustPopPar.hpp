@@ -14,6 +14,8 @@
 
 #include "PopulationPar.hpp"
 
+const int dof = 8;  // population-level model is a multivariate student's t-distribution with dof degrees of freedom
+
 double matrix_invert3d(double* A, double* A_inv);
 double chisqr(double* x, double* covar_inv, int nx);
 
@@ -48,7 +50,7 @@ public:
 		prior_sigma_var.assign(pchi, 25.0);
 	}
     
-    double LogDensity(double* chi, svector theta)
+    double LogDensity(double* chi, svector t)
     {
         double covar[pchi * pchi];
         double covar_inv[pchi * pchi];
@@ -56,33 +58,33 @@ public:
         
         // theta = (mu, log(sigma), arctanh(corr)) to allow more efficient sampling, so we need to transform theta values to
         // the values of the covariance matrix of (log C, beta, log T)
-        covar[0] = exp(2.0 * theta[pchi]);  // Covar[0,0], variance in log C
-        covar[1] = tanh(theta[2 * pchi]) * exp(theta[pchi] + theta[pchi+1]);  // Covar[0,1] = cov(log C, beta)
-        covar[2] = tanh(theta[2 * pchi + 1]) * exp(theta[pchi] + theta[pchi+2]);  // Covar[0,2] = cov(log C, log T)
+        covar[0] = exp(2.0 * t[pchi]);  // Covar[0,0], variance in log C
+        covar[1] = tanh(t[2 * pchi]) * exp(t[pchi] + t[pchi+1]);  // Covar[0,1] = cov(log C, beta)
+        covar[2] = tanh(t[2 * pchi + 1]) * exp(t[pchi] + t[pchi+2]);  // Covar[0,2] = cov(log C, log T)
         covar[3] = covar[1];  // Covar[1,0]
-        covar[4] = exp(2.0 * theta[pchi + 1]);  // Covar[1,1], variance in beta
-        covar[5] = tanh(theta[2 * pchi + 2]) * exp(theta[pchi+1] + theta[pchi+2]);  // Covar[1,2] = cov(beta, log T)
+        covar[4] = exp(2.0 * t[pchi + 1]);  // Covar[1,1], variance in beta
+        covar[5] = tanh(t[2 * pchi + 2]) * exp(t[pchi+1] + t[pchi+2]);  // Covar[1,2] = cov(beta, log T)
         covar[6] = covar[2];  // Covar[2,0]
         covar[7] = covar[5];  // Covar[2,1]
-        covar[8] = exp(2.0 * theta[pchi + 2]);  // Covar[2,2], variance in log T
+        covar[8] = exp(2.0 * t[pchi + 2]);  // Covar[2,2], variance in log T
         
         cov_determ_inv = matrix_invert3d(covar, covar_inv);
         double chi_cent[pchi];
         for (int j = 0; j < pchi; ++j) {
-            chi_cent[j] = chi[j] - theta[j];
+            chi_cent[j] = chi[j] - t[j];
         }
         double zsqr = chisqr(chi_cent, covar_inv, pchi);
         
         // multivariate student's t-distribution with DOF degrees of freedom
-        double logdens_pop = 0.5 * log(cov_determ_inv) - (pchi + c_dof) / 2.0 * log(1.0 + zsqr / c_dof);
+        double logdens_pop = 0.5 * log(cov_determ_inv) - (pchi + dof) / 2.0 * log(1.0 + zsqr / dof);
         
         return logdens_pop;
     }
     
 	// Set the initial values to the sample means and variances
 	void InitialValue() {
-		vecvec chi = this->Daug_->GetChi();
-		thrust::fill(this->theta.begin(), this->theta.end(), 0.0);
+		vecvec chi = this->p_Daug->GetChi();
+		std::fill(this->theta.begin(), this->theta.end(), 0.0);
 		// first compute sample mean
 		int ndata = chi.size();
 		for (int i = 0; i < ndata; ++i) {
@@ -104,7 +106,7 @@ public:
     
 	void InitialCholFactor() {
 		// set initial covariance matrix of the theta proposals as a diagonal matrix
-		thrust::fill(this->cholfact.begin(), this->cholfact.end(), 0.0);
+		std::fill(this->cholfact.begin(), this->cholfact.end(), 0.0);
 		int diag_index = 0;
 		for (int k=0; k<dtheta; k++) {
 			this->cholfact[diag_index] = 0.01;
@@ -167,9 +169,6 @@ public:
 		std::vector<double> mu(theta.begin(), theta.begin() + pchi);
 		std::vector<double> logsigma(theta.begin() + pchi, theta.begin() + 2 * pchi);
 		std::vector<double> arctanh_corr(theta.begin() + 2 * pchi, theta.end());
-		double mean_prior = MeanPrior(mu);
-		double sigma_prior = SigmaPrior(logsigma);
-		double corr_prior = CorrPrior(arctanh_corr);
 		//std::cout << "Priors: " << mean_prior << ", " << sigma_prior << ", " << corr_prior << std::endl;
 		return MeanPrior(mu) + SigmaPrior(logsigma) + CorrPrior(arctanh_corr);
 	}

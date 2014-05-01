@@ -28,16 +28,16 @@ public:
 		naccept = 0;
 	}
     
-    virtual void LogDensity(double* chi, svector t) {return 0.0;}
+    virtual double LogDensity(double* chi, svector t) {return 0.0;}
     
 	virtual void InitialValue() {
 		// set initial value of theta to zero
-		thrust::fill(theta.begin(), theta.end(), 0.0);
+		std::fill(theta.begin(), theta.end(), 0.0);
 	}
     
 	virtual void InitialCholFactor() {
 		// set initial covariance matrix of the theta proposals as the identity matrix
-		thrust::fill(cholfact.begin(), cholfact.end(), 0.0);
+		std::fill(cholfact.begin(), cholfact.end(), 0.0);
 		int diag_index = 0;
 		for (int k=0; k<dtheta; k++) {
 			cholfact[diag_index] = 1.0;
@@ -49,7 +49,7 @@ public:
 	void Initialize() {
 		InitialValue();
 		InitialCholFactor();
-        chi = p_Daug->GetChi()
+        vecvec chi = p_Daug->GetChi();
         double local_chi[pchi];
         for (int i=0; i<ndata; i++) {
             for (int j=0; j<pchi; j++) {
@@ -57,7 +57,7 @@ public:
             }
             logdens[i] = LogDensity(local_chi, theta);
         }
-        current_logdens = std::accumulate(logdens.begin(), logdens.end());
+        current_logdens = std::accumulate(logdens.begin(), logdens.end(), 0.0);
         
 		// reset the number of MCMC iterations
 		current_iter = 1;
@@ -76,7 +76,7 @@ public:
         
 	    // transform unit proposal so that is has a multivariate normal distribution
 	    svector proposed_theta(dtheta);
-        proposed_theta.fill(proposed_theta.begin(), proposed_theta.end(), 0.0);
+        std::fill(proposed_theta.begin(), proposed_theta.end(), 0.0);
 	    int cholfact_index = 0;
 	    for (int j=0; j<dtheta; j++) {
 	        for (int k=0; k<(j+1); k++) {
@@ -137,14 +137,14 @@ public:
         svector chi = p_Daug->GetChiVec();
         
 		// calculate log-posterior of new population parameter
-        double p_chi[pchi]
+        double p_chi[pchi];
         for (int i=0; i<ndata; i++) {
             for (int j=0; j<pchi; j++) {
-                p_chi[j] = chi[j * ndata + i]
+                p_chi[j] = chi[j * ndata + i];
             }
-            logdens_prop[i] = LogDensity(p_chi, proposed_theta)
+            proposed_logdens[i] = LogDensity(p_chi, proposed_theta);
         }
-		double logdens_prop = std::accumulate(proposed_logdens.begin(), proposed_logdens.end());
+		double logdens_prop = std::accumulate(proposed_logdens.begin(), proposed_logdens.end(), 0.0);
         
 		logdens_prop += LogPrior(proposed_theta);
         
@@ -170,7 +170,7 @@ public:
 	// setters and getters
 	void SetDataAugPtr(boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > DataAug) {
 		p_Daug = DataAug;
-		ndata = Daug->GetDataDim();
+		ndata = p_Daug->GetDataDim();
 		logdens.resize(ndata);
 		proposed_logdens.resize(ndata);
 	}
@@ -179,14 +179,14 @@ public:
 		theta = t;
 		if (update_logdens) {
 			// update value of conditional log-posterior for theta|chi
-			svector chi = Daug->GetChiVec();
+			svector chi = p_Daug->GetChiVec();
             // calculate log-posterior of new population parameter
-            double p_chi[pchi]
+            double p_chi[pchi];
             for (int i=0; i<ndata; i++) {
                 for (int j=0; j<pchi; j++) {
-                    p_chi[j] = chi[j * ndata + i]
+                    p_chi[j] = chi[j * ndata + i];
                 }
-                logdens[i] = LogDensity(p_chi, theta)
+                logdens[i] = LogDensity(p_chi, theta);
             }
             double logdens_prop = std::accumulate(logdens.begin(), logdens.end());
             logdens_prop += LogPrior(theta);
@@ -195,7 +195,7 @@ public:
     
 	void SetLogDens(svector& new_logdens) {
 		logdens = new_logdens;
-		current_logdens = std::accumulate(logdens.begin(), logdens.end());
+		current_logdens = std::accumulate(logdens.begin(), logdens.end(), 0.0);
 	}
 	void SetCholFact(svector cholfact_new) { cholfact = cholfact_new; }
 	void SetCurrentIter(int iter) { current_iter = iter; }

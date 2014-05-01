@@ -19,7 +19,6 @@
 const int mfeat = 5;
 const int pchi = 3;  // chi = {log C, beta, log T}, where C \propto N_H (column density)
 const int dtheta = 9;
-const int dof = 8;  // population-level model is a multivariate student's t-distribution with dof degrees of freedom
 
 
 int main(int argc, char** argv)
@@ -29,7 +28,7 @@ int main(int argc, char** argv)
 	/*
 	 * Read in the data for the measurements, meas, and their standard deviations, meas_unc.
 	 */
-	std::string datafile = "../data/cbt_sed_1000.dat";
+	std::string datafile = "/Users/brandonkelly/Projects/CUDAHM/dusthm/data/cbt_sed_1000.dat";
 	int ndata = get_file_lines(datafile) - 1;  // subtract off one line for the header
 	std::cout << "Loaded " << ndata << " data points." << std::endl;
     
@@ -100,12 +99,12 @@ int main(int argc, char** argv)
 	std::cout << "Writing results to text files..." << std::endl;
     
 	// write the sampled theta values to a file. Output will have nsamples rows and dtheta columns.
-	std::string thetafile("dusthm_thetas.dat");
+	std::string thetafile("dusthm-cpp_thetas.dat");
 	write_thetas(thetafile, theta_samples);
     
 	// write the posterior means and standard deviations of the characteristics to a file. output will have ndata rows and
 	// 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
-	std::string chifile("dusthm_chi_summary.dat");
+	std::string chifile("dusthm-cpp_chi_summary.dat");
 	write_chis(chifile, chi_samples);
     
 	time(&timer2);

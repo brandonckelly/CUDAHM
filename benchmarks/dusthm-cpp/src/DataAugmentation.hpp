@@ -9,16 +9,6 @@
 #ifndef dusthm_cpp_DataAugmentation_hpp
 #define dusthm_cpp_DataAugmentation_hpp
 
-/*
- * parameters.cuh
- *
- *  Created on: Jul 28, 2013
- *      Author: brandonkelly
- */
-
-#ifndef _DATA_AUGMENTATION_HPP__
-#define _DATA_AUGMENTATION_HPP__
-
 // Standard includes
 #include <cmath>
 #include <vector>
@@ -27,6 +17,9 @@
 
 // Boost includes
 #include <boost/shared_ptr.hpp>
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/normal_distribution.hpp>
+#include <boost/random/uniform_real_distribution.hpp>
 
 // Local includes
 #include "chol_update_r1.hpp"
@@ -53,7 +46,7 @@ class DataAugmentation
 {
 public:
 	// Constructor
-	DataAugmentation(vecvec& meas, vecvec& meas_unc) : ndata(meas.size()) {
+	DataAugmentation(vecvec& meas2d, vecvec& meas_unc2d) : ndata(meas2d.size()) {
 		// set sizes of arrays
 		meas.resize(ndata * mfeat);
 		meas_unc.resize(ndata * mfeat);
@@ -66,42 +59,47 @@ public:
 		// copy input data to data members
 		for (int j = 0; j < mfeat; ++j) {
 			for (int i = 0; i < ndata; ++i) {
-				meas[ndata * j + i] = meas[i][j];
-				meas_unc[ndata * j + i] = meas_unc[i][j];
+				meas[ndata * j + i] = meas2d[i][j];
+				meas_unc[ndata * j + i] = meas_unc2d[i][j];
 			}
 		}
         
-		thrust::fill(cholfact.begin(), cholfact.end(), 0.0);
+        std::fill(cholfact.begin(), cholfact.end(), 0.0);
         
         save_trace = true;
 	}
  
-    virtual void LogDensity(double* chi, double* meas, double* meas_unc) {return 0.0;}
+    virtual double LogDensity(double* chi, double* meas, double* meas_unc) {return 0.0;}
     
 	virtual void Initialize() {
         // initialize all chi values to zero
-        chi.fill(chi.begin(), chi.end(), 0.0)
+        std::fill(chi.begin(), chi.end(), 0.0);
 
         // set initial covariance matrix of the chi proposals as the identity matrix
+        double local_chi[pchi];
+        double local_meas[mfeat], local_meas_unc[mfeat];
         for (int i=0; i<ndata; i++) {
             int diag_index = 0;
             for (int j=0; j<pchi; j++) {
-                cholfact[idata + ndata * diag_index] = 1.0;
+                cholfact[i + ndata * diag_index] = 1.0;
                 diag_index += j + 2;  // cholesky factor is lower diagonal
+                local_chi[j] = chi[i + ndata * j];
             }
+            for (int j=0; j<mfeat; j++) {
+                local_meas[j] = meas[i + ndata * j];
+                local_meas_unc[j] = meas_unc[i + ndata * j];
+            }
+            logdens[i] = LogDensity(local_chi, local_meas, local_meas_unc);
         }
         
-        // set initial value of the log p(meas|chi)
-        logdens = LogDensity(chi, meas, meas_unc);
-        
-		thrust::fill(naccept.begin(), naccept.end(), 0);
+		std::fill(naccept.begin(), naccept.end(), 0);
 		current_iter = 1;
 	}
     
 	// launch the update kernel on the GPU
 	virtual void Update() {
 
-        svector logdens_pop = p_Theta->GetLogDens()
+        svector logdens_pop = p_Theta->GetLogDensVec();
         
         for (int i=0; i<ndata; i++) {
             // copy values for this data point for consistency with CUDAHM
@@ -123,11 +121,11 @@ public:
             }
             
             // propose a new value of chi
-            Propose(local_chi, local_cholfact, proposed_chi, snorm_deviate, scaled_proposal, pchi);
+            Propose(local_chi, local_cholfact, proposed_chi, snorm_deviate, scaled_proposal);
             
             // get value of log-posterior for proposed chi value
             double logdens_meas_prop = LogDensity(proposed_chi, local_meas, local_meas_unc);
-            double logdens_pop_prop = p_Theta->LogDensity(proposed_chi);
+            double logdens_pop_prop = p_Theta->LogDensity(proposed_chi, p_Theta->GetTheta());
             double logpost_prop = logdens_meas_prop + logdens_pop_prop;
             
             /*
@@ -156,15 +154,13 @@ public:
             bool accept = AcceptProp(logpost_prop, logpost_current, 0.0, 0.0, metro_ratio);
             
             // adapt the covariance matrix of the characteristic proposal distribution
-            AdaptProp(local_cholfact, snorm_deviate, scaled_proposal, metro_ratio, pchi, current_iter);
+            AdaptProp(local_cholfact, snorm_deviate, scaled_proposal, metro_ratio, current_iter);
             
             for (int j = 0; j < dim_cholfact; ++j) {
                 // copy value of this adapted cholesky factor back to global memory
                 cholfact[j * ndata + i] = local_cholfact[j];
             }
             
-            // copy local RNG state back to global memory
-            devStates[idata] = localState;
             // printf("current iter, Accept, idata: %d, %d, %d\n", current_iter, accept, idata);
             for (int j=0; j<pchi; j++) {
                 chi[ndata * j + i] = accept ? proposed_chi[j] : local_chi[j];
@@ -180,7 +176,7 @@ public:
 	}
     
     void Propose(double* p_chi, double* p_cholfact, double* p_proposed_chi, double* p_snorm_deviate,
-                 double* p_scaled_proposal, int pchi)
+                 double* p_scaled_proposal)
     {
         // get the unit proposal
         for (int j=0; j<pchi; j++) {
@@ -205,15 +201,14 @@ public:
                     double backward_dens, double& ratio)
     {
         double lograt = logdens_prop - forward_dens - (logdens_current - backward_dens);
-        lograt = min(lograt, 0.0);
+        lograt = std::min(lograt, 0.0);
         ratio = exp(lograt);
         double unif = uniform(rng);
         bool accept = (unif < ratio) && isfinite(ratio);
         return accept;
     }
 
-    void AdaptProp(double* p_cholfact, double* p_snorm_deviate, double* p_scaled_proposal, double metro_ratio,
-                   int pchi, int current_iter)
+    void AdaptProp(double* p_cholfact, double* p_snorm_deviate, double* p_scaled_proposal, double metro_ratio, int current_iter)
     {
         double unit_norm = 0.0;
         for (int j=0; j<pchi; j++) {
@@ -231,7 +226,7 @@ public:
     }
     
 	void ResetAcceptance() {
-		thrust::fill(d_naccept.begin(), d_naccept.end(), 0);
+		std::fill(naccept.begin(), naccept.end(), 0);
 	}
     
 	// setters and getters
@@ -286,11 +281,11 @@ public:
     
 	svector GetLogDensVec() {return logdens;}
 	double GetLogDens() {return std::accumulate(logdens.begin(), logdens.end(), 0.0);}
-	hvector GetChiVec() {return chi;}
+	svector GetChiVec() {return chi;}
 	int GetDataDim() {return ndata;}
 	int GetChiDim() {return pchi;}
 	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > GetPopulationPtr() { return p_Theta; }
-	thrust::host_vector<int> GetNaccept() {return naccept;}
+    std::vector<int> GetNaccept() {return naccept;}
     
 protected:
 	// measurements and their uncertainties

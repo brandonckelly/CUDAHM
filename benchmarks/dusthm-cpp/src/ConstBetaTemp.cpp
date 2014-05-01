@@ -9,8 +9,6 @@
 #include <stdio.h>
 #include <ConstBetaTemp.hpp>
 
-// frequencies correspond to {500, 350, 250, 170, 70} microns, the Herschel bands
-const double nu[5] = {5.99584916e11, 8.56549880e11, 1.19916983e12, 1.87370286e12, 2.99792458e12};
 const double nu_ref = 2.3e11;  // 230 GHz
 
 // physical constants, cgs

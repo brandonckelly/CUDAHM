@@ -28,7 +28,7 @@ int main(int argc, char** argv)
 	/*
 	 * Read in the data for the measurements, meas, and their standard deviations, meas_unc.
 	 */
-	std::string datafile = "/Users/brandonkelly/Projects/CUDAHM/dusthm/data/cbt_sed_1000.dat";
+	std::string datafile = "/Users/brandonkelly/Projects/CUDAHM/dusthm/data/cbt_sed_100000.dat";
 	int ndata = get_file_lines(datafile) - 1;  // subtract off one line for the header
 	std::cout << "Loaded " << ndata << " data points." << std::endl;
     

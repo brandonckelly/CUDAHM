@@ -22,7 +22,7 @@ def modified_bbody(nu, const, beta, temp):
     return sed
 
 
-ndata = 1000
+ndata = 100000
 
 cbt_mean = np.asarray([15.0, 2.0, np.log(15.0)])
 

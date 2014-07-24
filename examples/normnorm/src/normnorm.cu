@@ -31,7 +31,10 @@
 #include <string>
 
 // local includes
-#include "../../cudahm/src/GibbsSampler.hpp"
+#include "../../../mwg/src/GibbsSampler.hpp"
+#include "../../../mwg/src/kernels.cu"
+#include "../../../data_proc_util/src/input_output.cpp"
+
 
 // known dimensions of features, characteristics and population parameter
 const int mfeat = 3;
@@ -98,97 +101,23 @@ double LogDensityPop(double* chi, double* theta)
  */
 __constant__ pLogDensMeas c_LogDensMeas = LogDensityMeas;  // log p(y_i|chi_i)
 __constant__ pLogDensPop c_LogDensPop = LogDensityPop;  // log p(chi_i|theta)
-
-
-// return the number of lines in a text file
-int get_file_lines(std::string& filename) {
-    int number_of_lines = 0;
-    std::string line;
-    std::ifstream inputfile(filename.c_str());
-
-    if (inputfile.good()) {
-        while (std::getline(inputfile, line))
-            ++number_of_lines;
-        inputfile.close();
-        return number_of_lines;
-	} else {
-		std::string errmsg("File ");
-		errmsg.append(filename);
-		errmsg.append(" does not exist.\n");
-		throw std::runtime_error(errmsg);
-	}
-}
-
-// read in the data
-void read_data(std::string& filename, vecvec& meas, vecvec& meas_unc, int ndata, int mfeat) {
-	std::ifstream input_file(filename.c_str());
-	meas.resize(ndata);
-	meas_unc.resize(ndata);
-	for (int i = 0; i < ndata; ++i) {
-		std::vector<double> this_meas(mfeat);
-		std::vector<double> this_meas_unc(mfeat);
-		for (int j = 0; j < mfeat; ++j) {
-			input_file >> this_meas[j] >> this_meas_unc[j];
-		}
-		meas[i] = this_meas;
-		meas_unc[i] = this_meas;
-	}
-	input_file.close();
-}
-
-// dump the sampled values of the population parameter to a text file
-void write_thetas(std::string& filename, vecvec& theta_samples) {
-	std::ofstream outfile(filename.c_str());
-	int nsamples = theta_samples.size();
-	int dtheta = theta_samples[0].size();
-	for (int i = 0; i < nsamples; ++i) {
-		for (int j = 0; j < dtheta; ++j) {
-			outfile << theta_samples[i][j] << " ";
-		}
-		outfile << std::endl;
-	}
-}
-
-// dump the posterior means and standard deviations of the characteristics to a text file
-void write_chis(std::string& filename, std::vector<vecvec>& chi_samples) {
-	std::ofstream outfile(filename.c_str());
-	int nsamples = chi_samples.size();
-	int ndata = chi_samples[0].size();
-	int pchi = chi_samples[0][0].size();
-
-	for (int i = 0; i < ndata; ++i) {
-		std::vector<double> post_mean_i(pchi, 0.0);
-		std::vector<double> post_msqr_i(pchi, 0.0);  // posterior mean of the square of the values for chi_i
-		for (int j = 0; j < nsamples; ++j) {
-			for (int k = 0; k < pchi; ++k) {
-				post_mean_i[k] += chi_samples[j][i][k] / nsamples;
-				post_msqr_i[k] += chi_samples[j][i][k] * chi_samples[j][i][k] / nsamples;
-			}
-		}
-		for (int k = 0; k < pchi; ++k) {
-			double post_sigma_ik = sqrt(post_msqr_i[k] - post_mean_i[k] * post_mean_i[k]);  // posterior standard deviation
-			outfile << post_mean_i[k] << " " << post_sigma_ik <<" ";
-		}
-		outfile << std::endl;
-	}
-
-	outfile.close();
-}
+extern __constant__ double c_theta[100];
 
 int main(int argc, char** argv)
 {
+	BaseDataAdapter dataAdapter;
 	// allocate memory for measurement arrays
 	vecvec meas;
 	vecvec meas_unc;
 	std::string filename("../data/normnorm_example.txt");
-	int ndata = get_file_lines(filename);
+	int ndata = dataAdapter.get_file_lines(filename);
     // read in measurement data from text file
-    read_data(filename, meas, meas_unc, ndata, mfeat);
+    dataAdapter.read_data(filename, meas, meas_unc, ndata, mfeat);
     // build the MCMC sampler
     int niter = 50000;
     int nburnin = niter / 2;
 
-    int nchi_samples = 1000;  // only keep 1000 samples for the chi values to control memory usage and avoid numerous reads from GPU
+    int nchi_samples = 500;  // only keep 500 samples for the chi values to control memory usage and avoid numerous reads from GPU
     int nthin_chi = niter / nchi_samples;
 
     // instantiate the Metropolis-within-Gibbs sampler object
@@ -205,11 +134,11 @@ int main(int argc, char** argv)
 
     // write the sampled theta values to a file. Output will have nsamples rows and dtheta columns.
     std::string thetafile("normnorm_thetas.dat");
-    write_thetas(thetafile, theta_samples);
+    dataAdapter.write_thetas(thetafile, theta_samples);
 
     // write the posterior means and standard deviations of the characteristics to a file. output will have ndata rows and
     // 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
     std::string chifile("normnorm_chi_summary.dat");
-    write_chis(chifile, chi_samples);
+    dataAdapter.write_chis(chifile, chi_samples);
 
 }

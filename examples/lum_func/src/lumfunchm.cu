@@ -37,8 +37,8 @@ __device__ __host__
 double computeFluxLogDensWithPopPars(double gamma, double lScale, double uScale,
 									 double dist, double chiElem)
 {
-	double logCoef = log(4*CR_CUDART_PI) + 2*log(dist) - log(uScale) - lgamma(gamma + 1)
-		- log(1 - 1/pow(1+uScale/lScale, gamma + 1));
+	double logCoef = log((4*CR_CUDART_PI*dist*dist)/(uScale * tgamma(gamma + 1)
+		* (1 - 1/pow(1+uScale/lScale, gamma + 1))));
 	double x = 4 * CR_CUDART_PI * dist * dist * chiElem;
 	double logChiDependentPart = log(1-exp(-x/lScale)) + gamma * (log(x) - log(uScale)) - (x/uScale);
 	return logCoef + logChiDependentPart;
@@ -59,7 +59,8 @@ double LogDensityPop(double* chi, double* theta)
 __device__
 double LogDensityPopAux(double* chi, double* theta, double dist)
 {
-	return computeFluxLogDensWithPopPars(theta[0], theta[1], theta[2], dist, chi[0]);
+	double result = computeFluxLogDensWithPopPars(theta[0], theta[1], theta[2], dist, chi[0]);
+	return result;
 }
 
 /*
@@ -78,13 +79,13 @@ int main(int argc, char** argv)
 	// allocate memory for measurement arrays
 	vecvec meas;
 	vecvec meas_unc;
-	std::string filename("../data/filtered_fluxes_w_G_noise_mu_0.0_sig_1e-10_cnt_100000.dat");
+	std::string filename(argv[1]);
 	int ndata = dataAdapter.get_file_lines(filename);
     // read in measurement data from text file
     dataAdapter.read_data(filename, meas, meas_unc, ndata, mfeat, false);
     std::cout << "Loaded " << ndata << " data points." << std::endl;
 	
-	std::string distFilename("../data/dists_cnt_100000.dat");
+	std::string distFilename(argv[2]);
 	std::vector<double> distData(ndata);
 	dataAdapter.load_dist_data(distFilename,distData,ndata);
 

@@ -8,7 +8,7 @@
 #ifndef LUMFUNCPOPPAR_CUH_
 #define LUMFUNCPOPPAR_CUH_
 
-#include "../CudaHM/parameters.cuh"
+#include "../../../mwg/src/parameters.cuh"
 
 extern __constant__ pLogDensPopAux c_LogDensPopAux;
 
@@ -50,10 +50,9 @@ public:
 
 	virtual void InitialValue() {
 		// set initial value of theta to one
-		h_theta[0] = -2.0;
+		h_theta[0] = -1.5;
 		h_theta[1] = 1.0;
-		h_theta[2] = 1.0;
-		//thrust::fill(h_theta.begin(), h_theta.end(), 1.0);
+		h_theta[2] = 100.0;
 	}
 
 	// update the value of the population parameter value using a robust adaptive metropolis algorithm
@@ -115,6 +114,23 @@ public:
 			current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
             current_logdens += LogPrior(h_theta);
 		}
+	}
+
+	virtual double LogPrior(hvector theta) {
+		double negative_infinity = -std::numeric_limits<double>::infinity();
+		double gammaTheta = theta[0];
+		double lScaleTheta = theta[1];
+		double uScaleTheta = theta[2];
+		double result;
+		if ((gammaTheta < 0) && (gammaTheta > -2) && (lScaleTheta < uScaleTheta))
+		{
+			result = log(0.90322) + log(lScaleTheta) - 2 * log(uScaleTheta) - log(1 + gammaTheta * gammaTheta);
+		}
+		else
+		{
+			result = negative_infinity;
+		}
+		return result;
 	}
 
 	virtual double* GetDistData() { return thrust::raw_pointer_cast(&d_distData[0]); }

@@ -9,7 +9,7 @@
 #define LUMFUNCDAUG_CUH_
 
 // Kernel to compute the initial values of chi = flux.
-template<int mfeat> __global__
+template<int mfeat, int pchi> __global__
 void initial_flux_value(double* chi, double* meas, double* meas_unc, double* cholfact, double* logdens,
 		int ndata, pLogDensMeas LogDensityMeas, curandState* devStates)
 {
@@ -17,7 +17,7 @@ void initial_flux_value(double* chi, double* meas, double* meas_unc, double* cho
 	if (idata < ndata)
 	{
 		for (int j = 0; j < pchi; ++j) {
-			chi[idata + j * ndata] = 1.0; // initialize chi values to one
+			chi[idata + j * ndata] = 1.0e-8; // initialize chi values to small value
 		}
 
 		// set initial covariance matrix of the chi proposals as the identity matrix
@@ -55,7 +55,7 @@ public:
 		double* p_logdens = thrust::raw_pointer_cast(&this->d_logdens[0]);
 
 		// set initial values for the characteristics. this will launch a CUDA kernel.
-		initial_flux_value <mfeat> <<<this->nBlocks, this->nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens,
+		initial_flux_value <mfeat,pchi> <<<this->nBlocks, this->nThreads>>>(p_chi, p_meas, p_meas_unc, p_cholfact, p_logdens,
 				this->ndata, this->p_logdens_function, this->p_devStates);
 		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 

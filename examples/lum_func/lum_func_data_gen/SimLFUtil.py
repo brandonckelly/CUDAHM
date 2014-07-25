@@ -1,3 +1,6 @@
+"""
+Created 2014-07-21 by Janos Szalai-Gindl and Tamas Budavari;
+"""
 import datetime as dt
 import numpy as np
 import matplotlib.pyplot as plt

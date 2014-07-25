@@ -1,3 +1,6 @@
+"""
+Created 2014-07-15 by Janos Szalai-Gindl and Tamas Budavari;
+"""
 import argparse as argp
 from SimLFUtil import SimLFUtil
 

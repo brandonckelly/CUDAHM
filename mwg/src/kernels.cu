@@ -89,7 +89,7 @@ void AdaptProp(double* cholfact, double* snorm_deviate, double* scaled_proposal,
 	unit_norm = sqrt(unit_norm);
 	double decay_rate = 0.667;
 	double target_rate = 0.4;
-	double decay_sequence = 1.0 / pow(current_iter, decay_rate);
+	double decay_sequence = 1.0 / pow((double)current_iter, decay_rate);
 	double scaled_coef = sqrt(decay_sequence * fabs(metro_ratio - target_rate)) / unit_norm;
 	for (int j=0; j<pchi; j++) {
 		scaled_proposal[j] *= scaled_coef;

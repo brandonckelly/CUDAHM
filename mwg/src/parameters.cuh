@@ -154,7 +154,7 @@ public:
 	}
 
 	// setters and getters
-	void SetChi(dvector& chi, bool update_logdens = true) {
+	virtual void SetChi(dvector& chi, bool update_logdens = true) {
 		d_chi = chi;
 		if (update_logdens) {
 			// update the posteriors for the new values of the characteristics
@@ -301,7 +301,7 @@ public:
 	}
 
 	// calculate the initial value of the population parameters
-	void Initialize() {
+	virtual void Initialize() {
 		// first set initial values
 		InitialValue();
 		InitialCholFactor();
@@ -438,7 +438,7 @@ public:
 		d_proposed_logdens.resize(ndata);
 	}
 
-	void SetTheta(hvector& theta, bool update_logdens = true) {
+	virtual void SetTheta(hvector& theta, bool update_logdens = true) {
 		h_theta = theta;
 	    double* p_theta = thrust::raw_pointer_cast(&theta[0]);
 		CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_theta, dtheta * sizeof(*p_theta)));
@@ -504,6 +504,8 @@ public:
 	int GetNaccept() { return naccept; }
 	pLogDensPop GetLogDensPopPtr() { return p_logdens_function; }
 	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > GetDataAugPtr() { return Daug; }
+	virtual double* GetDistData() { return NULL; }
+	virtual pLogDensPopAux GetLogDensPopAuxPtr() { return NULL; }
 
 protected:
 	// the value of the population parameter

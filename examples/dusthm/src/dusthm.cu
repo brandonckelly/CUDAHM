@@ -38,8 +38,9 @@
 #include <time.h>
 
 // local CUDAHM includes
-#include "../../cudahm/src/GibbsSampler.hpp"
-#include "input_output.hpp"
+#include "../../../mwg/src/GibbsSampler.hpp"
+#include "../../../mwg/src/kernels.cu"
+#include "../../../data_proc_util/src/input_output.cpp"
 #include "ConstBetaTemp.cuh"
 #include "DustPopPar.hpp"
 
@@ -55,19 +56,19 @@ const int pchi = 3;  // chi = {log C, beta, log T}, where C \propto N_H (column 
 const int dtheta = 9;
 // frequencies correspond to {500, 350, 250, 170, 70} microns, the Herschel bands
 __constant__ const double c_nu[mfeat] = {5.99584916e11, 8.56549880e11, 1.19916983e12, 1.87370286e12, 2.99792458e12};
-const double nu_ref = 2.3e11;  // 230 GHz
-__constant__ double c_nu_ref = nu_ref;
+#define NU_REF 2.3e11 // 230 GHz
+__constant__ double c_nu_ref = NU_REF;
 
 const int dof = 8;  // population-level model is a multivariate student's t-distribution with dof degrees of freedom
 __constant__ int c_dof = dof;
 
 // physical constants, cgs
-const double clight = 2.99792458e10;
-__constant__ double c_clight = clight;
-const double hplanck = 6.6260755e-27;
-__constant__ double c_hplanck = hplanck;
-const double kboltz = 1.380658e-16;
-__constant__ double c_kboltz = kboltz;
+#define CLIGHT 2.99792458e10
+__constant__ double c_clight = CLIGHT;
+#define HPLANCK 6.6260755e-27
+__constant__ double c_hplanck = HPLANCK;
+#define KBOLTZ 1.380658e-16
+__constant__ double c_kboltz = KBOLTZ;
 
 // Compute the model dust SED, a modified blackbody
 __device__
@@ -210,21 +211,24 @@ __constant__ pLogDensPop c_LogDensPop = LogDensityPop;  // log p(chi_i|theta)
  */
 extern __constant__ double c_theta[100];
 
+const std::string thetasFileHeader = "# log(C) mean, beta mean, log(T) mean, log(log(C) sigma), log(beta sigma), log(log(T) sigma), arctanh(log(C) corr), arctanh(beta corr), arctanh(log(T) corr)";
+const std::string chisFileHeader = "# log(C_i) mean, log(C_i) sigma, beta_i mean, beta_i sigma, log(T_i) mean, log(T_i) sigma";
 
 int main(int argc, char** argv)
 {
+	CBTDataAdapter dataAdapter(thetasFileHeader, chisFileHeader);
 	time_t timer1, timer2;  // keep track of how long the program takes to run
 	time(&timer1);
 	/*
 	 * Read in the data for the measurements, meas, and their standard deviations, meas_unc.
 	 */
 	std::string datafile = "../data/cbt_sed_100000.dat";
-	int ndata = get_file_lines(datafile) - 1;  // subtract off one line for the header
+	int ndata = dataAdapter.get_file_lines(datafile) - 1;  // subtract off one line for the header
 	std::cout << "Loaded " << ndata << " data points." << std::endl;
 
 	vecvec fnu(ndata);  // the measured SEDs
 	vecvec fnu_sig(ndata);  // the standard deviation in the measurement errors
-	read_data(datafile, fnu, fnu_sig, ndata, mfeat);
+	dataAdapter.read_data(datafile, fnu, fnu_sig, ndata, mfeat, true);
 
 	/*
 	 * Set the number of MCMC iterations and the amount of thinning for the chi and theta samples.
@@ -235,7 +239,7 @@ int main(int argc, char** argv)
 
 	int nmcmc_iter = 50000;
 	int nburnin = nmcmc_iter / 2;
-	int nchi_samples = 100;
+	int nchi_samples = 50;
 	int nthin_chi = nmcmc_iter / nchi_samples;
 
 	// first create pointers to instantiated subclassed DataAugmentation and PopulationPar objects, since we need to give them to the
@@ -251,7 +255,7 @@ int main(int argc, char** argv)
 	 */
 //	vecvec cbt_true(ndata);
 //	std::string cbtfile = "../data/true_cbt_1000.dat";
-//	load_cbt(cbtfile, cbt_true, ndata);
+//	dataAdapter.load_cbt(cbtfile, cbt_true, ndata);
 //
 //	// copy input data to data members
 //	hvector h_cbt(ndata * pchi);
@@ -290,12 +294,12 @@ int main(int argc, char** argv)
 
 	// write the sampled theta values to a file. Output will have nsamples rows and dtheta columns.
 	std::string thetafile("dusthm_thetas.dat");
-	write_thetas(thetafile, theta_samples);
+	dataAdapter.write_thetas(thetafile, theta_samples);
 
 	// write the posterior means and standard deviations of the characteristics to a file. output will have ndata rows and
 	// 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
 	std::string chifile("dusthm_chi_summary.dat");
-	write_chis(chifile, chi_samples);
+	dataAdapter.write_chis(chifile, chi_samples);
 
 	time(&timer2);
 	double seconds = difftime(timer2, timer1);

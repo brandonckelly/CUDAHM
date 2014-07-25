@@ -10,7 +10,7 @@
 
 #include <limits>
 
-#include "../../cudahm/src/parameters.cuh"
+#include "../../../mwg/src/parameters.cuh"
 
 /*
  * Override PopulationPar's LogPrior method, since we do not want a uniform prior on theta. Also override the InitialValue method

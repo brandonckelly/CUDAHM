@@ -112,7 +112,7 @@ int main(int argc, char** argv)
 	std::string filename("../data/normnorm_example.txt");
 	int ndata = dataAdapter.get_file_lines(filename);
     // read in measurement data from text file
-    dataAdapter.read_data(filename, meas, meas_unc, ndata, mfeat);
+    dataAdapter.read_data(filename, meas, meas_unc, ndata, mfeat, false);
     // build the MCMC sampler
     int niter = 50000;
     int nburnin = niter / 2;

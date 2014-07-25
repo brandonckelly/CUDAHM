@@ -8,7 +8,7 @@
 #ifndef CONSTBETATEMP_CUH_
 #define CONSTBETATEMP_CUH_
 
-#include "../../cudahm/src/parameters.cuh"
+#include "../../../mwg/src/parameters.cuh"
 
 // Kernel to compute the initial values of chi = (log C, beta, log T). Does this by randomly generating values within a range
 // of reasonable physical values for far-IR SEDs of dust in galactic starless cores.

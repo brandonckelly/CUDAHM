@@ -66,6 +66,7 @@
       <CodeGeneration>compute_20,sm_20</CodeGeneration>
       <GenerateLineInfo>true</GenerateLineInfo>
       <PtxAsOptionV>true</PtxAsOptionV>
+      <MaxRegCount>42</MaxRegCount>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">

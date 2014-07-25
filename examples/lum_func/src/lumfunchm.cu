@@ -12,9 +12,9 @@
 #include <time.h>
 
 // local CUDAHM includes
-#include "../CudaHM/GibbsSampler.hpp"
-#include "../CudaHM/kernels.cu"
-#include "../DataProcessingUtil/input_output.cpp"
+#include "../../../mwg/src/GibbsSampler.hpp"
+#include "../../../mwg/src/kernels.cu"
+#include "../../../data_proc_util/src/input_output.cpp"
 #include "LumFuncPopPar.cuh"
 #include "LumFuncDaug.cuh"
 
@@ -78,21 +78,20 @@ int main(int argc, char** argv)
 	// allocate memory for measurement arrays
 	vecvec meas;
 	vecvec meas_unc;
-	std::string filename("filtered_fluxes_w_G_noise_mu_0.0_sig_1e-10_cnt_100000.dat");
+	std::string filename("../data/filtered_fluxes_w_G_noise_mu_0.0_sig_1e-10_cnt_100000.dat");
 	int ndata = dataAdapter.get_file_lines(filename);
     // read in measurement data from text file
     dataAdapter.read_data(filename, meas, meas_unc, ndata, mfeat, false);
     std::cout << "Loaded " << ndata << " data points." << std::endl;
 	
-	std::string distFilename("dists_cnt_100000.dat");
+	std::string distFilename("../data/dists_cnt_100000.dat");
 	std::vector<double> distData(ndata);
 	dataAdapter.load_dist_data(distFilename,distData,ndata);
 
 	// build the MCMC sampler
     int niter = 50000;
     int nburnin = niter / 2;
-
-    int nchi_samples = 500;  // only keep 1000 samples for the chi values to control memory usage and avoid numerous reads from GPU
+    int nchi_samples = 50;  // only keep 50 samples for the chi values to control memory usage and avoid numerous reads from GPU
     int nthin_chi = niter / nchi_samples;
 
 	// first create pointers to instantiated subclassed DataAugmentation and PopulationPar objects, since we need to give them to the

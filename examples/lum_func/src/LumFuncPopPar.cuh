@@ -49,10 +49,10 @@ public:
 	}
 
 	virtual void InitialValue() {
-		// set initial value of theta to one
-		h_theta[0] = -1.5;
-		h_theta[1] = 1.0;
-		h_theta[2] = 100.0;
+		// set initial value of theta
+		h_theta[0] = -0.5;
+		h_theta[1] = 50.001;
+		h_theta[2] = 60.0001;
 	}
 
 	// update the value of the population parameter value using a robust adaptive metropolis algorithm
@@ -100,6 +100,7 @@ public:
 		current_iter++;
 	}
 
+	// NOT USED
 	virtual void SetTheta(hvector& theta, bool update_logdens = true) {
 		h_theta = theta;
 	    double* p_theta = thrust::raw_pointer_cast(&theta[0]);

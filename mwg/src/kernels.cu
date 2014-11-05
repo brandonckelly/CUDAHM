@@ -3,7 +3,11 @@
 // Global random number generator and distributions for generating random numbers on the host. The random number generator used
 // is the Mersenne Twister mt19937 from the BOOST library.
 boost::random::mt19937 rng;
-boost::random::normal_distribution<> snorm(0.0, 1.0); // Standard normal distribution
+boost::random::normal_distribution<> snorm(0.0, 1.0e-10); // NOT standard normal distribution rather normal distribution with sigma 1.0e-10//
+//boost::random::normal_distribution<> snorm(0.0, 1.0);
+//boost::random::normal_distribution<> snorm_sigma_1(0.0, 1.0e-5);
+//boost::random::normal_distribution<> snorm(0.0, 1.0e-9);
+//boost::random::normal_distribution<> snorm(0.0, 1.0e-11);
 boost::random::uniform_real_distribution<> uniform(0.0, 1.0); // Uniform distribution from 0.0 to 1.0
 
 __constant__ double c_theta[100];
@@ -57,7 +61,11 @@ void Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_
 	// get the unit proposal
 	for (int j=0; j<pchi; j++) {
 #ifdef __CUDA_ARCH__
-		snorm_deviate[j] = curand_normal_double(p_state);
+		// NOT standard normal distribution rather normal distribution with sigma 1.0e-10
+		snorm_deviate[j] = (1.0e-10) * curand_normal_double(p_state);
+		//snorm_deviate[j] = curand_normal_double(p_state);
+		//snorm_deviate[j] = (1.0e-9) * curand_normal_double(p_state);
+		//snorm_deviate[j] = (1.0e-11) * curand_normal_double(p_state);
 #else
 		snorm_deviate[j] = snorm(rng);
 #endif
@@ -105,7 +113,13 @@ bool AcceptProp(double logdens_prop, double logdens_current, double forward_dens
 		double backward_dens, double& ratio, curandState* p_state)
 {
 	double lograt = logdens_prop - forward_dens - (logdens_current - backward_dens);
-	lograt = min(lograt, 0.0);
+	
+	// The following is necessary because if one argument is NaN, returns the numeric argument:
+	if (isfinite(lograt))
+	{
+		lograt = min(lograt, 0.0);
+	}
+	
 	ratio = exp(lograt);
 #ifdef __CUDA_ARCH__
 	double unif = curand_uniform_double(p_state);

@@ -111,7 +111,7 @@ public:
 		//std::cout << std::endl;
 		// make sure correlation matrix is positive definite
 		double determ =
-				(1.0 - corr[2] * corr[2]) - corr[0] * (corr[0] - corr[2] * corr[3]) + corr[1] * (corr[0] * corr[2] - corr[1]);
+				(1.0 - corr[2] * corr[2]) - corr[0] * (corr[0] - corr[2] * corr[1]) + corr[1] * (corr[0] * corr[2] - corr[1]);
 
 		double logprior;
 		if (determ > 0) {

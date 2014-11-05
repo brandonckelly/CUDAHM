@@ -88,6 +88,7 @@ public:
 	}
 
 	// setters and getters
+	// NOT USED
 	virtual void SetChi(dvector& chi, bool update_logdens = true) {
 		d_chi = chi;
 		if (update_logdens) {

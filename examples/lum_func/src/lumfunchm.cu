@@ -32,19 +32,36 @@ double LogDensityMeas(double* chi, double* meas, double* meas_unc)
 	return logdens;
 }
 
+__device__ __host__
+double min_double()
+{
+	// const unsigned long long ieee754mindouble = 0xffefffffffffffff;
+	// return __longlong_as_double(ieee754mindouble);
+	// we choose the next double for minimal double because of technical reason:
+	// (If we summarize (more than one) ieee754mindoubles we get NaN result.)
+	return -1.797693e+250;
+}
+
 // helper funtion for used by LogDensityPop to compute the log-density of flux | theta
 __device__ __host__
 double computeFluxLogDensWithPopPars(double gamma, double lScale, double uScale,
 									 double dist, double chiElem)
 {
-	double logCoef = log((4*CR_CUDART_PI*dist*dist)/(uScale * tgamma(gamma + 1)
-		* (1 - 1/pow(1+uScale/lScale, gamma + 1))));
+	double result;	
 	double x = 4 * CR_CUDART_PI * dist * dist * chiElem;
-	double logChiDependentPart = log(1-exp(-x/lScale)) + gamma * (log(x) - log(uScale)) - (x/uScale);
-	return logCoef + logChiDependentPart;
+	if (x > 0)
+	{
+		double logChiDependentPart = log(1 - exp(-x / lScale)) + gamma * (log(x) - log(uScale)) - (x / uScale);
+		result = /*logCoef +*/ logChiDependentPart;
+	}
+	else
+	{
+		result = min_double();
+	}
+	return result;
 }
 
-// Not used:
+// NOT USED
 __device__
 double LogDensityPop(double* chi, double* theta)
 {
@@ -81,6 +98,9 @@ int main(int argc, char** argv)
 	vecvec meas_unc;
 	std::string filename(argv[1]);
 	int ndata = dataAdapter.get_file_lines(filename);
+
+	//ndata = 1000;
+
     // read in measurement data from text file
     dataAdapter.read_data(filename, meas, meas_unc, ndata, mfeat, false);
     std::cout << "Loaded " << ndata << " data points." << std::endl;
@@ -90,7 +110,7 @@ int main(int argc, char** argv)
 	dataAdapter.load_dist_data(distFilename,distData,ndata);
 
 	// build the MCMC sampler
-    int niter = 50000;
+	int niter = 1000000;
     int nburnin = niter / 2;
     int nchi_samples = 50;  // only keep 50 samples for the chi values to control memory usage and avoid numerous reads from GPU
     int nthin_chi = niter / nchi_samples;

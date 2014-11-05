@@ -26,6 +26,7 @@
     <Compile Include="bb1truncpl.py" />
     <Compile Include="bb1_plots.py" />
     <Compile Include="bb1_rng_plot.py" />
+    <Compile Include="plot_lumfunc_w_thetas.py" />
     <Compile Include="SimLF.py" />
     <Compile Include="SimLFUtil.py" />
   </ItemGroup>

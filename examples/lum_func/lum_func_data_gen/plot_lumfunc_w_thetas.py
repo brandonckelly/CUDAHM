@@ -56,16 +56,21 @@ ylabel('$p(x)$')
 tit = r'Init. values of $\theta$: (%5.4f,%5.4f,%5.4f); Iter. num.: %d; Obj. num.: %d;\\Means of $\theta$: (%5.4f,%5.4f,%5.4f); St. deviations of $\theta$: (%5.4f,%5.4f,%5.4f); St. error: (%e,%e,%e)' % (init_beta, init_lower_scale, init_upper_scale, iter_num, obj_num, mean_vec[0], mean_vec[1], mean_vec[2], std_vec[0], std_vec[1], std_vec[2], sem_vec[0], sem_vec[1], sem_vec[2])
 fig_log.suptitle(tit, fontsize=18, fontweight='bold')
 
-xlog = np.logspace(-7, 7, 300)
+xlog = np.logspace(-3, 3, 300)
 #xlin = np.linspace(0.001, 300., 500)
 
 # Helper for plotting BB1 with samples of theta parameters:
-def plot_figs(smp_beta, smp_l, smp_u, xlog, c):
-	bb1 = BB1TruncPL(smp_beta, smp_l, smp_u)
-	pdf = bb1.pdf(xlog)
-	figure(fig_log.number)
-	#alpha=.01, linewidth=0.5
-	loglog(xlog, pdf, c+'-', alpha=.01, linewidth=0.5, zorder=1)
+def plot_figs(idx, xlog, c):
+    smp_beta = theta_data[idx][0]
+    smp_l =theta_data[idx][1]
+    smp_u = theta_data[idx][2]
+    bb1 = BB1TruncPL(smp_beta, smp_l, smp_u)
+    pdf = bb1.pdf(xlog)
+    figure(fig_log.number)
+    #alpha=.01, linewidth=0.5
+    #the green colored line belongs to the latest theta from iterations.
+    red_rate = (1.0 - idx/float(theta_data.shape[0]))
+    loglog(xlog, pdf, color=(red_rate*1.0,1.0,0.0), alpha=.01, linewidth=0.5, zorder=1)
 
 t1 = dt.datetime.today()
 print 'Elapsed time of loading samples of theta parameters:', t1-t0
@@ -75,7 +80,13 @@ bb1_0 = BB1TruncPL(beta, lower_scale, upper_scale)
 lbl_0 = 'BB1 (%5.2f,%5.2f,%5.2f)' % (beta, lower_scale, upper_scale)
 pdf_0 = bb1_0.pdf(xlog)
 figure(fig_log.number)
-loglog(xlog, pdf_0, 'r-', linewidth=2, label=lbl_0, zorder=2)
+loglog(xlog, pdf_0, 'r-', linewidth=2, label=lbl_0, zorder=3)
+
+bb1_1 = BB1TruncPL(mean_vec[0], mean_vec[1], mean_vec[2])
+lbl_1 = 'Mean BB1 (%5.2f,%5.2f,%5.2f)' % (mean_vec[0], mean_vec[1], mean_vec[2])
+pdf_1 = bb1_1.pdf(xlog)
+figure(fig_log.number)
+loglog(xlog, pdf_1, 'm-', linewidth=2, label=lbl_1, zorder=2)
 
 u_array = np.random.uniform(size=theta_data.shape[0])
 accept_rate = cov/float(theta_data.shape[0])
@@ -83,7 +94,7 @@ accept_rate = cov/float(theta_data.shape[0])
 cnt_accept = 0
 for idx in range(0, theta_data.shape[0]):
 	if u_array[idx] < accept_rate:
-		plot_figs(theta_data[idx][0], theta_data[idx][1], theta_data[idx][2], xlog, 'b')
+		plot_figs(idx, xlog, 'b')
 		cnt_accept += 1
 
 print 'Count of accepted array elements: %d' % cnt_accept

@@ -76,11 +76,12 @@ class SimLFUtil:
         filtered_noisy = noisy[mask]
         return filtered_noisy
 
-    def save_data_to_disk(self,dists,fluxes,noisy_fluxes):
+    def save_data_to_disk(self,lums,dists,fluxes,noisy_fluxes):
         """
         This function saves the random distances, flux data
         and the related filtered noisy data to disk.
         """
+        np.savetxt(self.data_dir + 'lums' + '_cnt_' + str(self.n_samp) + '.dat', lums, fmt='%10.6e')
         np.savetxt(self.data_dir + 'dists' + '_cnt_' + str(self.n_samp) + '.dat', dists, fmt='%10.6e')
         np.savetxt(self.data_dir + 'fluxes' + '_cnt_' + str(self.n_samp) + '.dat', fluxes, fmt='%10.6e')
         n_fluxes_len = len(noisy_fluxes)
@@ -167,6 +168,6 @@ class SimLFUtil:
         print('Elapsed time of calculating statistics:', t1-t0)
         
         t0 = dt.datetime.today()
-        self.save_data_to_disk(dists,fluxes,noisy_fluxes)
+        self.save_data_to_disk(lums,dists,fluxes,noisy_fluxes)
         t1 = dt.datetime.today()
         print('Elapsed time of data files writing:', t1-t0)

@@ -45,20 +45,20 @@ public:
 
 	// Set the initial values to the sample means and variances
 	void InitialValue() {
-		vecvec chi = this->Daug->GetChi();
+		double * chi = this->Daug->GetChi();
 		thrust::fill(this->h_theta.begin(), this->h_theta.end(), 0.0);
 		// first compute sample mean
-		int ndata = chi.size();
+		int ndata = this->Daug->GetDataDim();
 		for (int i = 0; i < ndata; ++i) {
 			for (int j = 0; j < pchi; ++j) {
-				this->h_theta[j] += chi[i][j] / double(ndata);
+				this->h_theta[j] += chi[ndata * j + i] / double(ndata);
 			}
 		}
 		// now compute sample variances
 		std::vector<double> chi_var(pchi, 0.0);
 		for (int i = 0; i < ndata; ++i) {
 			for (int j = 0; j < pchi; ++j) {
-				chi_var[j] += (chi[i][j] - this->h_theta[j]) * (chi[i][j] - this->h_theta[j]) / ndata;
+				chi_var[j] += (chi[ndata * j + i] - this->h_theta[j]) * (chi[ndata * j + i] - this->h_theta[j]) / ndata;
 			}
 		}
 		this->h_theta[3] = log(sqrt(chi_var[0]));

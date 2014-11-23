@@ -27,10 +27,10 @@ public:
 	virtual void read_data(std::string& filename, vecvec& meas, vecvec& meas_unc, int ndata, int mfeat, bool hasHeader) = 0;
 	
 	// dump the sampled values of the population parameter to a text file
-	virtual void write_thetas(std::string& filename, vecvec& theta_samples) = 0;
+	virtual void write_thetas(std::string& filename, const double * theta_samples, int nsamples, int dtheta) = 0;
 
 	// dump the posterior means and standard deviations of the characteristics to a text file
-	virtual void write_chis(std::string& filename, std::vector<vecvec>& chi_samples) = 0;
+	virtual void write_chis(std::string& filename, const double * chi_samples, int nsamples, int ndata, int pchi) = 0;
 };
 
 // This is an interface which is a plugin for IDataAdapter and it is extended by

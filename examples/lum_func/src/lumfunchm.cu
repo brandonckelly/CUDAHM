@@ -78,7 +78,7 @@ double dist, double chiElem)
 	double logCoef = determineCoef(gamma, lScale, uScale);
 	double result;
 	double x = 4 * CR_CUDART_PI * dist * dist * chiElem;
-	if (x > 0)
+	if (x > 0.0)
 	{
 		double logChiDependentPart = log(1 - exp(-x / lScale)) + gamma * (log(x) - log(uScale)) - (x / uScale);
 		result = logCoef + logChiDependentPart;
@@ -121,6 +121,7 @@ extern __constant__ double c_theta[100];
 
 int main(int argc, char** argv)
 {
+	clock_t begin = clock();
 	DistDataAdapter dataAdapter;
 	// allocate memory for measurement arrays
 	vecvec meas;
@@ -128,7 +129,7 @@ int main(int argc, char** argv)
 	std::string filename(argv[1]);
 	int ndata = dataAdapter.get_file_lines(filename);
 
-	//ndata = 1000;
+	//ndata = 50000;
 
 	// read in measurement data from text file
 	dataAdapter.read_data(filename, meas, meas_unc, ndata, mfeat, false);
@@ -139,7 +140,7 @@ int main(int argc, char** argv)
 	dataAdapter.load_dist_data(distFilename, distData, ndata);
 
 	// build the MCMC sampler
-	int niter = 1000000;
+	int niter = atoi(argv[3]);
 	int nburnin = niter / 2;
 	int nchi_samples = 50;  // only keep 50 samples for the chi values to control memory usage and avoid numerous reads from GPU
 	int nthin_chi = niter / nchi_samples;
@@ -159,17 +160,21 @@ int main(int argc, char** argv)
 	Sampler.Run();
 
 	// grab the samples
-	vecvec theta_samples = Sampler.GetPopSamples();  // vecvec is a typedef for std::vector<std::vector<double> >
-	std::vector<vecvec> chi_samples = Sampler.GetCharSamples();
+	const double * theta_samples = Sampler.GetPopSamples();
+	const double * chi_samples = Sampler.GetCharSamples();
 
 	std::cout << "Writing results to text files..." << std::endl;
 
 	// write the sampled theta values to a file. Output will have nsamples rows and dtheta columns.
 	std::string thetafile("lumfunc_thetas.dat");
-	dataAdapter.write_thetas(thetafile, theta_samples);
+	dataAdapter.write_thetas(thetafile, theta_samples, niter, dtheta);
 
 	// write the posterior means and standard deviations of the characteristics to a file. output will have ndata rows and
 	// 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
 	std::string chifile("lumfunc_chi_summary.dat");
-	dataAdapter.write_chis(chifile, chi_samples);
+	dataAdapter.write_chis(chifile, chi_samples, nchi_samples, ndata, pchi);
+	clock_t end = clock();
+	double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+	std::cout << "Elapsed time (in min)" << (elapsed_secs / 60.0) << std::endl;
+	std::cout << "End of execution" << std::endl;
 }

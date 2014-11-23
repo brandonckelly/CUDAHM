@@ -196,18 +196,11 @@ public:
 
 	bool SaveTrace() { return save_trace; }
 
-	// return the value of the characteristic in a std::vector of std::vectors for convenience
-	vecvec GetChi() {
+	// return the value of the characteristic in an array where (i,j)->chi[ndata * j + i] (i=0..ndata-1,j=0..pchi-1)
+	double * GetChi() {
 		hvector h_chi = d_chi;  // first grab the values from the GPU
-		vecvec chi(ndata);
-		for (int i = 0; i < ndata; ++i) {
-			// organize values into a 2-d array of dimensions ndata x pchi
-			std::vector<double> chi_i(pchi);
-			for (int j = 0; j < pchi; ++j) {
-				chi_i[j] = h_chi[ndata * j + i];
-			}
-			chi[i] = chi_i;
-		}
+		double * chi = new double[ndata*pchi];
+		thrust::copy(h_chi.begin(), h_chi.end(), &chi[0]);
 		return chi;
 	}
 
@@ -478,10 +471,10 @@ public:
 		}
 		return copied_h_theta; }
 
-	std::vector<double> GetTheta() { // return the current value of theta as a std::vector
-		std::vector<double> std_theta(h_theta.size());
-		thrust::copy(h_theta.begin(), h_theta.end(), std_theta.begin());
-		return std_theta;
+	double * GetTheta() { // return the current value of theta as an array
+		double * result_theta = new double[dtheta];
+		thrust::copy(h_theta.begin(), h_theta.end(), &result_theta[0]);
+		return result_theta;
 	}
 
 	double GetLogDens() { return current_logdens; } // return the current value of summed log p(chi | theta);

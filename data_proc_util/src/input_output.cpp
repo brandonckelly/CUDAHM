@@ -66,29 +66,24 @@ public:
 	}
 
 	// dump the sampled values of the population parameter to a text file
-	virtual void write_thetas(std::string& filename, vecvec& theta_samples)
+	virtual void write_thetas(std::string& filename, const double * theta_samples, int nsamples, int dtheta)
 	{
 		std::ofstream outfile(filename.c_str());
 		if (!m_thetasFileHeader.empty()) {
 			outfile << m_thetasFileHeader << std::endl;
 		}
-		int nsamples = theta_samples.size();
-		int dtheta = theta_samples[0].size();
 		for (int i = 0; i < nsamples; ++i) {
 			for (int j = 0; j < dtheta; ++j) {
-				outfile << theta_samples[i][j] << " ";
+				outfile << theta_samples[nsamples*j + i] << " ";
 			}
 			outfile << std::endl;
 		}
 	}
 
 	// dump the posterior means and standard deviations of the characteristics to a text file
-	virtual void write_chis(std::string& filename, std::vector<vecvec>& chi_samples)
+	virtual void write_chis(std::string& filename, const double * chi_samples, int nsamples, int ndata, int pchi)
 	{
 		std::ofstream outfile(filename.c_str());
-		int nsamples = chi_samples.size();
-		int ndata = chi_samples[0].size();
-		int pchi = chi_samples[0][0].size();
 		if (!m_chisFileHeader.empty()) {
 			outfile << m_chisFileHeader << std::endl;
 		}
@@ -97,8 +92,8 @@ public:
 			std::vector<double> post_msqr_i(pchi, 0.0);  // posterior mean of the square of the values for chi_i
 			for (int j = 0; j < nsamples; ++j) {
 				for (int k = 0; k < pchi; ++k) {
-					post_mean_i[k] += chi_samples[j][i][k] / nsamples;
-					post_msqr_i[k] += chi_samples[j][i][k] * chi_samples[j][i][k] / nsamples;
+					post_mean_i[k] += chi_samples[(k*ndata + i)*nsamples + j] / nsamples;
+					post_msqr_i[k] += chi_samples[(k*ndata + i)*nsamples + j] * chi_samples[(k*ndata + i)*nsamples + j] / nsamples;
 				}
 			}
 			for (int k = 0; k < pchi; ++k) {

@@ -3,8 +3,8 @@
 // Global random number generator and distributions for generating random numbers on the host. The random number generator used
 // is the Mersenne Twister mt19937 from the BOOST library.
 boost::random::mt19937 rng;
-boost::random::normal_distribution<> snorm(0.0, 1.0e-10); // NOT standard normal distribution rather normal distribution with sigma 1.0e-10//
-//boost::random::normal_distribution<> snorm(0.0, 1.0);
+boost::random::normal_distribution<> snorm(0.0, 1.0); // standard normal distribution for proposal
+//boost::random::normal_distribution<> snorm(0.0, 1.0e-10); // NOT standard normal distribution rather normal distribution with sigma 1.0e-10//
 //boost::random::normal_distribution<> snorm_sigma_1(0.0, 1.0e-5);
 //boost::random::normal_distribution<> snorm(0.0, 1.0e-9);
 //boost::random::normal_distribution<> snorm(0.0, 1.0e-11);

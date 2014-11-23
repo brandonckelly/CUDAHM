@@ -287,19 +287,19 @@ int main(int argc, char** argv)
 	Sampler.Run();
 
     // grab the samples
-	vecvec theta_samples = Sampler.GetPopSamples();
-	std::vector<vecvec> chi_samples = Sampler.GetCharSamples();
+	const double * theta_samples = Sampler.GetPopSamples();
+	const double * chi_samples = Sampler.GetCharSamples();
 
 	std::cout << "Writing results to text files..." << std::endl;
 
 	// write the sampled theta values to a file. Output will have nsamples rows and dtheta columns.
 	std::string thetafile("dusthm_thetas.dat");
-	dataAdapter.write_thetas(thetafile, theta_samples);
+	dataAdapter.write_thetas(thetafile, theta_samples, nmcmc_iter, dtheta);
 
 	// write the posterior means and standard deviations of the characteristics to a file. output will have ndata rows and
 	// 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
 	std::string chifile("dusthm_chi_summary.dat");
-	dataAdapter.write_chis(chifile, chi_samples);
+	dataAdapter.write_chis(chifile, chi_samples, nchi_samples, ndata, pchi);
 
 	time(&timer2);
 	double seconds = difftime(timer2, timer1);

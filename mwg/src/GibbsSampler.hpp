@@ -112,6 +112,9 @@ public:
 		// run the main MCMC sampler
 		std::cout << "Now doing " << niter_ << " iterations of the Gibbs Sampler..." << std::endl;
 
+		int ndata = Daug_->GetDataDim();
+		int ntheta_samples_num = niter_ / nthin_theta_;
+		int nchi_samples_num = niter_ / nthin_chi_;
 		for (int i = 0; i < niter_; ++i) {
 			if (i % 1000 == 0) {
 				std::cout << i << "..." << std::endl;
@@ -119,14 +122,27 @@ public:
 			Iterate();
 			// TODO: How long does saving the values take? Maybe replace these with iterators?
 			if (!fix_poppar && (current_iter_ % nthin_theta_ == 0)) {
+				double * current_theta = PopPar_->GetTheta();
 				// save the value of the population parameter since we've done nthin_theta_ iterations since the last save
-				ThetaSamples_[ntheta_samples_] = PopPar_->GetTheta();
+				for (int j = 0; j < dtheta; j++)
+				{
+					int current_idx = j*ntheta_samples_num + ntheta_samples_;
+					ThetaSamples_[current_idx] = current_theta[j];
+				}
 				LogDensPop_Samples_[ntheta_samples_] = PopPar_->GetLogDens();
 				ntheta_samples_++;
 			}
 			if (!fix_char && (current_iter_ % nthin_chi_ == 0) && Daug_->SaveTrace()) {
+				double * chi = Daug_->GetChi();
 				// save the value of the characteristics
-				ChiSamples_[nchi_samples_] = Daug_->GetChi();
+				for (int i = 0; i < ndata; ++i)
+				{
+					for (int j = 0; j < pchi; ++j)
+					{
+						int current_idx = (j*ndata + i) * nchi_samples_num + nchi_samples_;
+						ChiSamples_[current_idx] = chi[ndata * j + i];
+					}
+				}
 				LogDensMeas_Samples_[nchi_samples_] = Daug_->GetLogDens();
 				nchi_samples_++;
 			}
@@ -170,8 +186,8 @@ public:
 	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > GetThetaPtr() { return PopPar_; }
 
 	// grab the MCMC samples
-	const vecvec& GetPopSamples() const { return ThetaSamples_; }
-	const std::vector<vecvec>& GetCharSamples() const { return ChiSamples_; }
+	const double * GetPopSamples() const { return ThetaSamples_; }
+	const double * GetCharSamples() const { return ChiSamples_; }
 	const std::vector<double>& GetLogDensPop() const { return LogDensPop_Samples_; }
 	const std::vector<double>& GetLogDensMeas() const { return LogDensMeas_Samples_; }
 
@@ -182,8 +198,8 @@ protected:
 	bool fix_poppar, fix_char; // is set to true, then keep the values fixed throughout the MCMC sampler
 	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > Daug_;
 	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > PopPar_;
-	std::vector<vecvec> ChiSamples_;
-	vecvec ThetaSamples_;
+	double * ChiSamples_;
+	double * ThetaSamples_;
 	std::vector<double> LogDensMeas_Samples_;
 	std::vector<double> LogDensPop_Samples_;
 
@@ -204,8 +220,16 @@ protected:
 		// set container sizes
 		int nchi_samples = niter_ / nthin_chi_;
 		int ntheta_samples = niter_ / nthin_theta_;
-		ChiSamples_.resize(nchi_samples);
-		ThetaSamples_.resize(ntheta_samples);
+		ChiSamples_ = new double[nchi_samples*ndata*pchi];
+		for (int idx = 0; idx < nchi_samples*ndata*pchi; idx++)
+		{
+			ChiSamples_[idx] = 0.0;
+		}
+		ThetaSamples_ = new double[ntheta_samples*dtheta];
+		for (int idx = 0; idx < ntheta_samples*dtheta; idx++)
+		{
+			ThetaSamples_[idx] = 0.0;
+		}
 		LogDensMeas_Samples_.resize(nchi_samples);
 		LogDensPop_Samples_.resize(ntheta_samples);
 

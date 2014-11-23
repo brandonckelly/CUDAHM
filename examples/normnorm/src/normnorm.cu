@@ -109,7 +109,7 @@ int main(int argc, char** argv)
 	// allocate memory for measurement arrays
 	vecvec meas;
 	vecvec meas_unc;
-	std::string filename("E:/Programs/Visual Studio/Workplaces/Doktori/CUDAHM/examples/normnorm/data/normnorm_example.txt");
+	std::string filename("../data/normnorm_example.txt");
 	int ndata = dataAdapter.get_file_lines(filename);
     // read in measurement data from text file
     dataAdapter.read_data(filename, meas, meas_unc, ndata, mfeat, false);

@@ -191,7 +191,7 @@ class BB1TruncPL:
             return x, m
 
         # For -1 < gamma < 0, split the envelope into gamma and exponential parts.
-        u = rand(num)
+        u = rand()
         if u < self.p_gamma:  # gamma distn envelope
             x = self.gamma_dist.rvs(num)
             r = x/self.l

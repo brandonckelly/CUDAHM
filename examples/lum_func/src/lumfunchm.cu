@@ -46,18 +46,19 @@ __device__ __host__
 double determineCoef(double gamma, double lScale, double uScale)
 {
 	double logCoef = 0;
-	if ((gamma > -1.001) && (gamma < -0.999))
+	if (gamma == -1.0)
 	{
-		// Euler-Mascheroni constant:
-		double gamma_const = 0.57721566490153286060651209008240243104215933593992;
+		logCoef = logCoef - log(uScale * log(1 + uScale / lScale));
+		//// Euler-Mascheroni constant:
+		//double gamma_const = 0.57721566490153286060651209008240243104215933593992;
 
-		// Constant from the small z expansion of the gamma function Gamma(z) :
-		double k1 = (3 * gamma_const * gamma_const + 0.5 * CR_CUDART_PI * CR_CUDART_PI) / 6.0;
-		double ratio = uScale / lScale;
-		double C0 = log(ratio + 1.0);
-		double C1 = -C0*(gamma_const + 0.5*C0);
-		double C2 = C0*(k1 + C0*(0.5*gamma_const + C0 / 6.0));
-		logCoef = logCoef - log(C0 + (gamma + 1)*(C1 + (gamma + 1)*C2));
+		//// Constant from the small z expansion of the gamma function Gamma(z) :
+		//double k1 = (3 * gamma_const * gamma_const + 0.5 * CR_CUDART_PI * CR_CUDART_PI) / 6.0;
+		//double ratio = uScale / lScale;
+		//double C0 = log(ratio + 1.0);
+		//double C1 = -C0*(gamma_const + 0.5*C0);
+		//double C2 = C0*(k1 + C0*(0.5*gamma_const + C0 / 6.0));
+		//logCoef = logCoef - log(C0 + (gamma + 1)*(C1 + (gamma + 1)*C2));
 	}
 	else if ((gamma > -2.0) && (gamma < 0.0))
 	{
@@ -129,7 +130,7 @@ int main(int argc, char** argv)
 	std::string filename(argv[1]);
 	int ndata = dataAdapter.get_file_lines(filename);
 
-	//ndata = 50000;
+	//ndata = 20000;
 
 	// read in measurement data from text file
 	dataAdapter.read_data(filename, meas, meas_unc, ndata, mfeat, false);

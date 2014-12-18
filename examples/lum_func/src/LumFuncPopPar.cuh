@@ -50,9 +50,9 @@ public:
 
 	virtual void InitialValue() {
 		// set initial value of theta
-		h_theta[0] = -1.3;
-		h_theta[1] = 5.0;
-		h_theta[2] = 110.0;
+		h_theta[0] = -1.41;
+		h_theta[1] = 4.0e10;
+		h_theta[2] = 5.8e12;
 	}
 
 	// update the value of the population parameter value using a robust adaptive metropolis algorithm
@@ -85,6 +85,23 @@ public:
 		double logdens_prop = thrust::reduce(d_proposed_logdens.begin(), d_proposed_logdens.end());
 
 		logdens_prop += LogPrior(h_proposed_theta);
+
+		//double* p_chi = Daug->GetChi();
+
+		//double erf_sum = 0.0;
+		//for (int idx = 0; idx < ndata; ++idx)
+		//{
+		//	double chi_i = p_chi[idx];
+		//	double sigma = 1e-10;
+		//	double fluxLimit = 1e-13;
+		//	erf_sum += 0.5 * (1.0 + erf((chi_i - fluxLimit) / (sigma * sqrt(2))));
+		//}
+		//delete[] p_chi;
+
+		//double p_logC_given_theta = (ndata - 1) * log((1.0 / (double) ndata) * erf_sum);
+
+		//// the effect of flux limit:
+		//logdens_prop -= p_logC_given_theta;
 
 		// accept the proposed value?
 		double metro_ratio = 0.0;
@@ -199,15 +216,31 @@ public:
 
 	virtual hvector Propose() {
 		// get the unit proposal
-		for (int k = 0; k<dtheta; k++) {
+		/*for (int k = 0; k<dtheta; k++) {
 			snorm_deviate[k] = snorm(rng);
+		}*/
+
+		snorm_deviate[0] = snorm(rng);
+
+		snorm_deviate[1] = snorm_sigma_1(rng);
+
+		snorm_deviate[2] = snorm_sigma_1(rng);
+
+		if ((current_iter == 1) || (current_iter % 1000 == 0))
+		{
+			int cholfact_index = 0;
+			std::string line = "";
+			printf("%d cholfact:\n", current_iter);
+			for (int j = 0; j < dtheta; j++) {
+				for (int k = 0; k < (j + 1); k++) {
+					line += std::to_string(cholfact[cholfact_index]) + " ";
+					cholfact_index++;
+				}
+				line += "\n";
+				printf(line.c_str());
+				line = "";
+			}
 		}
-
-		//snorm_deviate[0] = snorm(rng);
-
-		//snorm_deviate[1] = snorm_sigma_1(rng);
-
-		//snorm_deviate[2] = snorm_sigma_1(rng);
 
 		// transform unit proposal so that is has a multivariate normal distribution
 		hvector proposed_theta(dtheta);

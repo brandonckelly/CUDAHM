@@ -17,7 +17,7 @@ void initial_flux_value(double* chi, double* meas, double* meas_unc, double* cho
 	if (idata < ndata)
 	{
 		for (int j = 0; j < pchi; ++j) {
-			chi[idata + j * ndata] = 1.0e-8; // initialize chi values to small value
+			chi[idata + j * ndata] = meas[idata + j * ndata]; // initialize chi values to measurements
 		}
 
 		// set initial covariance matrix of the chi proposals as the identity matrix

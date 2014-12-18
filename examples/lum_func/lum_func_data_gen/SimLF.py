@@ -12,9 +12,8 @@ parser.add_argument("sdev", help="The standard deviation of Gaussian noise which
 parser.add_argument("--lower_scale", default = 1., help="The lower scale of 'Break-By-1 Truncated Power Law'", type=float)
 parser.add_argument("--n_samp", default = 10000000, help="The number of required samples", type=int)
 parser.add_argument("--r_max", default = 4000, help="The maximal distance", type=int)
-parser.add_argument("--thr_coef", default = 5, help=("The threshold coefficient. This value is "
-"a multiplication factor of the threshold as the standard deviation is also ((threshold) = (coefficient) x (standard deviation))."), type=int)
 parser.add_argument("--n_bins", default = 100, help="The number of bins for plotting histograms", type=int)
+parser.add_argument("--flux_limit", default = 0.0, help="The flux limit: this is a threshold below which the fluxes are dropped from sample", type=float)
 
 #For example:
 #gamma = -1.2

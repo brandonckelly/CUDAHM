@@ -32,6 +32,20 @@ xlog = np.logspace(-3, 3, 300)
 pdf_0 = bb1_0.pdf(xlog)
 lbl_0 = 'BB1 (%5.4f,%5.4f,%5.4f)' % (beta,lower_scale,upper_scale)
 
+def determineLogDistCDF(r):
+    if r < 0:
+        return 0.0
+    elif r<=4000.0:
+        return (r**3)/(4000.0**3)
+    else:
+        return 1.0
+
+xlog = np.logspace(-3, 3, 300)
+pdf_cut = range(pdf_0.shape[0])
+for i in range(pdf_0.shape[0]):
+    pdf_cut[i]=determineLogDistCDF(np.sqrt(pdf_0[i]/((1.9e-6)*4*np.pi)))
+lbl_cut = 'BB1-CUT (%5.4f,%5.4f,%5.4f)' % (beta,lower_scale,upper_scale)
+
 #print "pdf_0 at 1.4166: ", bb1_0.pdf(1.4166)
 
 bb1_1 = BB1TruncPL(mean_beta,mean_lower_scale,mean_upper_scale)
@@ -43,6 +57,7 @@ lbl_1 = 'Mean BB1 (%5.4f,%5.4f,%5.4f)' % (mean_beta,mean_lower_scale,mean_upper_
 fig_log = figure()
 loglog(xlog, pdf_0, 'r-', linewidth=2, label=lbl_0, zorder=2)
 loglog(xlog, pdf_1, 'm-', linewidth=2, label=lbl_1, zorder=2)
+loglog(xlog, pdf_cut, 'b-', linewidth=2, label=lbl_cut, zorder=2)
 hist(lums_data, bins=lbins_lums, color=(0.0,0.5,0.0), label='lum data', log=True, normed=True)
 
 legend(loc=3)

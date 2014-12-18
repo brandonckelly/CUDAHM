@@ -36,7 +36,6 @@ cov = args.cov
 rc('text', usetex=True)
 rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
 
-
 #theta_data=np.loadtxt('lumfunc_thetas.dat',delimiter=' ',dtype=[('f0',np.float32),('f1',np.float32),('f2',np.float32)])
 
 theta_data=np.loadtxt('lumfunc_thetas.dat',delimiter=' ',usecols=(0,1,2))
@@ -53,10 +52,10 @@ print 'Standard error of the mean of sample values of theta parameters: (%e,%e,%
 fig_log = figure(figsize=(15.75, 10))
 xlabel('$x$')
 ylabel('$p(x)$')
-tit = r'Init. values of $\theta$: (%5.4f,%5.4f,%5.4f); Iter. num.: %d; Obj. num.: %d;\\Means of $\theta$: (%5.4f,%5.4f,%5.4f); St. deviations of $\theta$: (%5.4f,%5.4f,%5.4f); St. error: (%e,%e,%e)' % (init_beta, init_lower_scale, init_upper_scale, iter_num, obj_num, mean_vec[0], mean_vec[1], mean_vec[2], std_vec[0], std_vec[1], std_vec[2], sem_vec[0], sem_vec[1], sem_vec[2])
+tit = r'Init. values of $\theta$: (%5.4f,%e,%e); Iter. num.: %d; Obj. num.: %d;\\Means of $\theta$: (%5.4f,%e,%e);\\St. deviations of $\theta$: (%5.4f,%e,%e); St. error: (%e,%e,%e)' % (init_beta, init_lower_scale, init_upper_scale, iter_num, obj_num, mean_vec[0], mean_vec[1], mean_vec[2], std_vec[0], std_vec[1], std_vec[2], sem_vec[0], sem_vec[1], sem_vec[2])
 fig_log.suptitle(tit, fontsize=18, fontweight='bold')
 
-xlog = np.logspace(-3, 3, 300)
+xlog = np.logspace(8, 13, 300)
 #xlin = np.linspace(0.001, 300., 500)
 
 # Helper for plotting BB1 with samples of theta parameters:
@@ -82,11 +81,11 @@ pdf_0 = bb1_0.pdf(xlog)
 figure(fig_log.number)
 loglog(xlog, pdf_0, 'r-', linewidth=2, label=lbl_0, zorder=3)
 
-bb1_1 = BB1TruncPL(mean_vec[0], mean_vec[1], mean_vec[2])
-lbl_1 = 'Mean BB1 (%5.2f,%5.2f,%5.2f)' % (mean_vec[0], mean_vec[1], mean_vec[2])
-pdf_1 = bb1_1.pdf(xlog)
-figure(fig_log.number)
-loglog(xlog, pdf_1, 'm-', linewidth=2, label=lbl_1, zorder=2)
+#bb1_1 = BB1TruncPL(mean_vec[0], mean_vec[1], mean_vec[2])
+#lbl_1 = 'Mean BB1 (%5.2f,%5.2f,%5.2f)' % (mean_vec[0], mean_vec[1], mean_vec[2])
+#pdf_1 = bb1_1.pdf(xlog)
+#figure(fig_log.number)
+#loglog(xlog, pdf_1, 'm-', linewidth=2, label=lbl_1, zorder=2)
 
 u_array = np.random.uniform(size=theta_data.shape[0])
 accept_rate = cov/float(theta_data.shape[0])

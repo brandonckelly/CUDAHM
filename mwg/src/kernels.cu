@@ -5,7 +5,8 @@
 boost::random::mt19937 rng;
 boost::random::normal_distribution<> snorm(0.0, 1.0); // standard normal distribution for proposal
 //boost::random::normal_distribution<> snorm(0.0, 1.0e-10); // NOT standard normal distribution rather normal distribution with sigma 1.0e-10//
-//boost::random::normal_distribution<> snorm_sigma_1(0.0, 1.0e-5);
+boost::random::normal_distribution<> snorm_sigma_1(0.0, 1.0e12);
+//boost::random::normal_distribution<> snorm_sigma_2(0.0, 1.0e11);
 //boost::random::normal_distribution<> snorm(0.0, 1.0e-9);
 //boost::random::normal_distribution<> snorm(0.0, 1.0e-11);
 boost::random::uniform_real_distribution<> uniform(0.0, 1.0); // Uniform distribution from 0.0 to 1.0
@@ -61,8 +62,8 @@ void Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_
 	// get the unit proposal
 	for (int j=0; j<pchi; j++) {
 #ifdef __CUDA_ARCH__
-		// NOT standard normal distribution rather normal distribution with sigma 1.0e-10
-		snorm_deviate[j] = (1.0e-10) * curand_normal_double(p_state);
+		// standard normal distribution
+		snorm_deviate[j] = curand_normal_double(p_state);
 		//snorm_deviate[j] = curand_normal_double(p_state);
 		//snorm_deviate[j] = (1.0e-9) * curand_normal_double(p_state);
 		//snorm_deviate[j] = (1.0e-11) * curand_normal_double(p_state);

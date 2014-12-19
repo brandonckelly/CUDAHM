@@ -12,7 +12,7 @@ kboltz = 1.380658e-16
 wavelength = np.asarray([100.0, 160.0, 250.0, 350.0, 500.0])  # observational wavelengths in microns
 nu = clight / (wavelength / 1e4)
 nu.sort()
-print(nu)
+print nu
 nu_ref = 2.3e11  # 230 GHz
 
 

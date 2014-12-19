@@ -117,7 +117,7 @@ int main(int argc, char** argv)
     int niter = 50000;
     int nburnin = niter / 2;
 
-    int nchi_samples = 500;  // only keep 500 samples for the chi values to control memory usage and avoid numerous reads from GPU
+	int nchi_samples = 1000;  // only keep 1000 samples for the chi values to control memory usage and avoid numerous reads from GPU
     int nthin_chi = niter / nchi_samples;
 
     // instantiate the Metropolis-within-Gibbs sampler object

@@ -3,12 +3,7 @@
 // Global random number generator and distributions for generating random numbers on the host. The random number generator used
 // is the Mersenne Twister mt19937 from the BOOST library.
 boost::random::mt19937 rng;
-boost::random::normal_distribution<> snorm(0.0, 1.0); // standard normal distribution for proposal
-//boost::random::normal_distribution<> snorm(0.0, 1.0e-10); // NOT standard normal distribution rather normal distribution with sigma 1.0e-10//
-boost::random::normal_distribution<> snorm_sigma_1(0.0, 1.0e12);
-//boost::random::normal_distribution<> snorm_sigma_2(0.0, 1.0e11);
-//boost::random::normal_distribution<> snorm(0.0, 1.0e-9);
-//boost::random::normal_distribution<> snorm(0.0, 1.0e-11);
+boost::random::normal_distribution<> snorm(0.0, 1.0); // Standard normal distribution
 boost::random::uniform_real_distribution<> uniform(0.0, 1.0); // Uniform distribution from 0.0 to 1.0
 
 __constant__ double c_theta[100];
@@ -17,35 +12,35 @@ __constant__ double c_theta[100];
 __device__ __host__
 void chol_update_r1(double* cholfactor, double* v, int dim_v, bool downdate) {
 
-    double sign = 1.0;
+	double sign = 1.0;
 	if (downdate) {
 		// Perform the downdate instead
 		sign = -1.0;
 	}
-    int diag_index = 0;  // index of the diagonal of the cholesky factor
+	int diag_index = 0;  // index of the diagonal of the cholesky factor
 	for (int i=0; i<dim_v; i++) {
-        // loop over the columns of the Cholesky factor
-        double L_ii = cholfactor[diag_index];
-        double v_i = v[i];
-        double r = sqrt( L_ii * L_ii + sign * v_i * v_i);
+		// loop over the columns of the Cholesky factor
+		double L_ii = cholfactor[diag_index];
+		double v_i = v[i];
+		double r = sqrt( L_ii * L_ii + sign * v_i * v_i);
 		double c = r / L_ii;
 		double s = v_i / L_ii;
 		cholfactor[diag_index] = r;
-        int index_ji = diag_index; // index of the cholesky factor array that points to L[j,i]
-        // update the rest of the rows of the Cholesky factor for this column
-        for (int j=i+1; j<dim_v; j++) {
-            // loop over the rows of the i^th column of the Cholesky factor
-            index_ji += j;
-            cholfactor[index_ji] = (cholfactor[index_ji] + sign * s * v[j]) / c;
-        }
-        // update the elements of the vector v[i+1:dim_v-1]
-        index_ji = diag_index;
-        for (int j=i+1; j<dim_v; j++) {
-            index_ji += j;
-            v[j] = c * v[j] - s * cholfactor[index_ji];
-        }
-        diag_index += i + 2;
-    }
+		int index_ji = diag_index; // index of the cholesky factor array that points to L[j,i]
+		// update the rest of the rows of the Cholesky factor for this column
+		for (int j=i+1; j<dim_v; j++) {
+			// loop over the rows of the i^th column of the Cholesky factor
+			index_ji += j;
+			cholfactor[index_ji] = (cholfactor[index_ji] + sign * s * v[j]) / c;
+		}
+		// update the elements of the vector v[i+1:dim_v-1]
+		index_ji = diag_index;
+		for (int j=i+1; j<dim_v; j++) {
+			index_ji += j;
+			v[j] = c * v[j] - s * cholfactor[index_ji];
+		}
+		diag_index += i + 2;
+	}
 }
 
 // compute the conditional log-posterior density of the measurements given the characteristic
@@ -62,11 +57,7 @@ void Propose(double* chi, double* cholfact, double* proposed_chi, double* snorm_
 	// get the unit proposal
 	for (int j=0; j<pchi; j++) {
 #ifdef __CUDA_ARCH__
-		// standard normal distribution
 		snorm_deviate[j] = curand_normal_double(p_state);
-		//snorm_deviate[j] = curand_normal_double(p_state);
-		//snorm_deviate[j] = (1.0e-9) * curand_normal_double(p_state);
-		//snorm_deviate[j] = (1.0e-11) * curand_normal_double(p_state);
 #else
 		snorm_deviate[j] = snorm(rng);
 #endif
@@ -115,12 +106,14 @@ bool AcceptProp(double logdens_prop, double logdens_current, double forward_dens
 {
 	double lograt = logdens_prop - forward_dens - (logdens_current - backward_dens);
 	
-	// The following is necessary because if one argument is NaN, returns the numeric argument:
+	// The following is necessary because if one argument is NaN and the other is numeric
+	// then the min function returns the numeric argument which is 0.0
+	// but if the lograt is NaN we would like to pass this value to exp function (see below):
 	if (isfinite(lograt))
 	{
 		lograt = min(lograt, 0.0);
 	}
-	
+	// the exp function returns NaN if the input value is NaN
 	ratio = exp(lograt);
 #ifdef __CUDA_ARCH__
 	double unif = curand_uniform_double(p_state);
@@ -138,8 +131,8 @@ bool AcceptProp(double logdens_prop, double logdens_current, double forward_dens
 // Initialize the parallel random number generator state on the device
 __global__ void initialize_rng(curandState *state)
 {
-    int id = threadIdx.x + blockIdx.x * blockDim.x;
-    /* Each thread gets same seed, a different sequence
-     number, no offset */
-    curand_init(1234, id, 0, &state[id]);
+	int id = threadIdx.x + blockIdx.x * blockDim.x;
+	/* Each thread gets same seed, a different sequence
+	 number, no offset */
+	curand_init(1234, id, 0, &state[id]);
 }

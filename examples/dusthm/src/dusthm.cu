@@ -239,7 +239,7 @@ int main(int argc, char** argv)
 
 	int nmcmc_iter = 50000;
 	int nburnin = nmcmc_iter / 2;
-	int nchi_samples = 50;
+	int nchi_samples = 100;
 	int nthin_chi = nmcmc_iter / nchi_samples;
 
 	// first create pointers to instantiated subclassed DataAugmentation and PopulationPar objects, since we need to give them to the
@@ -286,7 +286,7 @@ int main(int argc, char** argv)
 	// run the MCMC sampler
 	Sampler.Run();
 
-    // grab the samples
+	// grab the samples
 	const double * theta_samples = Sampler.GetPopSamples();
 	const double * chi_samples = Sampler.GetCharSamples();
 

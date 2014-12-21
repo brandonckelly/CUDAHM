@@ -145,8 +145,8 @@ public:
 				p_logdens_meas, p_logdens_pop, p_devStates, p_logdens_function, p_logdens_pop_function, current_iter,
 				p_naccept, ndata);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
-	    CUDA_CHECK_RETURN(cudaDeviceSynchronize());
-	    current_iter++;
+		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+		current_iter++;
 	}
 
 	void ResetAcceptance() {
@@ -223,7 +223,7 @@ public:
 	double* GetDevChiPtr() { return thrust::raw_pointer_cast(&d_chi[0]); }
 	int GetDataDim() { return ndata; }
 	int GetChiDim() { return pchi; }
-	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > GetPopulationPtr() { return p_Theta; }
+	virtual boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > GetPopulationPtr() { return p_Theta; }
 	pLogDensMeas GetLogDensMeasPtr() { return p_logdens_function; }
 	thrust::host_vector<int> GetNaccept() {
 		hvector h_naccept = d_naccept;
@@ -275,7 +275,7 @@ public:
 		naccept = 0;
 		// grab pointer to function that compute the log-density of characteristics|theta from device
 		// __constant__ memory
-	    CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensPop, sizeof(c_LogDensPop)));
+		CUDA_CHECK_RETURN(cudaMemcpyFromSymbol(&p_logdens_function, c_LogDensPop, sizeof(c_LogDensPop)));
 	}
 
 	virtual void InitialValue() {
@@ -299,7 +299,7 @@ public:
 		InitialValue();
 		InitialCholFactor();
 		// transfer initial value of theta to GPU constant memory
-	    double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
+		double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
 		CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_theta, dtheta*sizeof(*p_theta)));
 
 		// get initial value of conditional log-posterior for theta|chi
@@ -307,9 +307,9 @@ public:
 		double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
 		logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_chi, p_logdens, p_logdens_function, ndata);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
-	    CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
-	    current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
+		current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
 
 		// reset the number of MCMC iterations
 		current_iter = 1;
@@ -321,60 +321,60 @@ public:
 
 	// propose a new value of the population parameters
 	virtual hvector Propose() {
-	    // get the unit proposal
-	    for (int k=0; k<dtheta; k++) {
-	        snorm_deviate[k] = snorm(rng);
-	    }
+		// get the unit proposal
+		for (int k=0; k<dtheta; k++) {
+			snorm_deviate[k] = snorm(rng);
+		}
 
-	    // transform unit proposal so that is has a multivariate normal distribution
-	    hvector proposed_theta(dtheta);
-	    thrust::fill(scaled_proposal.begin(), scaled_proposal.end(), 0.0);
-	    int cholfact_index = 0;
-	    for (int j=0; j<dtheta; j++) {
-	        for (int k=0; k<(j+1); k++) {
-	        	// cholfact is lower-diagonal matrix stored as a 1-d array
-	            scaled_proposal[j] += cholfact[cholfact_index] * snorm_deviate[k];
-	            cholfact_index++;
-	        }
-	        proposed_theta[j] = h_theta[j] + scaled_proposal[j];
-	    }
+		// transform unit proposal so that is has a multivariate normal distribution
+		hvector proposed_theta(dtheta);
+		thrust::fill(scaled_proposal.begin(), scaled_proposal.end(), 0.0);
+		int cholfact_index = 0;
+		for (int j=0; j<dtheta; j++) {
+			for (int k=0; k<(j+1); k++) {
+				// cholfact is lower-diagonal matrix stored as a 1-d array
+				scaled_proposal[j] += cholfact[cholfact_index] * snorm_deviate[k];
+				cholfact_index++;
+			}
+			proposed_theta[j] = h_theta[j] + scaled_proposal[j];
+		}
 
-	    return proposed_theta;
+		return proposed_theta;
 	}
 
 	// adapt the covariance matrix (i.e., the cholesky factors) of the theta proposals
 	virtual void AdaptProp(double metro_ratio) {
 		double unit_norm = 0.0;
-	    for (int j=0; j<dtheta; j++) {
-	    	unit_norm += snorm_deviate[j] * snorm_deviate[j];
-	    }
-	    unit_norm = sqrt(unit_norm);
-	    double decay_sequence = 1.0 / std::pow(current_iter, decay_rate);
-	    double scaled_coef = sqrt(decay_sequence * fabs(metro_ratio - target_rate)) / unit_norm;
-	    for (int j=0; j<dtheta; j++) {
-	        scaled_proposal[j] *= scaled_coef;
-	    }
+		for (int j=0; j<dtheta; j++) {
+			unit_norm += snorm_deviate[j] * snorm_deviate[j];
+		}
+		unit_norm = sqrt(unit_norm);
+		double decay_sequence = 1.0 / std::pow(current_iter, decay_rate);
+		double scaled_coef = sqrt(decay_sequence * fabs(metro_ratio - target_rate)) / unit_norm;
+		for (int j=0; j<dtheta; j++) {
+			scaled_proposal[j] *= scaled_coef;
+		}
 
-	    bool downdate = (metro_ratio < target_rate);
-	    double* p_cholfact = thrust::raw_pointer_cast(&cholfact[0]);
-	    double* p_scaled_proposal = thrust::raw_pointer_cast(&scaled_proposal[0]);
-	    // rank-1 update of the cholesky factor
-	    chol_update_r1(p_cholfact, p_scaled_proposal, dtheta, downdate);
+		bool downdate = (metro_ratio < target_rate);
+		double* p_cholfact = thrust::raw_pointer_cast(&cholfact[0]);
+		double* p_scaled_proposal = thrust::raw_pointer_cast(&scaled_proposal[0]);
+		// rank-1 update of the cholesky factor
+		chol_update_r1(p_cholfact, p_scaled_proposal, dtheta, downdate);
 	}
 
 	// calculate whether to accept or reject the metropolist-hastings proposal
 	bool AcceptProp(double logdens_prop, double logdens_current, double& ratio, double forward_dens = 0.0,
 			double backward_dens = 0.0) {
-	    double lograt = logdens_prop - forward_dens - (logdens_current - backward_dens);
-	    lograt = std::min(lograt, 0.0);
-	    ratio = exp(lograt);
-	    double unif = uniform(rng);
-	    bool accept = (unif < ratio) && isfinite(ratio);
-	    if (!isfinite(ratio)) {
+		double lograt = logdens_prop - forward_dens - (logdens_current - backward_dens);
+		lograt = std::min(lograt, 0.0);
+		ratio = exp(lograt);
+		double unif = uniform(rng);
+		bool accept = (unif < ratio) && isfinite(ratio);
+		if (!isfinite(ratio)) {
 			// metropolis ratio is not finite, so make it equal to zero to not screw up the proposal cholesky factor update
-	    	ratio = 0.0;
+			ratio = 0.0;
 		}
-	    return accept;
+		return accept;
 	}
 
 	// update the value of the population parameter value using a robust adaptive metropolis algorithm
@@ -387,7 +387,7 @@ public:
 		hvector h_proposed_theta = Propose();
 
 		// copy proposed theta to GPU constant memory
-	    double* p_proposed_theta = thrust::raw_pointer_cast(&h_proposed_theta[0]);
+		double* p_proposed_theta = thrust::raw_pointer_cast(&h_proposed_theta[0]);
 		CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_proposed_theta, dtheta*sizeof(*p_proposed_theta)));
 
 		// calculate log-posterior of new population parameter in parallel on the device
@@ -396,7 +396,7 @@ public:
 
 		logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(Daug->GetDevChiPtr(), p_logdens_prop, p_logdens_function, ndata);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
-	    CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 		double logdens_prop = thrust::reduce(d_proposed_logdens.begin(), d_proposed_logdens.end());
 
 		logdens_prop += LogPrior(h_proposed_theta);
@@ -411,7 +411,7 @@ public:
 			current_logdens = logdens_prop;
 		} else {
 			// proposal rejected, so need to copy current theta back to constant memory
-		    double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
+			double* p_theta = thrust::raw_pointer_cast(&h_theta[0]);
 			CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_theta, dtheta*sizeof(*p_theta)));
 			current_logdens = logdens_current;
 		}
@@ -433,7 +433,7 @@ public:
 
 	virtual void SetTheta(hvector& theta, bool update_logdens = true) {
 		h_theta = theta;
-	    double* p_theta = thrust::raw_pointer_cast(&theta[0]);
+		double* p_theta = thrust::raw_pointer_cast(&theta[0]);
 		CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_theta, dtheta * sizeof(*p_theta)));
 		if (update_logdens) {
 			// update value of conditional log-posterior for theta|chi
@@ -442,7 +442,7 @@ public:
 			logdensity_pop <pchi, dtheta> <<<nBlocks,nThreads>>>(p_chi, p_logdens, p_logdens_function, ndata);
 			CUDA_CHECK_RETURN(cudaPeekAtLastError());
 			current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
-            current_logdens += LogPrior(h_theta);
+			current_logdens += LogPrior(h_theta);
 		}
 	}
 
@@ -497,8 +497,6 @@ public:
 	int GetNaccept() { return naccept; }
 	pLogDensPop GetLogDensPopPtr() { return p_logdens_function; }
 	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > GetDataAugPtr() { return Daug; }
-	virtual double* GetDistData() { return NULL; }
-	virtual pLogDensPopAux GetLogDensPopAuxPtr() { return NULL; }
 
 protected:
 	// the value of the population parameter

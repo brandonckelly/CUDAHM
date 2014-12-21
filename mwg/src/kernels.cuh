@@ -24,7 +24,6 @@
 // pointers to functions that must be supplied by the user for computing the conditional log-densities
 typedef double (*pLogDensMeas)(double*, double*, double*);
 typedef double (*pLogDensPop)(double*, double*);
-typedef double (*pLogDensPopAux)(double*, double*, double);
 
 // Global random number generator and distributions for generating random numbers on the host. The random number generator used
 // is the Mersenne Twister mt19937 from the BOOST library.
@@ -213,108 +212,6 @@ void logdensity_pop(double* chi, double* logdens, pLogDensPop LogDensityPop, int
 			chi_i[j] = chi[j * ndata + idata];
 		}
 		logdens[idata] = LogDensityPop(chi_i, c_theta);
-	}
-}
-
-// kernel to update the values of the characteristics in parallel on the GPU
-// this variation uses auxiliary data for determination of log p(chi_i | theta)
-template<int mfeat, int pchi, int dtheta> __global__
-void update_characteristic_aux(double* meas, double* meas_unc, double* chi, double* cholfact,
-		double* logdens_meas, double* logdens_pop, curandState* devStates, pLogDensMeas LogDensityMeas,
-		pLogDensPopAux LogDensityPop, int current_iter, int* naccept, int ndata, double* auxdata)
-{
-	int idata = blockDim.x * blockIdx.x + threadIdx.x;
-	if (idata < ndata)
-	{
-		curandState localState = devStates[idata]; // grab state of this random number generator
-
-		// copy values for this data point to registers for speed
-		double snorm_deviate[pchi], scaled_proposal[pchi], proposed_chi[pchi], local_chi[pchi];
-		const int dim_cholfact = pchi * pchi - ((pchi - 1) * pchi) / 2;
-		double local_cholfact[dim_cholfact];
-		int cholfact_index = 0;
-		for (int j = 0; j < pchi; ++j) {
-			local_chi[j] = chi[j * ndata + idata];
-			for (int k = 0; k < (j+1); ++k) {
-				local_cholfact[cholfact_index] = cholfact[cholfact_index * ndata + idata];
-				cholfact_index++;
-			}
-		}
-		double local_meas[mfeat], local_meas_unc[mfeat];
-		for (int j = 0; j < mfeat; ++j) {
-			local_meas[j] = meas[j * ndata + idata];
-			local_meas_unc[j] = meas_unc[j * ndata + idata];
-		}
-		// propose a new value of chi
-		Propose(local_chi, local_cholfact, proposed_chi, snorm_deviate, scaled_proposal, pchi, &localState);
-
-		// get value of log-posterior for proposed chi value
-		double logdens_meas_prop = LogDensityMeas(proposed_chi, local_meas, local_meas_unc);
-		double auxdata_i = auxdata[idata];
-		double logdens_pop_prop = LogDensityPop(proposed_chi, c_theta, auxdata_i);
-		double logpost_prop = logdens_meas_prop + logdens_pop_prop;
-
-		/*
-		 * Uncomment this bit of code for help when debugging.
-		 *
-		if (idata == 0) {
-			printf("current iter, idata, mfeat, pchi, dtheta: %i, %i, %i, %i, %i\n", current_iter, idata, mfeat, pchi, dtheta);
-			printf("  measurements: %g, %g, %g, %g, %g\n", local_meas[0], local_meas[1], local_meas[2], local_meas[3], local_meas[4]);
-			printf("  measurement sigmas: %g, %g, %g, %g, %g\n", local_meas_unc[0], local_meas_unc[1], local_meas_unc[2],
-					local_meas_unc[3], local_meas_unc[4]);
-			printf("  cholfact: %g, %g, %g, %g, %g, %g\n", local_cholfact[0], local_cholfact[1], local_cholfact[2], local_cholfact[3],
-					local_cholfact[4], local_cholfact[5]);
-			printf("  current chi: %g, %g, %g\n", local_chi[0], local_chi[1], local_chi[2]);
-			printf("  proposed chi: %g, %g, %g\n", proposed_chi[0], proposed_chi[1], proposed_chi[2]);
-			printf("  current logdens_meas, logdens_pop: %g, %g\n", logdens_meas[idata], logdens_pop[idata]);
-			printf("  proposed logdens_meas, logdens_pop: %g, %g\n", logdens_meas_prop, logdens_pop_prop);
-			printf("\n");
-		}
-		*/
-
-		// accept the proposed value of the characteristic?
-		double logdens_meas_i = logdens_meas[idata];
-		double logdens_pop_i = logdens_pop[idata];
-		double logpost_current = logdens_meas_i + logdens_pop_i;
-		double metro_ratio = 0.0;
-		bool accept = AcceptProp(logpost_prop, logpost_current, 0.0, 0.0, metro_ratio, &localState);
-
-		// adapt the covariance matrix of the characteristic proposal distribution
-		AdaptProp(local_cholfact, snorm_deviate, scaled_proposal, metro_ratio, pchi, current_iter);
-
-		for (int j = 0; j < dim_cholfact; ++j) {
-			// copy value of this adapted cholesky factor back to global memory
-			cholfact[j * ndata + idata] = local_cholfact[j];
-		}
-
-		// copy local RNG state back to global memory
-		devStates[idata] = localState;
-		// printf("current iter, Accept, idata: %d, %d, %d\n", current_iter, accept, idata);
-		for (int j=0; j<pchi; j++) {
-			chi[ndata * j + idata] = accept ? proposed_chi[j] : local_chi[j];
-		}
-		logdens_meas[idata] = accept ? logdens_meas_prop : logdens_meas_i;
-		logdens_pop[idata] = accept ? logdens_pop_prop : logdens_pop_i;
-		naccept[idata] += accept;
-
-	}
-
-}
-
-// compute the conditional log-posterior density of the characteristics given the population parameter
-// and auxiliary data which are needed to density function determination
-template<int pchi, int dtheta> __global__
-void logdensity_pop_aux(double* chi, double* logdens, double* auxdata, pLogDensPopAux LogDensityPop, int ndata)
-{
-	int idata = blockDim.x * blockIdx.x + threadIdx.x;
-	if (idata < ndata)
-	{
-		double chi_i[pchi];
-		for (int j = 0; j < pchi; ++j) {
-			chi_i[j] = chi[j * ndata + idata];
-		}
-		double auxdata_i = auxdata[idata];
-		logdens[idata] = LogDensityPop(chi_i, c_theta, auxdata_i);
 	}
 }
 

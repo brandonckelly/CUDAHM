@@ -9,14 +9,36 @@
 #define LUMFUNCPOPPAR_CUH_
 
 #include "../../../mwg/src/parameters.cuh"
+#include "LumFuncDist.cuh"
+
+typedef double(*pLogDensPopAux)(double*, double*, double);
 
 extern __constant__ pLogDensPopAux c_LogDensPopAux;
+
+boost::random::normal_distribution<> snorm_sigma_1(0.0, 1.0e12); // normal distribution with st dev 1.0e12 for proposal
+
+// compute the conditional log-posterior density of the characteristics given the population parameter
+// and auxiliary data which are needed to density function determination
+template<int pchi, int dtheta> __global__
+void logdensity_pop_aux(double* chi, double* logdens, double* auxdata, pLogDensPopAux LogDensityPop, int ndata)
+{
+	int idata = blockDim.x * blockIdx.x + threadIdx.x;
+	if (idata < ndata)
+	{
+		double chi_i[pchi];
+		for (int j = 0; j < pchi; ++j) {
+			chi_i[j] = chi[j * ndata + idata];
+		}
+		double auxdata_i = auxdata[idata];
+		logdens[idata] = LogDensityPop(chi_i, c_theta, auxdata_i);
+	}
+}
 
 template <int mfeat, int pchi, int dtheta>
 class LumFuncPopPar : public PopulationPar<mfeat, pchi, dtheta>
 {
 public:
-	LumFuncPopPar(int ndata, thrust::device_vector<double>& d_distData) : PopulationPar<mfeat, pchi, dtheta>(), d_distData(d_distData)
+	LumFuncPopPar(int ndata, LumFuncDist& lumFuncDist) : PopulationPar<mfeat, pchi, dtheta>(), lumFuncDist(lumFuncDist)
 	{
 		// grab pointer to function that compute the log-density of characteristics|theta from device
 		// __constant__ memory
@@ -24,7 +46,7 @@ public:
 	}
 
 	// calculate the initial value of the population parameters
-	virtual void Initialize() {
+	void Initialize() {
 		// first set initial values
 		InitialValue();
 		InitialCholFactor();
@@ -35,7 +57,7 @@ public:
 		// get initial value of conditional log-posterior for theta|chi
 		double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
 		double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
-		double* p_distData = thrust::raw_pointer_cast(&d_distData[0]);
+		double* p_distData = lumFuncDist.GetDistData();
 		logdensity_pop_aux <pchi, dtheta> << <nBlocks, nThreads >> >(p_chi, p_logdens, p_distData, p_logdensaux_function, ndata);
 
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
@@ -48,25 +70,27 @@ public:
 		naccept = 0;
 	}
 
-	virtual void InitialValue() {
+	void InitialValue() {
 		// set initial value of theta
 		h_theta[0] = -1.41;
 		h_theta[1] = 4.0e10;
 		h_theta[2] = 5.8e12;
 	}
 
+	void InitialCholFactor() {
+		// set initial covariance matrix of the theta proposals as the identity matrix
+		thrust::fill(cholfact.begin(), cholfact.end(), 0.0);
+		cholfact[0] = 1.0;
+		cholfact[2] = 1.0e10;
+		cholfact[5] = 1.0e12;
+	}
+
 	// update the value of the population parameter value using a robust adaptive metropolis algorithm
-	virtual void Update() {
-		//TestEstimation();
+	void Update() {
 		// get current conditional log-posterior of population
 		double logdens_current = thrust::reduce(d_logdens.begin(), d_logdens.end());
 		logdens_current += LogPrior(h_theta);
-
-		/*if (_isnan(logdens_current) || !_finite(logdens_current))
-		{
-		logdens_current = logdens_current;
-		}*/
-
+		
 		// propose new value of population parameter
 		hvector h_proposed_theta = Propose();
 
@@ -77,7 +101,7 @@ public:
 		// calculate log-posterior of new population parameter in parallel on the device
 		const int ndata = Daug->GetDataDim();
 		double* p_logdens_prop = thrust::raw_pointer_cast(&d_proposed_logdens[0]);
-		double* p_distData = thrust::raw_pointer_cast(&d_distData[0]);
+		double* p_distData = lumFuncDist.GetDistData();
 
 		logdensity_pop_aux <pchi, dtheta> << <nBlocks, nThreads >> >(Daug->GetDevChiPtr(), p_logdens_prop, p_distData, p_logdensaux_function, ndata);
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
@@ -123,56 +147,9 @@ public:
 		AdaptProp(metro_ratio);
 		current_iter++;
 	}
-
-	void TestEstimation() {
-		const int ndata = Daug->GetDataDim();
-		double* p_logdens_prop = thrust::raw_pointer_cast(&d_proposed_logdens[0]);
-		double* p_distData = thrust::raw_pointer_cast(&d_distData[0]);
-
-		std::vector<double> flux_true(ndata);
-		std::string fluxfile = "C:/temp/data/beta-1.5_l1.0_u100.0_sig1e-10_n1000/fluxes_cnt_1000.dat";
-
-		std::ifstream input_file(fluxfile.c_str());
-		flux_true.resize(ndata);
-		for (int i = 0; i < ndata; ++i) {
-			input_file >> flux_true[i];
-		}
-		input_file.close();
-
-		// copy input data to data members
-		hvector h_flux(ndata);
-		dvector d_flux;
-		for (int i = 0; i < ndata; ++i) {
-			h_flux[i] = flux_true[i];
-		}
-
-		// copy data from host to device
-		d_flux = h_flux;
-
-		Daug->SetChi(d_flux, true);
-
-		hvector h_theta(dtheta);
-		h_theta[0] = -1.499;
-		h_theta[1] = 1.001;
-		h_theta[2] = 100.001;
-
-		SetTheta(h_theta, true);
-
-		std::cout << "current_logdens " << current_logdens << std::endl;
-
-		Daug->SetChi(d_flux, true);
-
-		h_theta[0] = -1.99937;
-		h_theta[1] = 2.5301e-015;
-		h_theta[2] = 99.8111;
-
-		SetTheta(h_theta, true);
-
-		std::cout << "current_logdens " << current_logdens << std::endl;
-	}
-
+	
 	// NOT USED
-	virtual void SetTheta(hvector& theta, bool update_logdens = true) {
+	void SetTheta(hvector& theta, bool update_logdens = true) {
 		h_theta = theta;
 		double* p_theta = thrust::raw_pointer_cast(&theta[0]);
 		CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_theta, p_theta, dtheta * sizeof(*p_theta)));
@@ -180,7 +157,7 @@ public:
 			// update value of conditional log-posterior for theta|chi
 			double* p_chi = Daug->GetDevChiPtr(); // grab pointer to Daug.d_chi
 			double* p_logdens = thrust::raw_pointer_cast(&d_logdens[0]);
-			double* p_distData = thrust::raw_pointer_cast(&d_distData[0]);
+			double* p_distData = lumFuncDist.GetDistData();
 			logdensity_pop_aux <pchi, dtheta> << <nBlocks, nThreads >> >(p_chi, p_logdens, p_distData, p_logdensaux_function, ndata);
 			CUDA_CHECK_RETURN(cudaPeekAtLastError());
 			current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
@@ -197,7 +174,7 @@ public:
 		return -1.797693e+250;
 	}
 
-	virtual double LogPrior(hvector theta) {
+	double LogPrior(hvector theta) {
 		double negative_infinity = -std::numeric_limits<double>::infinity();
 		double gammaTheta = theta[0];
 		double lScaleTheta = theta[1];
@@ -214,17 +191,11 @@ public:
 		return result;
 	}
 
-	virtual hvector Propose() {
+	hvector Propose() {
 		// get the unit proposal
-		/*for (int k = 0; k<dtheta; k++) {
+		for (int k = 0; k<dtheta; k++) {
 			snorm_deviate[k] = snorm(rng);
-		}*/
-
-		snorm_deviate[0] = snorm(rng);
-
-		snorm_deviate[1] = snorm_sigma_1(rng);
-
-		snorm_deviate[2] = snorm_sigma_1(rng);
+		}
 
 		if ((current_iter == 1) || (current_iter % 1000 == 0))
 		{
@@ -258,12 +229,8 @@ public:
 		return proposed_theta;
 	}
 
-
-	virtual double* GetDistData() { return thrust::raw_pointer_cast(&d_distData[0]); }
-	virtual pLogDensPopAux GetLogDensPopAuxPtr() { return p_logdensaux_function; }
-
 protected:
-	thrust::device_vector<double> d_distData;
+	LumFuncDist& lumFuncDist;
 	// pointer to device-side function that compute the conditional log-posterior of characteristics|population
 	pLogDensPopAux p_logdensaux_function;
 

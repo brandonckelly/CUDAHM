@@ -17,6 +17,7 @@
 #include "../../../data_proc_util/src/input_output.cpp"
 #include "LumFuncPopPar.cuh"
 #include "LumFuncDaug.cuh"
+#include "LumFuncDist.cuh"
 
 // known dimensions of features, characteristics and population parameter
 const int mfeat = 1;
@@ -143,16 +144,19 @@ int main(int argc, char** argv)
 	// build the MCMC sampler
 	int niter = atoi(argv[3]);
 	int nburnin = niter / 2;
-	int nchi_samples = 50;  // only keep 50 samples for the chi values to control memory usage and avoid numerous reads from GPU
+	int nchi_samples = 100;  // only keep 100 samples for the chi values to control memory usage and avoid numerous reads from GPU
 	int nthin_chi = niter / nchi_samples;
 
-	// first create pointers to instantiated subclassed DataAugmentation and PopulationPar objects, since we need to give them to the
-	// constructor for the GibbsSampler class.
-	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > LFD(new LumFuncDaug<mfeat, pchi, dtheta>(meas, meas_unc));
 	thrust::device_vector<double> d_distData;
 	d_distData.resize(ndata);
 	thrust::copy(distData.begin(), distData.end(), d_distData.begin());
-	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > LFPP(new LumFuncPopPar<mfeat, pchi, dtheta>(ndata, d_distData));
+	LumFuncDist LFDist(d_distData);
+
+	// first create pointers to instantiated subclassed DataAugmentation and PopulationPar objects, since we need to give them to the
+	// constructor for the GibbsSampler class.
+	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > LFD(new LumFuncDaug<mfeat, pchi, dtheta>(meas, meas_unc, LFDist));
+	
+	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > LFPP(new LumFuncPopPar<mfeat, pchi, dtheta>(ndata, LFDist));
 
 	// instantiate the Metropolis-within-Gibbs sampler object
 	GibbsSampler<mfeat, pchi, dtheta> Sampler(LFD, LFPP, niter, nburnin, nthin_chi);
@@ -174,6 +178,10 @@ int main(int argc, char** argv)
 	// 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
 	std::string chifile("lumfunc_chi_summary.dat");
 	dataAdapter.write_chis(chifile, chi_samples, nchi_samples, ndata, pchi);
+	std::string chifileMin("lumfunc_chi_min.dat");
+	std::string chifileMax("lumfunc_chi_max.dat");
+	std::string chifileMedian("lumfunc_chi_median.dat");
+	dataAdapter.write_relevant_chis(chifileMin, chifileMax, chifileMedian, chi_samples, nchi_samples, ndata);
 	clock_t end = clock();
 	double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
 	std::cout << "Elapsed time (in min)" << (elapsed_secs / 60.0) << std::endl;

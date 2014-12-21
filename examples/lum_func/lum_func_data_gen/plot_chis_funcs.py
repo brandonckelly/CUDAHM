@@ -16,7 +16,7 @@ parser = argp.ArgumentParser()
 parser.add_argument("real_flux_file", help="The file name of real flux data file.", type = str)
 parser.add_argument("noisy_flux_file", help="The file name of noisy flux data file.", type = str)
 parser.add_argument("estimated_flux_file", help="The file name of estimated flux data file.", type = str)
-parser.add_argument("prefix", help="The prefic for created output files.", type = str)
+parser.add_argument("prefix", help="The prefix for created output files.", type = str)
 
 args = parser.parse_args()
 real_flux_file = args.real_flux_file

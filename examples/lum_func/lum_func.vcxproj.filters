@@ -21,6 +21,9 @@
     <ClInclude Include="src\LumFuncPopPar.cuh">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\LumFuncDist.cuh">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\lumfunchm.cu">

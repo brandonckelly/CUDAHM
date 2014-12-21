@@ -9,6 +9,7 @@
 #include "input_output.hpp"
 #include <cmath>
 #include <stdexcept>
+#include <iostream>
 
 class BaseDataAdapter : public IDataAdapter
 {
@@ -24,7 +25,7 @@ public:
 	}
 
 	// return the number of lines in a text file
-	virtual int get_file_lines(std::string& filename) 
+	int get_file_lines(std::string& filename) 
 	{
 		int number_of_lines = 0;
 		std::string line;
@@ -44,7 +45,7 @@ public:
 	}
 
 	// read in the data
-	virtual void read_data(std::string& filename, vecvec& meas, vecvec& meas_unc, int ndata, int mfeat, bool hasHeader)
+	void read_data(std::string& filename, vecvec& meas, vecvec& meas_unc, int ndata, int mfeat, bool hasHeader)
 	{
 		std::ifstream input_file(filename.c_str());
 		meas.resize(ndata);
@@ -66,7 +67,7 @@ public:
 	}
 
 	// dump the sampled values of the population parameter to a text file
-	virtual void write_thetas(std::string& filename, const double * theta_samples, int nsamples, int dtheta)
+	void write_thetas(std::string& filename, const double * theta_samples, int nsamples, int dtheta)
 	{
 		std::ofstream outfile(filename.c_str());
 		if (!m_thetasFileHeader.empty()) {
@@ -81,7 +82,7 @@ public:
 	}
 
 	// dump the posterior means and standard deviations of the characteristics to a text file
-	virtual void write_chis(std::string& filename, const double * chi_samples, int nsamples, int ndata, int pchi)
+	void write_chis(std::string& filename, const double * chi_samples, int nsamples, int ndata, int pchi)
 	{
 		std::ofstream outfile(filename.c_str());
 		if (!m_chisFileHeader.empty()) {
@@ -125,7 +126,7 @@ public:
 	}
 
 	// load in a set of (const, beta, temp) values
-	virtual void load_cbt(std::string& filename, vecvec& cbt, int ndata)
+	void load_cbt(std::string& filename, vecvec& cbt, int ndata)
 	{
 		std::ifstream input_file(filename.c_str());
 		cbt.resize(ndata);
@@ -153,7 +154,7 @@ public:
 	}
 
 	// load in a set of distance values
-	virtual void load_dist_data(std::string& filename, std::vector<double>& dists, int ndata)
+	void load_dist_data(std::string& filename, std::vector<double>& dists, int ndata)
 	{
 		std::ifstream input_file(filename.c_str());
 		dists.resize(ndata);
@@ -161,5 +162,59 @@ public:
 			input_file >> dists[i];
 		}
 		input_file.close();
+	}
+
+	// dump the traces of the lowest, the middle and the highest values of the characteristics to a text file
+	// it is supposed there is only one characteristic for each object (so pchi == 1)
+	void write_relevant_chis(std::string& filenameMin, std::string& filenameMax, std::string& filenameMedian, const double * chi_samples, int nsamples, int ndata)
+	{
+		std::ofstream outfileMin(filenameMin.c_str());
+		std::ofstream outfileMax(filenameMax.c_str());
+		std::ofstream outfileMedian(filenameMedian.c_str());
+		int minPos, maxPos, medianPos;
+		double minValue = 1e300;
+		double maxValue = -1e300;
+		double mean = 0.0;
+		double msqr = 0.0;
+		double chiActual;
+		for (int i = 0; i < ndata; ++i)
+		{
+			// we find in the last sample
+			chiActual = chi_samples[i*nsamples + nsamples - 1];
+			if (chiActual < minValue)
+			{
+				minValue = chiActual;
+				minPos = i;
+			}
+			if (chiActual > maxValue)
+			{
+				maxValue = chiActual;
+				maxPos = i;
+			}
+			mean += chiActual / ndata;
+			msqr += chiActual * chiActual / ndata;
+		}
+		double stDev = sqrt(msqr - mean * mean);
+		double medianApprox;
+		for (int i = 0; i < ndata; ++i)
+		{
+			// we find in the last sample
+			chiActual = chi_samples[i*nsamples + nsamples - 1];
+			if ((chiActual - mean > -stDev) && (chiActual - mean < stDev))
+			{
+				medianApprox = chiActual;
+				medianPos = i;
+				break;
+			}
+		}
+		std::cout << minValue << " " << maxValue << " " << medianApprox << std::endl;
+		for (int j = 0; j < nsamples; ++j) {
+			outfileMin << chi_samples[minPos*nsamples + j] << std::endl;
+			outfileMax << chi_samples[maxPos*nsamples + j] << std::endl;
+			outfileMedian << chi_samples[medianPos*nsamples + j] << std::endl;
+		}
+		outfileMin.close();
+		outfileMax.close();
+		outfileMedian.close();
 	}
 };

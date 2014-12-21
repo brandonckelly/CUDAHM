@@ -101,7 +101,6 @@ double LogDensityPop(double* chi, double* theta)
  */
 __constant__ pLogDensMeas c_LogDensMeas = LogDensityMeas;  // log p(y_i|chi_i)
 __constant__ pLogDensPop c_LogDensPop = LogDensityPop;  // log p(chi_i|theta)
-extern __constant__ double c_theta[100];
 
 int main(int argc, char** argv)
 {
@@ -111,34 +110,34 @@ int main(int argc, char** argv)
 	vecvec meas_unc;
 	std::string filename("../data/normnorm_example.txt");
 	int ndata = dataAdapter.get_file_lines(filename);
-    // read in measurement data from text file
-    dataAdapter.read_data(filename, meas, meas_unc, ndata, mfeat, false);
-    // build the MCMC sampler
-    int niter = 50000;
-    int nburnin = niter / 2;
+	// read in measurement data from text file
+	dataAdapter.read_data(filename, meas, meas_unc, ndata, mfeat, false);
+	// build the MCMC sampler
+	int niter = 50000;
+	int nburnin = niter / 2;
 
 	int nchi_samples = 1000;  // only keep 1000 samples for the chi values to control memory usage and avoid numerous reads from GPU
-    int nthin_chi = niter / nchi_samples;
+	int nthin_chi = niter / nchi_samples;
 
-    // instantiate the Metropolis-within-Gibbs sampler object
-    GibbsSampler<mfeat, pchi, dtheta> Sampler(meas, meas_unc, niter, nburnin, nthin_chi);
+	// instantiate the Metropolis-within-Gibbs sampler object
+	GibbsSampler<mfeat, pchi, dtheta> Sampler(meas, meas_unc, niter, nburnin, nthin_chi);
 
-    // launch the MCMC sampler
-    Sampler.Run();
+	// launch the MCMC sampler
+	Sampler.Run();
 
-    // grab the samples
+	// grab the samples
 	const double * theta_samples = Sampler.GetPopSamples();  // vecvec is a typedef for std::vector<std::vector<double> >
 	const double * chi_samples = Sampler.GetCharSamples();
 
-    std::cout << "Writing results to text files..." << std::endl;
+	std::cout << "Writing results to text files..." << std::endl;
 
-    // write the sampled theta values to a file. Output will have nsamples rows and dtheta columns.
-    std::string thetafile("normnorm_thetas.dat");
+	// write the sampled theta values to a file. Output will have nsamples rows and dtheta columns.
+	std::string thetafile("normnorm_thetas.dat");
 	dataAdapter.write_thetas(thetafile, theta_samples, niter, dtheta);
 
-    // write the posterior means and standard deviations of the characteristics to a file. output will have ndata rows and
-    // 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
-    std::string chifile("normnorm_chi_summary.dat");
+	// write the posterior means and standard deviations of the characteristics to a file. output will have ndata rows and
+	// 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
+	std::string chifile("normnorm_chi_summary.dat");
 	dataAdapter.write_chis(chifile, chi_samples, nchi_samples, ndata, pchi);
 
 }

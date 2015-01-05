@@ -77,12 +77,14 @@ __device__ __host__
 double computeFluxLogDensWithPopPars(double gamma, double lScale, double uScale,
 double dist, double chiElem)
 {
-	double logCoef = determineCoef(gamma, lScale, uScale);
+	double scaledUpLScale = lScale * 1.0e10;
+	double scaledUpUScale = uScale * 1.0e12;
+	double logCoef = determineCoef(gamma, scaledUpLScale, scaledUpUScale);
 	double result;
 	double x = 4 * CR_CUDART_PI * dist * dist * chiElem;
 	if (x > 0.0)
 	{
-		double logChiDependentPart = log(1 - exp(-x / lScale)) + gamma * (log(x) - log(uScale)) - (x / uScale);
+		double logChiDependentPart = log(1 - exp(-x / scaledUpLScale)) + gamma * (log(x) - log(scaledUpUScale)) - (x / scaledUpUScale);
 		result = logCoef + logChiDependentPart;
 	}
 	else

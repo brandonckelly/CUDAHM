@@ -52,7 +52,7 @@ ylim_min = np.log(min(estimated_flux_data_0.min(), filtered_noisy_flux_data_0.mi
 ylim_max = np.log(max(estimated_flux_data_0.max(),filtered_noisy_flux_data_0.max()))
 
 fig = figure()
-ax = fig.add_subplot(1,1,1, xlim=[xlim_min, xlim_max], ylim=[ylim_min, ylim_max]) # one row, one column, first plot
+ax = fig.add_subplot(1,1,1, xlim=[xlim_min-2, xlim_max], ylim=[ylim_min-2, ylim_max]) # one row, one column, first plot
 ax.scatter(np.log(filtered_real_flux_data),np.log(filtered_noisy_flux_data_0), label = 'log real-noisy', color = 'b', marker = ".", linewidth=0.01, zorder=1)
 ax.scatter(np.log(real_flux_data),np.log(estimated_flux_data_0), label = 'log real-estimated', color = 'g', marker = ".", linewidth=0.01, zorder=1)
 ax.scatter(np.log(real_flux_data),np.log(real_flux_data), label = 'log real-real', color = 'r', marker = ".", linewidth=0.01, zorder=2)

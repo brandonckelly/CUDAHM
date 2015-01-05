@@ -1,4 +1,4 @@
-# executing e.g. python plot_lumfunc_w_thetas.py -1.5 1.0 100.0 -0.5 50.001 60.0001 500000 1000 (--cov 1000)
+# executing e.g. python plot_lumfunc_w_thetas.py -1.5 1.0 100.0 -0.5 50.001 60.0001 500000 1000 (--cov 1000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0)
 import argparse as argp
 from bb1truncpl import BB1TruncPL
 import numpy as np
@@ -20,6 +20,8 @@ parser.add_argument("init_upper_scale", help="The initial upper scale of MCMC me
 parser.add_argument("iter_num", help="The iteration number of MCMC method", type=int)
 parser.add_argument("obj_num", help="The object number of MCMC method", type=int)
 parser.add_argument("--cov", default = 10000, help="The value of this number determines, how many BB1 with samples of parameters theta will be plotted", type=int)
+parser.add_argument("--lower_scale_factor", default = 1.0, help="The factor which scales up the lower scale samples", type=float)
+parser.add_argument("--upper_scale_factor", default = 1.0, help="The factor which scales up the upper scale samples", type=float)
 
 args = parser.parse_args()
 beta = args.beta
@@ -31,6 +33,8 @@ init_upper_scale = args.init_upper_scale
 iter_num = args.iter_num
 obj_num = args.obj_num
 cov = args.cov 
+lower_scale_factor = args.lower_scale_factor
+upper_scale_factor = args.upper_scale_factor
 
 # Use TeX labels with CMR font:
 rc('text', usetex=True)
@@ -61,8 +65,8 @@ xlog = np.logspace(8, 13, 300)
 # Helper for plotting BB1 with samples of theta parameters:
 def plot_figs(idx, xlog, c):
     smp_beta = theta_data[idx][0]
-    smp_l =theta_data[idx][1]
-    smp_u = theta_data[idx][2]
+    smp_l =theta_data[idx][1] * lower_scale_factor
+    smp_u = theta_data[idx][2] * upper_scale_factor
     bb1 = BB1TruncPL(smp_beta, smp_l, smp_u)
     pdf = bb1.pdf(xlog)
     figure(fig_log.number)

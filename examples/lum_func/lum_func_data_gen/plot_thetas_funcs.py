@@ -52,3 +52,24 @@ ax.scatter(range(1, len(theta_data_l) + 1),theta_data_l, c=color_list, marker = 
 ax.set_xlabel(lbl_iter)
 ax.set_ylabel(lbl_lowerscale)
 savefig(prefix + 'lowerscale.png',dpi=120)
+
+fig = figure(figsize=(15.75, 10))	
+ax = fig.add_subplot(1,1,1) # one row, one column, first plot
+ax.scatter(theta_data_beta,theta_data_l, c=color_list, marker = ".", linewidth=0.01)
+ax.set_xlabel(lbl_beta)
+ax.set_ylabel(lbl_lowerscale)
+savefig(prefix + 'beta_lowerscale.png',dpi=120)
+
+fig = figure(figsize=(15.75, 10))
+ax = fig.add_subplot(1,1,1) # one row, one column, first plot
+ax.scatter(theta_data_beta,theta_data_u, c=color_list, marker = ".", linewidth=0.01)
+ax.set_xlabel(lbl_beta)
+ax.set_ylabel(lbl_upperscale)
+savefig(prefix + 'beta_upperscale.png',dpi=120)
+
+fig = figure(figsize=(15.75, 10))
+ax = fig.add_subplot(1,1,1) # one row, one column, first plot
+ax.scatter(theta_data_l,theta_data_u, c=color_list, marker = ".", linewidth=0.01)
+ax.set_xlabel(lbl_lowerscale)
+ax.set_ylabel(lbl_upperscale)
+savefig(prefix + 'lowerscale_upperscale.png',dpi=120)

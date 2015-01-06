@@ -110,22 +110,22 @@ public:
 
 		logdens_prop += LogPrior(h_proposed_theta);
 
-		double* p_chi = Daug->GetChi();
+		//double* p_chi = Daug->GetChi();
 
-		double erf_sum = 0.0;
-		for (int idx = 0; idx < ndata; ++idx)
-		{
-			double chi_i = p_chi[idx];
-			double sigma = 1e-10;
-			double fluxLimit = 1e-13;
-			erf_sum += 0.5 * (1.0 + erf((chi_i - fluxLimit) / (sigma * sqrt(2))));
-		}
-		delete[] p_chi;
+		//double erf_sum = 0.0;
+		//for (int idx = 0; idx < ndata; ++idx)
+		//{
+		//	double chi_i = p_chi[idx];
+		//	double sigma = 1e-10;
+		//	double fluxLimit = 1e-13;
+		//	erf_sum += 0.5 * (1.0 + erf((chi_i - fluxLimit) / (sigma * sqrt(2))));
+		//}
+		//delete[] p_chi;
 
-		double p_logC_given_theta = (ndata - 1) * log((1.0 / (double) ndata) * erf_sum);
+		//double p_logC_given_theta = (ndata - 1) * log((1.0 / (double) ndata) * erf_sum);
 
-		// the effect of flux limit:
-		logdens_prop -= p_logC_given_theta;
+		//// the effect of flux limit:
+		//logdens_prop -= p_logC_given_theta;
 
 		// accept the proposed value?
 		double metro_ratio = 0.0;

@@ -8,6 +8,8 @@
 #ifndef LUMFUNCPOPPAR_CUH_
 #define LUMFUNCPOPPAR_CUH_
 
+#include <gsl/gsl_integration.h>
+
 #include "../../../mwg/src/parameters.cuh"
 #include "LumFuncDist.cuh"
 
@@ -32,6 +34,52 @@ void logdensity_pop_aux(double* chi, double* logdens, double* auxdata, pLogDensP
 		double auxdata_i = auxdata[idata];
 		logdens[idata] = LogDensityPop(chi_i, c_theta, auxdata_i);
 	}
+}
+
+struct innerIntegrand_params {
+	double beta; double lScale; double uScale; double F; double rmax;
+};
+
+struct outerIntegrand_params {
+	double beta; double lScale; double uScale; double rmax; double fluxLimit; double sigma0; double sigCoef;
+};
+
+double innerIntegrand(double r, void * params)
+{
+	struct innerIntegrand_params * parameters = (struct innerIntegrand_params *) params;
+	double beta = (parameters->beta);
+	double uScale = (parameters->uScale);
+	double lScale = (parameters->lScale);
+	double F = (parameters->F);
+	double rmax = (parameters->rmax);
+	double lum = F * 4 * M_PI *r*r;
+	double numerator = 3 * r * r *
+		(1 - exp(-lum / lScale))*pow(lum / uScale, beta)*exp(-lum / uScale);
+	double denominator = rmax*rmax*rmax*uScale * tgamma(beta + 1) *
+		(1 - (1 / pow(1 + (uScale / lScale), beta + 1)));
+	return numerator / denominator;
+}
+
+double outerIntegrand(double F, void * params)
+{
+	struct outerIntegrand_params * parameters = (struct outerIntegrand_params *) params;
+	double beta = (parameters->beta);
+	double uScale = (parameters->uScale);
+	double lScale = (parameters->lScale);
+	double rmax = (parameters->rmax);
+	double fluxLimit = (parameters->fluxLimit);
+	double sigma = (parameters->sigma0) + pow((parameters->sigCoef) * F, 2.0);
+	double eta = 0.5*(1 + erf((F - fluxLimit) / (sigma*sqrt(2.0))));
+	gsl_integration_workspace * w
+		= gsl_integration_workspace_alloc(1000);
+	double innerResult, error;
+	gsl_function innerIntegrandGSLFunc;
+	struct innerIntegrand_params innerParams = { beta, lScale, uScale, F, rmax };
+	innerIntegrandGSLFunc.function = &innerIntegrand;
+	innerIntegrandGSLFunc.params = &innerParams;
+	gsl_integration_qag(&innerIntegrandGSLFunc, 0.0, rmax, 0, 1e-7, 1000, 6, w, &innerResult, &error);
+	gsl_integration_workspace_free(w);
+	return eta * innerResult;
 }
 
 template <int mfeat, int pchi, int dtheta>
@@ -110,23 +158,26 @@ public:
 
 		logdens_prop += LogPrior(h_proposed_theta);
 
-		//double* p_chi = Daug->GetChi();
+		double betaTheta = h_proposed_theta[0];
+		double scaledUpLScale = h_proposed_theta[1] * 1.0e10;
+		double scaledUpUScale = h_proposed_theta[2] * 1.0e12;
+		if ((betaTheta > -2.0) && (betaTheta < 0.0))
+		{
+			gsl_integration_workspace * w
+				= gsl_integration_workspace_alloc(1000);
+			double result, result1, result2, error1, error2;
+			gsl_function F;
+			struct outerIntegrand_params parameters = { betaTheta, scaledUpLScale, scaledUpUScale, 4000.0, 5.0, 1.0, 0.01 };
+			F.function = &outerIntegrand;
+			F.params = &parameters;
+			gsl_integration_qag(&F, 5.0, 6000.0, 0, 1e-7, 1000, 6, w, &result1, &error1);
+			gsl_integration_qagiu(&F, 6000.0, 0, 1e-7, 1000, w, &result2, &error2);
+			result = result1 + result2;
+			gsl_integration_workspace_free(w);
 
-		//double erf_sum = 0.0;
-		//for (int idx = 0; idx < ndata; ++idx)
-		//{
-		//	double chi_i = p_chi[idx];
-		//	double sigma = 1e-10;
-		//	double fluxLimit = 1e-13;
-		//	erf_sum += 0.5 * (1.0 + erf((chi_i - fluxLimit) / (sigma * sqrt(2))));
-		//}
-		//delete[] p_chi;
-
-		//double p_logC_given_theta = (ndata - 1) * log((1.0 / (double) ndata) * erf_sum);
-
-		//// the effect of flux limit:
-		//logdens_prop -= p_logC_given_theta;
-
+			logdens_prop -= ndata * log(result);
+		}
+		
 		// accept the proposed value?
 		double metro_ratio = 0.0;
 		bool accept = AcceptProp(logdens_prop, logdens_current, metro_ratio, 0.0, 0.0);
@@ -176,13 +227,13 @@ public:
 
 	double LogPrior(hvector theta) {
 		double negative_infinity = -std::numeric_limits<double>::infinity();
-		double gammaTheta = theta[0];
-		double lScaleTheta = theta[1];
-		double uScaleTheta = theta[2];
+		double betaTheta = theta[0];
+		double scaledUpLScale = theta[1] * 1.0e10;
+		double scaledUpUScale = theta[2] * 1.0e12;
 		double result;
-		if ((gammaTheta < 0) && (gammaTheta > -2) && (lScaleTheta < uScaleTheta))
+		if ((betaTheta < 0) && (betaTheta > -2) && (scaledUpLScale < scaledUpUScale))
 		{
-			result = log(0.90322) + log(lScaleTheta) - 2 * log(uScaleTheta) - log(1 + gammaTheta * gammaTheta);
+			result = log(0.90322) + log(scaledUpLScale) - 2 * log(scaledUpUScale) - log(1 + betaTheta * betaTheta);
 		}
 		else
 		{

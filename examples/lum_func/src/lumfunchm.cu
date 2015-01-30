@@ -10,7 +10,6 @@
 // standard library includes
 #include <iostream>
 #include <time.h>
-#include <gsl/gsl_integration.h>
 
 // local CUDAHM includes
 #include "../../../mwg/src/GibbsSampler.hpp"

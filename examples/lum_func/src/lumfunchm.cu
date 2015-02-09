@@ -47,7 +47,7 @@ __device__ __host__
 double determineCoef(double beta, double lScale, double uScale)
 {
 	double logCoef = 0;
-	if (beta == -1.0)
+	if ((beta >= -1.0001) && (beta <= -0.9999))
 	{
 		logCoef = logCoef - log(uScale * log(1 + uScale / lScale));
 		//// Euler-Mascheroni constant:
@@ -125,6 +125,12 @@ extern __constant__ double c_theta[100];
 
 int main(int argc, char** argv)
 {
+	double rmax = 4000.0;
+	double fluxLimit = 5.0;
+	//For flux-unlimited case:
+	//double fluxLimit = -30.0;
+	double sigma0 = 1.0;
+	double sigCoef = 0.01;
 	clock_t begin = clock();
 	DistDataAdapter dataAdapter;
 	// allocate memory for measurement arrays
@@ -158,7 +164,7 @@ int main(int argc, char** argv)
 	// constructor for the GibbsSampler class.
 	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > LFD(new LumFuncDaug<mfeat, pchi, dtheta>(meas, meas_unc, LFDist));
 	
-	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > LFPP(new LumFuncPopPar<mfeat, pchi, dtheta>(ndata, LFDist));
+	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > LFPP(new LumFuncPopPar<mfeat, pchi, dtheta>(ndata, LFDist, rmax, fluxLimit, sigma0, sigCoef));
 
 	// instantiate the Metropolis-within-Gibbs sampler object
 	GibbsSampler<mfeat, pchi, dtheta> Sampler(LFD, LFPP, niter, nburnin, nthin_chi);

@@ -8,6 +8,7 @@
 #ifndef LUMFUNCPOPPAR_CUH_
 #define LUMFUNCPOPPAR_CUH_
 
+#include <cmath>
 #include <cubature.h>
 
 #include "../../../mwg/src/parameters.cuh"
@@ -36,16 +37,16 @@ void logdensity_pop_aux(double* chi, double* logdens, double* auxdata, pLogDensP
 	}
 }
 
-struct outerIntegrand_params {
-	double beta; double lScale; double uScale; double rmax; double fluxLimit; double sigma0; double sigCoef;
+struct integrand_params {
+	double beta; double lScale; double uScale;
 };
 
 int simpleIntegrand(unsigned ndim, const double *x, void *fdata, unsigned fdim, double *fval)
 {
 	/* Parameters */
 	double beta = ((double *)fdata)[0];
-	double uScale = ((double *)fdata)[1];
-	double lScale = ((double *)fdata)[2];
+	double lScale = ((double *)fdata)[1];
+	double uScale = ((double *)fdata)[2];
 	double rmax = ((double *)fdata)[3];
 	double fluxLimit = ((double *)fdata)[4];
 	double sigma0 = ((double *)fdata)[5];
@@ -53,16 +54,17 @@ int simpleIntegrand(unsigned ndim, const double *x, void *fdata, unsigned fdim, 
 	/* Inputs */
 	double F = x[0];
 	double r = x[1];
-	/* Compute auxiliary variables */
-	double sigma = sigma0 + pow(sigCoef * F, 2.0);
-	double lum = F * 4 * CR_CUDART_PI *r*r;
-	double eta = 0.5*(1 + erf((F - fluxLimit) / (sigma*sqrt(2.0))));
-	double numerator = eta * 3 * r * r *
-		(1 - exp(-lum / lScale))*pow(lum / uScale, beta)*exp(-lum / uScale);
-	double denominator = rmax * rmax * rmax * uScale * tgamma(beta + 1) *
-		(1 - (1 / pow(1 + (uScale / lScale), beta + 1)));
-	/* Compute the output value */
-	fval[0] = numerator / denominator;
+	fval[0] = 0.0;
+	if (F > 0.0)
+	{
+		/* Compute auxiliary variables */
+		double sigma = sqrt(pow(sigma0, 2.0) + pow(sigCoef * F, 2.0));
+		double lum = F * 4 * CR_CUDART_PI *r*r;
+		double eta = 0.5*(1 + erf((F - fluxLimit) / (sigma*sqrt(2.0))));
+		/* Compute the output value */
+		fval[0] = eta * r * r *
+			(1 - exp(-lum / lScale))*pow(lum / uScale, beta)*exp(-lum / uScale);
+	}
 	return 0; // success
 }
 
@@ -70,26 +72,31 @@ int transformedIntegrand(unsigned ndim, const double *x, void *fdata, unsigned f
 {
 	/* Parameters */
 	double beta = ((double *)fdata)[0];
-	double uScale = ((double *)fdata)[1];
-	double lScale = ((double *)fdata)[2];
+	double lScale = ((double *)fdata)[1];
+	double uScale = ((double *)fdata)[2];
 	double rmax = ((double *)fdata)[3];
 	double fluxLimit = ((double *)fdata)[4];
 	double sigma0 = ((double *)fdata)[5];
 	double sigCoef = ((double *)fdata)[6];
+	double cutPoint = ((double *)fdata)[7];
 	/* Inputs */
 	double t = x[0];
 	double r = x[1];
 	/* Compute auxiliary variables */
-	double F = fluxLimit + (t / (1 - t));
-	double sigma = sigma0 + pow(sigCoef * F, 2.0);
-	double lum = F * 4 * CR_CUDART_PI *r*r;
-	double eta = 0.5*(1 + erf((F - fluxLimit) / (sigma*sqrt(2.0))));
-	double numerator = eta * 3 * r * r *
-		(1 - exp(-lum / lScale))*pow(lum / uScale, beta)*exp(-lum / uScale);
-	double denominator = rmax * rmax * rmax * uScale * tgamma(beta + 1) *
-		(1 - (1 / pow(1 + (uScale / lScale), beta + 1))) * pow(1 - t, 2.0);
-	/* Compute the output value */
-	fval[0] = numerator / denominator;
+	double F = cutPoint + (t / (1 - t));
+	double sigma;
+	fval[0] = 0.0;
+	if ((t < 1) && (F > 0.0))
+	{
+		sigma = sqrt(pow(sigma0, 2.0) + pow(sigCoef * F, 2.0));
+		double lum = F * 4 * CR_CUDART_PI *r*r;
+		double eta = 0.5*(1 + erf((F - fluxLimit) / (sigma*sqrt(2.0))));
+		double numerator = eta * r * r *
+			(1 - exp(-lum / lScale))*pow(lum / uScale, beta)*exp(-lum / uScale);
+		double denominator = pow(1 - t, 2.0);
+		/* Compute the output value */
+		fval[0] = numerator / denominator;
+	}
 	return 0; // success
 }
 
@@ -97,7 +104,9 @@ template <int mfeat, int pchi, int dtheta>
 class LumFuncPopPar : public PopulationPar<mfeat, pchi, dtheta>
 {
 public:
-	LumFuncPopPar(int ndata, LumFuncDist& lumFuncDist) : PopulationPar<mfeat, pchi, dtheta>(), lumFuncDist(lumFuncDist)
+	LumFuncPopPar(int ndata, LumFuncDist& lumFuncDist, double rmax, double fluxLimit, 
+		double sigma0, double sigCoef) : PopulationPar<mfeat, pchi, dtheta>(), lumFuncDist(lumFuncDist), rmax(rmax), 
+		fluxLimit(fluxLimit), sigma0(sigma0), sigCoef(sigCoef)
 	{
 		// grab pointer to function that compute the log-density of characteristics|theta from device
 		// __constant__ memory
@@ -124,6 +133,13 @@ public:
 
 		current_logdens = thrust::reduce(d_logdens.begin(), d_logdens.end());
 
+		double betaTheta = h_theta[0];
+		double scaledUpLScale = h_theta[1] * 1.0e10;
+		double scaledUpUScale = h_theta[2] * 1.0e12;
+		struct integrand_params currentParameters = { betaTheta, scaledUpLScale, scaledUpUScale };
+		current_calcInt = calculateIntegral(currentParameters);
+		current_logdens -= ndata * log(current_calcInt);
+
 		// reset the number of MCMC iterations
 		current_iter = 1;
 		naccept = 0;
@@ -144,40 +160,45 @@ public:
 		cholfact[5] = 1.0;
 	}
 
-	double calculateIntegral(struct outerIntegrand_params parameters)
+	double calculateIntegral(struct integrand_params parameters)
 	{
 		double result = 1.0;
-		if (parameters.fluxLimit > 0.0)
+		double reqRelError = 1e-4;
+		double cutPoint = 1e+4;
+
+		double params[8] = { parameters.beta, parameters.lScale, parameters.uScale, rmax, fluxLimit, sigma0, sigCoef, cutPoint };
+		// Calculate integral with flux over (cutPoint, infinity) where the integrand is transformed:
+		double xmin[2] = { 0.0, 0.0 }, xmax[2] = { 1.0, rmax }, val, err;
+		hcubature(1, transformedIntegrand, &params, 2, xmin, xmax, 0, 0, reqRelError, ERROR_INDIVIDUAL, &val, &err);
+
+		// Calculate integral with flux over (0.0, cutPoint):
+		double reqRelError2 = 1e-4;
+		double xmin2[2] = { 0.0, 0.0 }, xmax2[2] = { cutPoint, rmax }, val2, err2;
+		hcubature(1, simpleIntegrand, &params, 2, xmin2, xmax2, 0, 0, reqRelError2, ERROR_INDIVIDUAL, &val2, &err2);
+
+		double coef = 4 * CR_CUDART_PI;
+		if ((parameters.beta >= -1.0001) && (parameters.beta <= -0.9999))
 		{
-			double reqRelError = 1e-4;
-			double params[7] = { parameters.beta, parameters.lScale, parameters.uScale, parameters.rmax, 
-				parameters.fluxLimit, parameters.sigma0, parameters.sigCoef };
-			// Calculate integral with flux over (fluxLimit, infinity) where the integrand is transformed:
-			double xmin[2] = { 0.0, 0.0 }, xmax[2] = { 1.0, parameters.rmax }, val, err;
-			hcubature(1, transformedIntegrand, &params, 2, xmin, xmax, 0, 0, reqRelError, ERROR_INDIVIDUAL, &val, &err);
-			// Calculate integral with flux over (0.0, fluxLimit):
-			//double xmin2[2] = { 0.0, 0.0 }, xmax2[2] = { parameters.fluxLimit, parameters.rmax }, val2, err2;
-			//hcubature(1, simpleIntegrand, &params, 2, xmin2, xmax2, 0, 0, reqRelError, ERROR_INDIVIDUAL, &val2, &err2);
-			//result = (val / (val + val2));
-			result = val;
+			coef = (coef * exp(-log(parameters.uScale * log(1 + parameters.uScale / parameters.lScale)))) / rmax;
 		}
+		else
+		{
+			coef = coef / (rmax * parameters.uScale *
+				tgamma(parameters.beta + 1) * (1 - (1 / pow(1 + (parameters.uScale / parameters.lScale), parameters.beta + 1))));
+		}
+
+		result = coef * (val + val2);
 		return result;
 	}
 
 	// update the value of the population parameter value using a robust adaptive metropolis algorithm
 	void Update() {
-		double rmax = 4000.0;
-		double fluxLimit = 5.0;
-		double sigma0 = 1.0;
-		double sigCoef = 0.01;
 		const int ndata = Daug->GetDataDim();
 
 		// get current conditional log-posterior of population
 		double logdens_current = thrust::reduce(d_logdens.begin(), d_logdens.end());
 		logdens_current += LogPrior(h_theta);
-		double betaTheta = h_theta[0];
-		double scaledUpLScale = h_theta[1] * 1.0e10;
-		double scaledUpUScale = h_theta[2] * 1.0e12;
+		logdens_current -= ndata * log(current_calcInt);
 
 		// propose new value of population parameter
 		hvector h_proposed_theta = Propose();
@@ -192,36 +213,37 @@ public:
 
 		logdensity_pop_aux <pchi, dtheta> << <nBlocks, nThreads >> >(Daug->GetDevChiPtr(), p_logdens_prop, p_distData, p_logdensaux_function, ndata);
 
-		// While the device working on the calculation of log-posterior of new population parameters the flux-limit distortion is being calculated
-		struct outerIntegrand_params currentParameters = { betaTheta, scaledUpLScale, scaledUpUScale, rmax, fluxLimit, sigma0, sigCoef };
-		double val = calculateIntegral(currentParameters);
-		logdens_current -= ndata * log(val);
-
 		CUDA_CHECK_RETURN(cudaPeekAtLastError());
 		CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 		double logdens_prop = thrust::reduce(d_proposed_logdens.begin(), d_proposed_logdens.end());
 
 		logdens_prop += LogPrior(h_proposed_theta);
 
-		betaTheta = h_proposed_theta[0];
-		scaledUpLScale = h_proposed_theta[1] * 1.0e10;
-		scaledUpUScale = h_proposed_theta[2] * 1.0e12;
-		if ((betaTheta > -2.0) && (betaTheta < 0.0) && (scaledUpLScale > 0) && (scaledUpUScale > scaledUpLScale))
+		double betaTheta = h_proposed_theta[0];
+		double scaledUpLScale = h_proposed_theta[1] * 1.0e10;
+		double scaledUpUScale = h_proposed_theta[2] * 1.0e12;
+		bool accept;
+		double metro_ratio = 0.0;
+		double calcInt;
+		if ((betaTheta > -1.9) && (betaTheta < 0.0) && (scaledUpLScale > 0) && (scaledUpUScale > scaledUpLScale))
 		{
 			// Cubature integration version:
-			struct outerIntegrand_params parameters = { betaTheta, scaledUpLScale, scaledUpUScale, rmax, fluxLimit, sigma0, sigCoef };
-			double val = calculateIntegral(parameters);
-			logdens_prop -= ndata * log(val);
+			struct integrand_params parameters = { betaTheta, scaledUpLScale, scaledUpUScale };
+			calcInt = calculateIntegral(parameters);
+			logdens_prop -= ndata * log(calcInt);
+			// accept the proposed value?
+			accept = AcceptProp(logdens_prop, logdens_current, metro_ratio, 0.0, 0.0);
 		}
-		
-		// accept the proposed value?
-		double metro_ratio = 0.0;
-		bool accept = AcceptProp(logdens_prop, logdens_current, metro_ratio, 0.0, 0.0);
+		else
+		{
+			accept = false;
+		}
 		if (accept) {
 			h_theta = h_proposed_theta;
 			thrust::copy(d_proposed_logdens.begin(), d_proposed_logdens.end(), d_logdens.begin());
 			naccept++;
 			current_logdens = logdens_prop;
+			current_calcInt = calcInt;
 		}
 		else {
 			// proposal rejected, so need to copy current theta back to constant memory
@@ -320,7 +342,11 @@ protected:
 	LumFuncDist& lumFuncDist;
 	// pointer to device-side function that compute the conditional log-posterior of characteristics|population
 	pLogDensPopAux p_logdensaux_function;
-
+	double current_calcInt;
+	double rmax;
+	double fluxLimit;
+	double sigma0;
+	double sigCoef;
 };
 
 #endif /* LUMFUNCPOPPAR_CUH_ */

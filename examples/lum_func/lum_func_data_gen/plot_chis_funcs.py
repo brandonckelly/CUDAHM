@@ -1,4 +1,4 @@
-# executing e.g. python plot_chis_funcs.py b-1.2_l1.0_u100.0_fluxes_cnt_100000.dat b-1.2_l1.0_u100.0_filtered_fluxes_w_G_noise_mu_0.0_sig_1e-10_cnt_100000.dat b-1.2_l1.0_u100.0_init_b-1.3_l5.0_u110.0_lumfunc_chi_summary.dat b-1.2_l1.0_u100.0_init_b-1.3_l5.0_u110.0_
+# executing e.g. python plot_chis_funcs.py b-1.2_l1.0_u100.0_fluxes_cnt_100000.dat b-1.2_l1.0_u100.0_filtered_fluxes_w_G_noise_mu_0.0_sig_1e-10_cnt_100000.dat b-1.2_l1.0_u100.0_init_b-1.3_l5.0_u110.0_lumfunc_chi_summary.dat b-1.2_l1.0_u100.0_init_b-1.3_l5.0_u110.0_ (--lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0)
 
 # executing e.g. python plot_chis_funcs.py b-1.2_l1.0_u100.0_fluxes_cnt_100000.dat b-1.2_l1.0_u100.0_filtered_fluxes_w_G_noise_mu_0.0_sig_1e-10_cnt_100000.dat b-1.2_l1.0_u100.0_init_b-1.901_l24.009_u69.99_lumfunc_chi_summary.dat b-1.2_l1.0_u100.0_init_b-1.901_l24.009_u69.99_
 
@@ -17,12 +17,33 @@ parser.add_argument("real_flux_file", help="The file name of real flux data file
 parser.add_argument("noisy_flux_file", help="The file name of noisy flux data file.", type = str)
 parser.add_argument("estimated_flux_file", help="The file name of estimated flux data file.", type = str)
 parser.add_argument("prefix", help="The prefix for created output files.", type = str)
+parser.add_argument("--lower_scale_factor", default = 1.0, help="The factor which scales up the lower scale samples", type=float)
+parser.add_argument("--upper_scale_factor", default = 1.0, help="The factor which scales up the upper scale samples", type=float)
 
 args = parser.parse_args()
 real_flux_file = args.real_flux_file
 noisy_flux_file = args.noisy_flux_file
 estimated_flux_file = args.estimated_flux_file
 prefix = args.prefix
+lower_scale_factor = args.lower_scale_factor
+upper_scale_factor = args.upper_scale_factor
+
+# Wider margins to allow for larger labels; may need to adjust left:
+rc('figure.subplot', bottom=.125, top=.95, right=.95)  # left=0.125
+
+# Optionally make default line width thicker:
+#rc('lines', linewidth=2.0) # doesn't affect frame lines
+
+rc('font', size=14)  # default for labels (not axis labels)
+rc('font', family='serif')  # default for labels (not axis labels)
+rc('axes', labelsize=18)
+rc('xtick.major', pad=8)
+rc('xtick', labelsize=14)
+rc('ytick.major', pad=8)
+rc('ytick', labelsize=14)
+
+rc('savefig', dpi=150)  # mpl's default dpi is 100
+rc('axes.formatter', limits=(-4,4))
 
 # Use TeX labels with CMR font:
 rc('text', usetex=True)
@@ -60,6 +81,6 @@ ax.set_xlabel(lbl_real)
 ax.set_ylabel(lbl_noisy_estimated)
 ax.legend(loc=2)
 ttl_array = prefix.split("_")
-ttl = r'Real $\theta$: (' + ttl_array[0][1:] + ',' + ttl_array[1][1:] + ',' + ttl_array[2][1:] + ')' + r'\\Init. values of $\theta$: (' + ttl_array[4][1:] + ',' + ttl_array[5][1:] + ',' + ttl_array[6][1:] + ')'
+ttl = r'Real $\theta$: (%5.2f,%5.2e,%5.2e); Init. values of $\theta$: (%5.2f,%5.2e,%5.2e)' % (float(ttl_array[0][1:]), float(ttl_array[1][1:]), float(ttl_array[2][1:]), float(ttl_array[4][1:]), float(ttl_array[5][1:]) * lower_scale_factor, float(ttl_array[6][1:]) * upper_scale_factor)
 suptitle(ttl)
-savefig(prefix + 'log_real_noisy_estimated.png',dpi=120)
+savefig(prefix + 'log_real_noisy_estimated.png')

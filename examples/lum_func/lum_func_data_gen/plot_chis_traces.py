@@ -15,6 +15,23 @@ fileChiMax = args.fileChiMax
 fileChiMedian = args.fileChiMedian
 prefix = args.prefix
 
+# Wider margins to allow for larger labels; may need to adjust left:
+rc('figure.subplot', bottom=.125, top=.95, right=.95)  # left=0.125
+
+# Optionally make default line width thicker:
+#rc('lines', linewidth=2.0) # doesn't affect frame lines
+
+rc('font', size=14)  # default for labels (not axis labels)
+rc('font', family='serif')  # default for labels (not axis labels)
+rc('axes', labelsize=18)
+rc('xtick.major', pad=8)
+rc('xtick', labelsize=14)
+rc('ytick.major', pad=8)
+rc('ytick', labelsize=14)
+
+rc('savefig', dpi=150)  # mpl's default dpi is 100
+rc('axes.formatter', limits=(-4,4))
+
 # Use TeX labels with CMR font:
 rc('text', usetex=True)
 rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
@@ -33,25 +50,25 @@ for idx in range(0, chi_min_data.shape[0]):
 lbl_min = 'chi min'
 lbl_max = 'chi max'
 lbl_median = 'chi median'
-lbl_iter= 'Iterations'
+lbl_iter= 'Iteration number'
 	
 fig = figure(figsize=(15.75, 10))	
 ax = fig.add_subplot(1,1,1) # one row, one column, first plot
 ax.scatter(range(1, len(chi_min_data) + 1),chi_min_data, c=color_list, marker = ".", linewidth=0.01)
 ax.set_xlabel(lbl_iter)
 ax.set_ylabel(lbl_min)
-savefig(prefix + 'min.png',dpi=120)
+savefig(prefix + 'min.png')
 
 fig = figure(figsize=(15.75, 10))
 ax = fig.add_subplot(1,1,1) # one row, one column, first plot
 ax.scatter(range(1, len(chi_median_data) + 1),chi_median_data, c=color_list, marker = ".", linewidth=0.01)
 ax.set_xlabel(lbl_iter)
 ax.set_ylabel(lbl_median)
-savefig(prefix + 'median.png',dpi=120)
+savefig(prefix + 'median.png')
 
 fig = figure(figsize=(15.75, 10))
 ax = fig.add_subplot(1,1,1) # one row, one column, first plot
 ax.scatter(range(1, len(chi_max_data) + 1),chi_max_data, c=color_list, marker = ".", linewidth=0.01)
 ax.set_xlabel(lbl_iter)
 ax.set_ylabel(lbl_max)
-savefig(prefix + 'max.png',dpi=120)
+savefig(prefix + 'max.png')

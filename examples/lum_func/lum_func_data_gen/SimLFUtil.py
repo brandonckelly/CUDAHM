@@ -67,9 +67,18 @@ class SimLFUtil:
         This function returns flux data with Gaussian noise (with mean = 0,
         standard deviation = self.sdev)
         """
-        g_array = np.random.normal(self.mean,self.sdev,self.n_samp)
-        noisy = fluxes + g_array
-        return noisy
+        noisy = []
+        sdev_list = []		
+        for fl in fluxes:
+            actual_sdev = np.sqrt((self.sdev)**2 + (0.01*fl)**2)
+            #print 'sdev: ',self.sdev, ' fl: ', fl, ' actual_sdev: ', actual_sdev
+            sdev_list.append(actual_sdev)
+            noise = np.random.normal(self.mean, actual_sdev)
+            var = fl + noise
+            noisy.append(var)
+        noisy = np.array(noisy)
+        sdev_list = np.array(sdev_list)
+        return noisy, sdev_list
 
     def filtered_noisy_flux_samples_with_flux_limit(self):
         """
@@ -78,6 +87,7 @@ class SimLFUtil:
         if it is over the flux limit.
         """
         noisy_fluxes_with_limit = np.array([],dtype=np.float64)
+        sdev_list_out = np.array([],dtype=np.float64)
         lums_with_limit = np.array([],dtype=np.float64)
         dists_with_limit = np.array([],dtype=np.float64)
         fluxes_with_limit = np.array([],dtype=np.float64)
@@ -87,7 +97,7 @@ class SimLFUtil:
             lums = self.lum_sample()
             dists = self.rnd_distance_sample()
             fluxes = self.flux_sample(lums,dists)
-            noisy_fluxes = self.noisy_flux_sample(fluxes)
+            noisy_fluxes, sdev_list = self.noisy_flux_sample(fluxes)
             mask = self.flux_limit < noisy_fluxes
             # Masking:
             t1 = noisy_fluxes[mask]
@@ -99,10 +109,12 @@ class SimLFUtil:
             dists_with_limit = np.hstack([dists_with_limit,t3])
             t4 = fluxes[mask]
             fluxes_with_limit = np.hstack([fluxes_with_limit,t4])
+            t5 = sdev_list[mask]
+            sdev_list_out = np.hstack([sdev_list_out,t5])
             iter += 1
-        return noisy_fluxes_with_limit[:self.n_samp], lums_with_limit[:self.n_samp], dists_with_limit[:self.n_samp], fluxes_with_limit[:self.n_samp], iter, droppedNum
+        return noisy_fluxes_with_limit[:self.n_samp], sdev_list_out[:self.n_samp], lums_with_limit[:self.n_samp], dists_with_limit[:self.n_samp], fluxes_with_limit[:self.n_samp], iter, droppedNum
 
-    def save_data_to_disk(self,lums,dists,fluxes,noisy_fluxes,with_limit=False):
+    def save_data_to_disk(self,lums,dists,fluxes,noisy_fluxes,sdev_list,with_limit=False):
         """
         This function saves the random distances, flux data
         and the related filtered noisy data to disk.
@@ -113,9 +125,9 @@ class SimLFUtil:
         n_fluxes_len = len(noisy_fluxes)
         noisy_fluxes_w_sdev = noisy_fluxes
         noisy_fluxes_w_sdev.shape = (1,n_fluxes_len)
-        sdev_array = np.linspace(self.sdev,self.sdev,n_fluxes_len)
-        sdev_array.shape = (1,n_fluxes_len)
-        noisy_fluxes_w_sdev = np.concatenate((noisy_fluxes_w_sdev.T,sdev_array.T),axis=1)
+        print sdev_list.shape
+        sdev_list.shape = (1,n_fluxes_len)
+        noisy_fluxes_w_sdev = np.concatenate((noisy_fluxes_w_sdev.T,sdev_list.T),axis=1)
         if with_limit:
             np.savetxt(self.data_dir + 'filtered_fluxes_w_G_noise_mu_' + str(self.mean) + '_sig_' + str(self.sdev) + '_fl_' + str(self.flux_limit) + '_cnt_' + str(self.n_samp) + '.dat', noisy_fluxes_w_sdev, fmt='%10.6e')
         else:
@@ -174,7 +186,7 @@ class SimLFUtil:
             print('Elapsed time of determining fluxes:', t1-t0)
             
             t0 = dt.datetime.today()
-            noisy_fluxes = self.noisy_flux_sample(fluxes)
+            noisy_fluxes, sdev_list = self.noisy_flux_sample(fluxes)
             t1 = dt.datetime.today()
             print('Elapsed time of determining filtered noisy fluxes:', t1-t0)
             
@@ -198,12 +210,12 @@ class SimLFUtil:
             print('Elapsed time of calculating statistics:', t1-t0)
             
             t0 = dt.datetime.today()
-            self.save_data_to_disk(lums,dists,fluxes,noisy_fluxes)
+            self.save_data_to_disk(lums,dists,fluxes,noisy_fluxes,sdev_list)
             t1 = dt.datetime.today()
             print('Elapsed time of data files writing:', t1-t0)
         else:
             t0 = dt.datetime.today()
-            noisy_fluxes_with_limit, lums_with_limit, dists_with_limit, fluxes_with_limit, iter, droppedNum = self.filtered_noisy_flux_samples_with_flux_limit()
+            noisy_fluxes_with_limit, sdev_list, lums_with_limit, dists_with_limit, fluxes_with_limit, iter, droppedNum = self.filtered_noisy_flux_samples_with_flux_limit()
             t1 = dt.datetime.today()
             print('Elapsed time of determining filtered noisy fluxes with flux limit:', t1-t0)
             print('Necessary iteration for it:', iter)
@@ -216,6 +228,6 @@ class SimLFUtil:
             print('Elapsed time of calculating statistics:', t1-t0)
             
             t0 = dt.datetime.today()
-            self.save_data_to_disk(lums_with_limit,dists_with_limit,fluxes_with_limit,noisy_fluxes_with_limit, True)
+            self.save_data_to_disk(lums_with_limit,dists_with_limit,fluxes_with_limit,noisy_fluxes_with_limit,sdev_list, True)
             t1 = dt.datetime.today()
             print('Elapsed time of data files writing:', t1-t0)

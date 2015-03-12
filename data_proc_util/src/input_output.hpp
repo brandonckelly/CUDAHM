@@ -13,6 +13,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <map>
 
 typedef std::vector<std::vector<double> > vecvec;
 
@@ -20,6 +21,9 @@ typedef std::vector<std::vector<double> > vecvec;
 class IDataAdapter
 {
 public:
+	// read settings file
+	virtual void read_settings(std::string& settingsfilename, std::map<std::string, std::string>& props) = 0;
+
 	// return the number of lines in a text file
 	virtual int get_file_lines(std::string& filename) = 0;
 

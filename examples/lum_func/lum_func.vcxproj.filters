@@ -24,6 +24,12 @@
     <ClInclude Include="src\LumFuncDist.cuh">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\NumIntegralCalc.cuh">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\UIncGamma.cuh">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\lumfunchm.cu">

@@ -36,6 +36,23 @@ cov = args.cov
 lower_scale_factor = args.lower_scale_factor
 upper_scale_factor = args.upper_scale_factor
 
+# Wider margins to allow for larger labels; may need to adjust left:
+rc('figure.subplot', bottom=.125, top=.95, right=.95)  # left=0.125
+
+# Optionally make default line width thicker:
+#rc('lines', linewidth=2.0) # doesn't affect frame lines
+
+rc('font', size=14)  # default for labels (not axis labels)
+rc('font', family='serif')  # default for labels (not axis labels)
+rc('axes', labelsize=18)
+rc('xtick.major', pad=8)
+rc('xtick', labelsize=14)
+rc('ytick.major', pad=8)
+rc('ytick', labelsize=14)
+
+rc('savefig', dpi=150)  # mpl's default dpi is 100
+rc('axes.formatter', limits=(-4,4))
+
 # Use TeX labels with CMR font:
 rc('text', usetex=True)
 rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
@@ -56,7 +73,8 @@ print 'Standard error of the mean of sample values of theta parameters: (%e,%e,%
 fig_log = figure(figsize=(15.75, 10))
 xlabel('$x$')
 ylabel('$p(x)$')
-tit = r'Init. values of $\theta$: (%5.4f,%e,%e); Iter. num.: %d; Obj. num.: %d;\\Means of $\theta$: (%5.4f,%e,%e);\\St. deviations of $\theta$: (%5.4f,%e,%e); St. error: (%e,%e,%e)' % (init_beta, init_lower_scale, init_upper_scale, iter_num, obj_num, mean_vec[0], mean_vec[1], mean_vec[2], std_vec[0], std_vec[1], std_vec[2], sem_vec[0], sem_vec[1], sem_vec[2])
+#tit = r'Init. values of $\theta$: (%5.4f,%e,%e); Iter. num.: %d; Obj. num.: %d;\\Means of $\theta$: (%5.4f,%e,%e);\\St. deviations of $\theta$: (%5.4f,%e,%e); St. error: (%e,%e,%e)' % (init_beta, init_lower_scale * lower_scale_factor, init_upper_scale * upper_scale_factor, iter_num, obj_num, mean_vec[0], mean_vec[1] * lower_scale_factor, mean_vec[2] * upper_scale_factor, std_vec[0], std_vec[1] * lower_scale_factor, std_vec[2] * lower_scale_factor, sem_vec[0], sem_vec[1], sem_vec[2])
+tit = r'Init. values of $\theta$: (%5.2f,%5.2e,%5.2e); Iter. num.: %d; Obj. num.: %d;' % (init_beta, init_lower_scale * lower_scale_factor, init_upper_scale * upper_scale_factor, iter_num, obj_num)
 fig_log.suptitle(tit, fontsize=18, fontweight='bold')
 
 xlog = np.logspace(8, 13, 300)
@@ -80,7 +98,7 @@ print 'Elapsed time of loading samples of theta parameters:', t1-t0
 
 t0 = dt.datetime.today()
 bb1_0 = BB1TruncPL(beta, lower_scale, upper_scale)
-lbl_0 = 'BB1 (%5.2f,%5.2f,%5.2f)' % (beta, lower_scale, upper_scale)
+lbl_0 = 'BB1 (%5.2f,%5.2e,%5.2e)' % (beta, lower_scale, upper_scale)
 pdf_0 = bb1_0.pdf(xlog)
 figure(fig_log.number)
 loglog(xlog, pdf_0, 'r-', linewidth=2, label=lbl_0, zorder=3)
@@ -104,6 +122,6 @@ print 'Count of accepted array elements: %d' % cnt_accept
 #plot_figs(theta_data[19][0], theta_data[19][1], theta_data[19][2], xlog, 'm')
 
 legend(loc=3)
-savefig('lumfunc_w_thetas.png',dpi=120)
+savefig('lumfunc_w_thetas.png')
 t1 = dt.datetime.today()
 print 'Elapsed time of generating figure of luminosity density function with samples of theta parameters:', t1-t0

@@ -24,6 +24,29 @@ public:
 	{
 	}
 
+	void read_settings(std::string& settingsfilename, std::map<std::string, std::string>& props)
+	{
+		std::string delimiter = "=";
+		std::ifstream input_file(settingsfilename.c_str());
+		std::string line;
+		if (input_file.good()) {
+			while (std::getline(input_file, line))
+			{
+				int pos = line.find(delimiter);
+				std::string propKey = line.substr(0, pos); // token is "scott"
+				std::string propValue = line.substr(pos + 1, line.length());
+				props[propKey] = propValue;
+			}
+			input_file.close();
+		}
+		else {
+			std::string errmsg("File ");
+			errmsg.append(settingsfilename);
+			errmsg.append(" does not exist.\n");
+			throw std::runtime_error(errmsg);
+		}
+	}
+
 	// return the number of lines in a text file
 	int get_file_lines(std::string& filename) 
 	{

@@ -1,0 +1,7 @@
+filename=
+distFilename=
+niter=100000
+rmax=4000.0
+fluxLimit=5.0
+sigma0=1.0
+sigCoef=0.01

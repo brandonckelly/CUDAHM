@@ -18,6 +18,8 @@
 #include "LumFuncPopPar.cuh"
 #include "LumFuncDaug.cuh"
 #include "LumFuncDist.cuh"
+#include "NumIntegralCalc.cuh"
+#include "UIncGamma.cuh"
 
 // known dimensions of features, characteristics and population parameter
 const int mfeat = 1;
@@ -125,18 +127,19 @@ extern __constant__ double c_theta[100];
 
 int main(int argc, char** argv)
 {
-	double rmax = 4000.0;
-	double fluxLimit = 5.0;
-	//For flux-unlimited case:
-	//double fluxLimit = -30.0;
-	double sigma0 = 1.0;
-	double sigCoef = 0.01;
 	clock_t begin = clock();
 	DistDataAdapter dataAdapter;
+	// The (first) argument contains the path and file name of configuration file
+	// where the parameters (e.g. flux data file, maximal distance) are found.
+	// Lines of configuration file conatin property name and value separated by '='
+	std::string settingsfilename(argv[1]);
+	std::map<std::string, std::string> props;
+	dataAdapter.read_settings(settingsfilename, props);
+
 	// allocate memory for measurement arrays
 	vecvec meas;
 	vecvec meas_unc;
-	std::string filename(argv[1]);
+	std::string filename(props["filename"]);
 	int ndata = dataAdapter.get_file_lines(filename);
 
 	//int ndata = 1000000;
@@ -145,12 +148,12 @@ int main(int argc, char** argv)
 	dataAdapter.read_data(filename, meas, meas_unc, ndata, mfeat, false);
 	std::cout << "Loaded " << ndata << " data points." << std::endl;
 
-	std::string distFilename(argv[2]);
+	std::string distFilename(props["distFilename"]);
 	std::vector<double> distData(ndata);
 	dataAdapter.load_dist_data(distFilename, distData, ndata);
 
 	// build the MCMC sampler
-	int niter = atoi(argv[3]);
+	int niter = std::stoi(props["niter"]);
 	int nburnin = niter / 2;
 	int nchi_samples = 100;  // only keep 100 samples for the chi values to control memory usage and avoid numerous reads from GPU
 	int nthin_chi = niter / nchi_samples;
@@ -159,12 +162,19 @@ int main(int argc, char** argv)
 	d_distData.resize(ndata);
 	thrust::copy(distData.begin(), distData.end(), d_distData.begin());
 	LumFuncDist LFDist(d_distData);
+	
+	double rmax = std::stod(props["rmax"]); //e.g. 4000.0
+	double fluxLimit = std::stod(props["fluxLimit"]); //e.g. 5.0 or for flux-unlimited case: -30.0
+	double sigma0 = std::stod(props["sigma0"]); //e.g. 1.0
+	double sigCoef = std::stod(props["sigCoef"]); //e.g. 0.01
+	UIncGamma uIncGamma;
+	NumIntegralCalc numIntegralCalc(uIncGamma, rmax, fluxLimit, sigma0, sigCoef);
 
 	// first create pointers to instantiated subclassed DataAugmentation and PopulationPar objects, since we need to give them to the
 	// constructor for the GibbsSampler class.
 	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > LFD(new LumFuncDaug<mfeat, pchi, dtheta>(meas, meas_unc, LFDist));
 	
-	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > LFPP(new LumFuncPopPar<mfeat, pchi, dtheta>(ndata, LFDist, rmax, fluxLimit, sigma0, sigCoef));
+	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > LFPP(new LumFuncPopPar<mfeat, pchi, dtheta>(ndata, LFDist, numIntegralCalc));
 
 	// instantiate the Metropolis-within-Gibbs sampler object
 	GibbsSampler<mfeat, pchi, dtheta> Sampler(LFD, LFPP, niter, nburnin, nthin_chi);

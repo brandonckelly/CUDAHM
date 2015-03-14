@@ -154,7 +154,7 @@ int main(int argc, char** argv)
 
 	// build the MCMC sampler
 	int niter = std::stoi(props["niter"]);
-	int nburnin = niter / 2;
+	int nburnin = std::stoi(props["nburnin"]);
 	int nchi_samples = 100;  // only keep 100 samples for the chi values to control memory usage and avoid numerous reads from GPU
 	int nthin_chi = niter / nchi_samples;
 

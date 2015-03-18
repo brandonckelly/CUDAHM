@@ -10,7 +10,7 @@
 
 #include "../../../mwg/src/parameters.cuh"
 #include "LumFuncDist.cuh"
-#include "NumIntegralCalc.cuh"
+#include "../lum_func_utils/src/NumIntegralCalc.cpp"
 
 typedef double(*pLogDensPopAux)(double*, double*, double);
 

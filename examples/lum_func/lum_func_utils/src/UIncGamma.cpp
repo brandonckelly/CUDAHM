@@ -13,8 +13,7 @@
 #ifndef UINCGAMMA_CUH_
 #define UINCGAMMA_CUH_
 
-// standard library includes
-#include <iostream>
+#include <math.h>
 
 // Euler–Mascheroni constant
 const double EulerMascheroniConst = 0.57721566490153286060;

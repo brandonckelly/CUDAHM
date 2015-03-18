@@ -18,8 +18,8 @@
 #include "LumFuncPopPar.cuh"
 #include "LumFuncDaug.cuh"
 #include "LumFuncDist.cuh"
-#include "NumIntegralCalc.cuh"
-#include "UIncGamma.cuh"
+#include "../lum_func_utils/src/NumIntegralCalc.cpp"
+#include "../lum_func_utils/src/UIncGamma.cpp"
 
 // known dimensions of features, characteristics and population parameter
 const int mfeat = 1;
@@ -155,8 +155,9 @@ int main(int argc, char** argv)
 	// build the MCMC sampler
 	int niter = std::stoi(props["niter"]);
 	int nburnin = std::stoi(props["nburnin"]);
-	int nchi_samples = 100;  // only keep 100 samples for the chi values to control memory usage and avoid numerous reads from GPU
+	int nchi_samples = std::stoi(props["nchi_samples"]);  // e.g. only keep 100 samples for the chi values to control memory usage and avoid numerous reads from GPU
 	int nthin_chi = niter / nchi_samples;
+	int nthin_theta = std::stoi(props["nthin_theta"]);
 
 	thrust::device_vector<double> d_distData;
 	d_distData.resize(ndata);
@@ -177,7 +178,7 @@ int main(int argc, char** argv)
 	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > LFPP(new LumFuncPopPar<mfeat, pchi, dtheta>(ndata, LFDist, numIntegralCalc));
 
 	// instantiate the Metropolis-within-Gibbs sampler object
-	GibbsSampler<mfeat, pchi, dtheta> Sampler(LFD, LFPP, niter, nburnin, nthin_chi);
+	GibbsSampler<mfeat, pchi, dtheta> Sampler(LFD, LFPP, niter, nburnin, nthin_chi, nthin_theta);
 
 	// launch the MCMC sampler
 	Sampler.Run();
@@ -190,7 +191,9 @@ int main(int argc, char** argv)
 
 	// write the sampled theta values to a file. Output will have nsamples rows and dtheta columns.
 	std::string thetafile("lumfunc_thetas.dat");
-	dataAdapter.write_thetas(thetafile, theta_samples, niter, dtheta);
+
+	int ntheta_samples = niter / nthin_theta;
+	dataAdapter.write_thetas(thetafile, theta_samples, ntheta_samples, dtheta);
 
 	// write the posterior means and standard deviations of the characteristics to a file. output will have ndata rows and
 	// 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.

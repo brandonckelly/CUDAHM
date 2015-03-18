@@ -1,8 +1,10 @@
 filename=
 distFilename=
-niter=100000
-nburnin=50000
+niter=200000
+nburnin=500000
+nchi_samples=100
+nthin_theta=20
 rmax=4000.0
-fluxLimit=5.0
+fluxLimit=0.5
 sigma0=1.0
 sigCoef=0.01

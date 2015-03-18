@@ -7,7 +7,7 @@
     </Filter>
     <Filter Include="Header Files">
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
     </Filter>
     <Filter Include="Resource Files">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
@@ -15,27 +15,11 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\LumFuncDaug.cuh">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\LumFuncPopPar.cuh">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\LumFuncDist.cuh">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <CudaCompile Include="src\lumfunchm.cu">
+    <ClCompile Include="src\NumIntegralCalc.cpp">
       <Filter>Source Files</Filter>
-    </CudaCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="data\dists_cnt_100000.dat">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="data\filtered_fluxes_w_G_noise_mu_0.0_sig_1e-10_cnt_100000.dat">
-      <Filter>Resource Files</Filter>
-    </None>
+    </ClCompile>
+    <ClCompile Include="src\UIncGamma.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

@@ -168,8 +168,9 @@ int main(int argc, char** argv)
 	double fluxLimit = std::stod(props["fluxLimit"]); //e.g. 5.0 or for flux-unlimited case: -30.0
 	double sigma0 = std::stod(props["sigma0"]); //e.g. 1.0
 	double sigCoef = std::stod(props["sigCoef"]); //e.g. 0.01
+	double erfLimit = std::stod(props["erfLimit"]); //e.g. 6.0
 	UIncGamma uIncGamma;
-	NumIntegralCalc numIntegralCalc(uIncGamma, rmax, fluxLimit, sigma0, sigCoef);
+	NumIntegralCalc numIntegralCalc(uIncGamma, rmax, fluxLimit, sigma0, sigCoef, erfLimit);
 
 	// first create pointers to instantiated subclassed DataAugmentation and PopulationPar objects, since we need to give them to the
 	// constructor for the GibbsSampler class.

@@ -137,9 +137,11 @@ double outerIntegrand(double r, void * params)
 class NumIntegralCalc
 {
 public:
-	NumIntegralCalc(UIncGamma& uIncGamma, double rmax, double fluxLimit, double sigma0, double sigCoef) : uIncGamma(uIncGamma), rmax(rmax), fluxLimit(fluxLimit),
+	NumIntegralCalc(UIncGamma& uIncGamma, double rmax, double fluxLimit, double sigma0, double sigCoef, double erfLimit) : uIncGamma(uIncGamma), rmax(rmax), fluxLimit(fluxLimit),
 		sigma0(sigma0), sigCoef(sigCoef)
 	{
+		double upperLimit = determineUpperLimit(fluxLimit, sigma0, sigCoef, erfLimit);
+		lumMax = upperLimit * rmax * rmax;
 	}
 
 	double determineLumFuncNormCnst(double beta, double lScale, double uScale)
@@ -156,9 +158,9 @@ public:
 		return coef;
 	}
 
-	double calculateLumFuncAndDistCommonCDF(double lumMax, double beta, double l, double u)
+	double calculateLumFuncAndDistCommonCDF(double lumMax, double beta, double l, double u, double lumFuncNormCnst)
 	{
-		double result = determineLumFuncNormCnst(beta, l, u) * u;
+		double result = lumFuncNormCnst * u;
 		double temp = tgamma(beta + 1.0) - uIncGamma.computeValue(beta + 1.0, lumMax / u);
 		temp += (uIncGamma.computeValue(beta + 1.0, lumMax * (1 / u + 1 / l)) - tgamma(beta + 1.0)) / pow(1 + u / l, beta + 1.0);
 		result *= temp;
@@ -226,17 +228,16 @@ public:
 			double reqRelError = 5e-6;
 			// The following works but it is a rough estimate:
 			//double lumMax = fluxLimit * 4.0 * M_PI * rmax * rmax;
-			double erfLimit = 6.0;
-			double upperLimit = determineUpperLimit(fluxLimit, sigma0, sigCoef, erfLimit);
-			double lumMax = upperLimit * 4.0 * M_PI * rmax * rmax;
+			
 			double params[8] = { parameters.beta, parameters.lScale, parameters.uScale, rmax, fluxLimit, sigma0, sigCoef, lumMax };
 			// Calculate integral with luminosity over (0.0, lumMax):
 			double xmin[2] = { 0.0, 0.0 }, xmax[2] = { lumMax, rmax }, val, err;
 			hcubature(1, lumIntegrandWithErf, &params, 2, xmin, xmax, 0, 0, reqRelError, ERROR_INDIVIDUAL, &val, &err);
-			double coef = (determineLumFuncNormCnst(parameters.beta, parameters.lScale, parameters.uScale) * 3.0) / (rmax * rmax * rmax);
+			double lumFuncNormCnst = determineLumFuncNormCnst(parameters.beta, parameters.lScale, parameters.uScale);
+			double coef = (lumFuncNormCnst * 3.0) / (rmax * rmax * rmax);
 			val *= coef;
 			// Calculate luminosity and distance common CDF:
-			double val2 = calculateLumFuncAndDistCommonCDF(lumMax, parameters.beta, parameters.lScale, parameters.uScale);
+			double val2 = calculateLumFuncAndDistCommonCDF(lumMax, parameters.beta, parameters.lScale, parameters.uScale, lumFuncNormCnst);
 			result = 1.0 + val - val2;
 		}
 		//clock_t end = clock();
@@ -250,6 +251,7 @@ private:
 	double fluxLimit;
 	double sigma0;
 	double sigCoef;
+	double lumMax;
 };
 
 #endif /* NUMINTEGRALCALC_CUH_ */

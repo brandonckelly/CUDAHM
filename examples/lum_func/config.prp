@@ -9,3 +9,5 @@ fluxLimit=0.5
 sigma0=1.0
 sigCoef=0.01
 erfLimit=6.0
+output_thetas=lumfunc_thetas.dat
+output_chis=lumfunc_chi_summary.dat

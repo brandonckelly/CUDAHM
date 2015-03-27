@@ -191,19 +191,15 @@ int main(int argc, char** argv)
 	std::cout << "Writing results to text files..." << std::endl;
 
 	// write the sampled theta values to a file. Output will have nsamples rows and dtheta columns.
-	std::string thetafile("lumfunc_thetas.dat");
+	std::string thetafile(props["output_thetas"]); //e.g. lumfunc_thetas.dat
 
 	int ntheta_samples = niter / nthin_theta;
 	dataAdapter.write_thetas(thetafile, theta_samples, ntheta_samples, dtheta);
 
 	// write the posterior means and standard deviations of the characteristics to a file. output will have ndata rows and
 	// 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
-	std::string chifile("lumfunc_chi_summary.dat");
+	std::string chifile(props["output_chis"]); //e.g. lumfunc_chi_summary.dat
 	dataAdapter.write_chis(chifile, chi_samples, nchi_samples, ndata, pchi);
-	std::string chifileMin("lumfunc_chi_min.dat");
-	std::string chifileMax("lumfunc_chi_max.dat");
-	std::string chifileMedian("lumfunc_chi_median.dat");
-	dataAdapter.write_relevant_chis(chifileMin, chifileMax, chifileMedian, chi_samples, nchi_samples, ndata);
 	clock_t end = clock();
 	double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
 	std::cout << "Elapsed time (in min)" << (elapsed_secs / 60.0) << std::endl;

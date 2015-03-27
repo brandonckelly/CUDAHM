@@ -209,21 +209,21 @@ public:
 			snorm_deviate[k] = snorm(rng);
 		}
 
-		if ((current_iter == 1) || (current_iter % 1000 == 0))
-		{
-			int cholfact_index = 0;
-			std::string line = "";
-			printf("%d cholfact:\n", current_iter);
-			for (int j = 0; j < dtheta; j++) {
-				for (int k = 0; k < (j + 1); k++) {
-					line += std::to_string(cholfact[cholfact_index]) + " ";
-					cholfact_index++;
-				}
-				line += "\n";
-				printf(line.c_str());
-				line = "";
-			}
-		}
+		//if ((current_iter == 1) || (current_iter % 1000 == 0))
+		//{
+		//	int cholfact_index = 0;
+		//	std::string line = "";
+		//	printf("%d cholfact:\n", current_iter);
+		//	for (int j = 0; j < dtheta; j++) {
+		//		for (int k = 0; k < (j + 1); k++) {
+		//			line += std::to_string(cholfact[cholfact_index]) + " ";
+		//			cholfact_index++;
+		//		}
+		//		line += "\n";
+		//		printf(line.c_str());
+		//		line = "";
+		//	}
+		//}
 
 		// transform unit proposal so that is has a multivariate normal distribution
 		hvector proposed_theta(dtheta);

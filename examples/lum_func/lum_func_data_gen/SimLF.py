@@ -25,7 +25,7 @@ args = parser.parse_args()
 tmp_r_max = args.r_max
 if(tmp_r_max==0.0):
   if(args.flux_limit != 0.0):
-    tmp_r_max = np.sqrt(np.exp(30.0)/(4.0 * np.pi * args.flux_limit))
+    tmp_r_max = np.sqrt(np.exp(32.0)/(4.0 * np.pi * args.flux_limit))
   else:
     tmp_r_max = 4000.0
 

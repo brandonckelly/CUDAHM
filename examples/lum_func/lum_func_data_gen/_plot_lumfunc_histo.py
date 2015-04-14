@@ -1,4 +1,4 @@
-# executing e.g. python _plot_lumfunc_histo_new.py -1.5 50000000000.0 5000000000000.0 fluxes_cnt_100000.dat lums_cnt_100000.dat dists_cnt_100000.dat 100000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --rmax 1121041.72243 --mu 0.000536477 --xlog_min 9.5 --xlog_max 13.0
+# executing e.g. python _plot_lumfunc_histo.py -1.5 50000000000.0 5000000000000.0 fluxes_cnt_100000.dat lums_cnt_100000.dat dists_cnt_100000.dat 100000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --rmax 1121041.72243 --mu 0.000536477 --xlog_min 10.0 --xlog_max 14.0
 
 import argparse as argp
 from bb1truncpl import BB1TruncPL
@@ -88,16 +88,16 @@ def integrand(r, lum):
 #figsize=(10, 10)
 fig_log = figure(figsize=(15.75, 10))
 xlabel(r'$L$')
-ylabel(r'$\phi(L|\theta)$ and $\phi^{T}(L|\theta)$')
-tit = r'Difference between lumfunc and lumfunc with sel. eff. (Obj. num.: %d)' % (obj_num)
-fig_log.suptitle(tit, fontsize=18, fontweight='bold')
+ylabel(r'$\phi(L | \theta)$ and $\phi^{T}(L | C, r, \theta)$')
+#tit = r'Difference between lumfunc and lumfunc with sel. eff. (Obj. num.: %d)' % (obj_num)
+#fig_log.suptitle(tit, fontsize=18, fontweight='bold')
 
 xlog = np.logspace(xlog_min, xlog_max, 300)
 
 t0 = dt.datetime.today()
 bb1_0 = BB1TruncPL(beta, lower_scale, upper_scale)
-lbl_0 = r'$\phi(L|\theta)$ (%5.2f,%5.2e,%5.2e)' % (beta, lower_scale, upper_scale)
-lbl_1 = r'$\phi^{T}(L|\theta)$ (%5.2f,%5.2e,%5.2e)' % (beta, lower_scale, upper_scale)
+lbl_0 = r'$\phi(L | \theta)$ (%5.2f,%5.2e,%5.2e)' % (beta, lower_scale, upper_scale)
+lbl_1 = r'$\phi^{T}(L | C, r, \theta)$ (%5.2f,%5.2e,%5.2e)' % (beta, lower_scale, upper_scale)
 pdf_0 = bb1_0.pdf(xlog)
 valsWSelEff = []
 for lumIdx in range(0, xlog.shape[0]):
@@ -116,7 +116,7 @@ xlim([10**xlog_min,10**xlog_max])
 ax.loglog(xlog, pdf_0, 'b--', linewidth=2, label=lbl_0, zorder=3)
 ax.loglog(xlog, valsWSelEff, 'r-', linewidth=2, label=lbl_1, zorder=3)
 
-lbl_2 = r'$4*\pi*T*r_{max}^2$'
+lbl_2 = r'$4\pi T r_{\max}^2$'
 ax.axvline(x = 4*np.pi*T*rmax**2, color='black', linewidth=3, label=lbl_2)
 
 #lbins_lums = np.logspace(np.log10(lum_data.min()),np.log10(lum_data.max()),n_bins+1)

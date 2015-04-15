@@ -17,10 +17,9 @@ noisy_flux_file = args.noisy_flux_file
 estimated_flux_file = args.estimated_flux_file
 n_regimes = args.n_regimes
 
-rc('figure', figsize=(16.5,10.5)) # default figure size in inches (8,6)
-
 # Wider margins to allow for larger labels; may need to adjust left:
-rc('figure.subplot', bottom=.125, top=.95, right=.95)  # left=0.125
+# This is a different setting because the original bottom is .125
+rc('figure.subplot', bottom=.225, top=.95, right=.95)  # left=0.125
 
 # Optionally make default line width thicker:
 #rc('lines', linewidth=2.0) # doesn't affect frame lines
@@ -86,30 +85,35 @@ ind = np.arange(n_regimes)  # the x locations for the groups
 width = 0.35       # the width of the bars
 
 fig, ax = subplots()
-#fig.set_size_inches(16.5,10.5)
-rects1 = ax.bar(ind, mse_max_like_list, width, color='b')
-rects2 = ax.bar(ind+width, mse_post_mean_list, width, color='r')
+
+ax.set_xlim([-0.3333, n_regimes])
+ax.set_ylim([0, max(max(mse_max_like_list), max(mse_post_mean_list))*1.25])
+
+rects1 = ax.bar(ind, mse_max_like_list, width, color='b', label = 'Max like')
+rects2 = ax.bar(ind+width, mse_post_mean_list, width, color='r', label = 'Post mean')
 
 # add some text for labels, title and axes ticks
-ax.set_ylabel('Mean Squared Error')
-ax.set_title('Comparison Mean Squared Error by Different Regimes')
+ax.set_ylabel('Mean Squared Errors')
+ax.set_title('Comparison Mean Squared Errors by Different Regimes')
 ax.set_xticks(ind+width)
 ax.set_xticklabels( regimes_text_list )
 
 # make font size of tick labels smaller and rotate it vertically:
 # based on http://stackoverflow.com/questions/6390393/matplotlib-make-tick-labels-font-size-smaller/11386056#11386056
 for tick in ax.xaxis.get_major_ticks():
-  tick.label.set_fontsize(10)
   tick.label.set_rotation('vertical')
 
-ax.legend( (rects1[0], rects2[0]), ('Max like', 'Post mean') )
+ax.legend(loc=2)  # upper left
+
+# based on: http://matplotlib.org/users/legend_guide.html#legend-location
+#ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.) # Place a legend to the right of this smaller figure.
 
 def autolabel(rects):
     # attach some text labels
     for rect in rects:
         height = rect.get_height()
-        ax.text(rect.get_x()+rect.get_width()/2., 1.05*height, '%d'%int(height),
-                ha='center', va='bottom')
+        ax.text(rect.get_x()+rect.get_width()/2., 0.5 + height, '%5.5f'%float(height),
+                ha='center', va='bottom', size='small', rotation = 'vertical')
 
 autolabel(rects1)
 autolabel(rects2)

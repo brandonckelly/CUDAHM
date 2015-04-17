@@ -151,6 +151,8 @@ private:
 		{
 			result = bList[idx] / (x + aList[idx] + result);
 		}
+		delete[] aList;
+		delete[] bList;
 		return result;
 	}
 

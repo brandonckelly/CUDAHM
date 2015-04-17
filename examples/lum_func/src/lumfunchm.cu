@@ -26,6 +26,10 @@ const int mfeat = 1;
 const int pchi = 1;  // chi = flux
 const int dtheta = 3;
 
+__constant__ double c_fluxLimit;
+__constant__ double c_sigma0;
+__constant__ double c_sigCoef;
+
 // compute the conditional log-posterior density of the measurements given the characteristic
 __device__
 double LogDensityMeas(double* chi, double* meas, double* meas_unc)
@@ -81,13 +85,14 @@ double dist, double chiElem)
 {
 	double scaledUpLScale = lScale * 1.0e10;
 	double scaledUpUScale = uScale * 1.0e12;
-	double logCoef = determineCoef(beta, scaledUpLScale, scaledUpUScale);
 	double result;
 	double x = 4 * CR_CUDART_PI * dist * dist * chiElem;
 	if (x > 0.0)
 	{
 		double logChiDependentPart = log(1 - exp(-x / scaledUpLScale)) + beta * (log(x) - log(scaledUpUScale)) - (x / scaledUpUScale);
-		result = logCoef + logChiDependentPart;
+		double logCoef = determineCoef(beta, scaledUpLScale, scaledUpUScale);
+		//double logEta = log(0.5 + 0.5*erf((chiElem - c_fluxLimit) / sqrt(2.0*(c_sigma0*c_sigma0 + c_sigCoef*c_sigCoef*chiElem*chiElem))));
+		result = logCoef + logChiDependentPart/* + logEta*/;
 	}
 	else
 	{
@@ -172,34 +177,29 @@ int main(int argc, char** argv)
 	UIncGamma uIncGamma;
 	NumIntegralCalc numIntegralCalc(uIncGamma, rmax, fluxLimit, sigma0, sigCoef, erfLimit);
 
+	CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_fluxLimit, &fluxLimit, sizeof(double)));
+	CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_sigma0, &sigma0, sizeof(double)));
+	CUDA_CHECK_RETURN(cudaMemcpyToSymbol(c_sigCoef, &sigCoef, sizeof(double)));
+
 	// first create pointers to instantiated subclassed DataAugmentation and PopulationPar objects, since we need to give them to the
 	// constructor for the GibbsSampler class.
 	boost::shared_ptr<DataAugmentation<mfeat, pchi, dtheta> > LFD(new LumFuncDaug<mfeat, pchi, dtheta>(meas, meas_unc, LFDist));
 	
 	boost::shared_ptr<PopulationPar<mfeat, pchi, dtheta> > LFPP(new LumFuncPopPar<mfeat, pchi, dtheta>(ndata, LFDist, numIntegralCalc));
 
-	// instantiate the Metropolis-within-Gibbs sampler object
-	GibbsSampler<mfeat, pchi, dtheta> Sampler(LFD, LFPP, niter, nburnin, nthin_chi, nthin_theta);
-
-	// launch the MCMC sampler
-	Sampler.Run();
-
-	// grab the samples
-	const double * theta_samples = Sampler.GetPopSamples();
-	const double * chi_samples = Sampler.GetCharSamples();
-
-	std::cout << "Writing results to text files..." << std::endl;
-
 	// write the sampled theta values to a file. Output will have nsamples rows and dtheta columns.
 	std::string thetafile(props["output_thetas"]); //e.g. lumfunc_thetas.dat
-
-	int ntheta_samples = niter / nthin_theta;
-	dataAdapter.write_thetas(thetafile, theta_samples, ntheta_samples, dtheta);
 
 	// write the posterior means and standard deviations of the characteristics to a file. output will have ndata rows and
 	// 2 * pchi columns, where the column format is posterior mean 1, posterior sigma 1, posterior mean 2, posterior sigma 2, etc.
 	std::string chifile(props["output_chis"]); //e.g. lumfunc_chi_summary.dat
-	dataAdapter.write_chis(chifile, chi_samples, nchi_samples, ndata, pchi);
+
+	// instantiate the Metropolis-within-Gibbs sampler object
+	GibbsSamplerWithCompactMemoryUsage<mfeat, pchi, dtheta> Sampler(LFD, LFPP, niter, nburnin, thetafile, chifile, nthin_chi, nthin_theta);
+
+	// launch the MCMC sampler
+	Sampler.Run();
+	
 	clock_t end = clock();
 	double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
 	std::cout << "Elapsed time (in min)" << (elapsed_secs / 60.0) << std::endl;

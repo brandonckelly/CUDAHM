@@ -1,4 +1,4 @@
-# executing e.g. python plot_lumfunc_w_thetas.py -1.5 1.0 100.0 -0.5 50.001 60.0001 500000 1000 (--cov 1000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0)
+# executing e.g. python plot_lumfunc_w_thetas.py lumfunc_thetas.dat -1.5 1.0 100.0 -0.5 50.001 60.0001 500000 500000 1000 (--cov 1000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0)
 import argparse as argp
 from bb1truncpl import BB1TruncPL
 import numpy as np
@@ -11,12 +11,14 @@ from scipy import stats
 t0 = dt.datetime.today()
 
 parser = argp.ArgumentParser()
+parser.add_argument("file", help="The file name of theta data file.", type = str)
 parser.add_argument("beta", help="The beta parameter of 'Break-By-1 Truncated Power Law'", type=float)
 parser.add_argument("lower_scale", help="The lower scale of 'Break-By-1 Truncated Power Law'", type=float)
 parser.add_argument("upper_scale", help="The upper scale of 'Break-By-1 Truncated Power Law'", type=float)
 parser.add_argument("init_beta", help="The initial beta parameter value of MCMC method", type=float)
 parser.add_argument("init_lower_scale", help="The initial lower scale of MCMC method", type=float)
 parser.add_argument("init_upper_scale", help="The initial upper scale of MCMC method", type=float)
+parser.add_argument("burnin_num", help="The iteration number of burn-in of MCMC method", type=int)
 parser.add_argument("iter_num", help="The iteration number of MCMC method", type=int)
 parser.add_argument("obj_num", help="The object number of MCMC method", type=int)
 parser.add_argument("--cov", default = 10000, help="The value of this number determines, how many BB1 with samples of parameters theta will be plotted", type=int)
@@ -24,12 +26,14 @@ parser.add_argument("--lower_scale_factor", default = 1.0, help="The factor whic
 parser.add_argument("--upper_scale_factor", default = 1.0, help="The factor which scales up the upper scale samples", type=float)
 
 args = parser.parse_args()
+file = args.file
 beta = args.beta
 lower_scale = args.lower_scale
 upper_scale = args.upper_scale
 init_beta = args.init_beta
 init_lower_scale = args.init_lower_scale
 init_upper_scale = args.init_upper_scale
+burnin_num = args.burnin_num
 iter_num = args.iter_num
 obj_num = args.obj_num
 cov = args.cov 
@@ -59,7 +63,7 @@ rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
 
 #theta_data=np.loadtxt('lumfunc_thetas.dat',delimiter=' ',dtype=[('f0',np.float32),('f1',np.float32),('f2',np.float32)])
 
-theta_data=np.loadtxt('lumfunc_thetas.dat',delimiter=' ',usecols=(0,1,2))
+theta_data=np.loadtxt(file,delimiter=' ',usecols=(0,1,2))
 
 mean_vec = np.mean(theta_data, axis = 0)
 std_vec = np.std(theta_data, axis = 0)
@@ -74,7 +78,7 @@ fig_log = figure(figsize=(15.75, 10))
 xlabel('$x$')
 ylabel('$p(x)$')
 #tit = r'Init. values of $\theta$: (%5.4f,%e,%e); Iter. num.: %d; Obj. num.: %d;\\Means of $\theta$: (%5.4f,%e,%e);\\St. deviations of $\theta$: (%5.4f,%e,%e); St. error: (%e,%e,%e)' % (init_beta, init_lower_scale * lower_scale_factor, init_upper_scale * upper_scale_factor, iter_num, obj_num, mean_vec[0], mean_vec[1] * lower_scale_factor, mean_vec[2] * upper_scale_factor, std_vec[0], std_vec[1] * lower_scale_factor, std_vec[2] * lower_scale_factor, sem_vec[0], sem_vec[1], sem_vec[2])
-tit = r'Init. values of $\theta$: (%5.2f,%5.2e,%5.2e); Iter. num.: %d; Obj. num.: %d;' % (init_beta, init_lower_scale * lower_scale_factor, init_upper_scale * upper_scale_factor, iter_num, obj_num)
+tit = r'Init. values of $\theta$: (%5.2f,%5.2e,%5.2e); Burn-in num.: %d; Iter. num.: %d; Obj. num.: %d;' % (init_beta, init_lower_scale * lower_scale_factor, init_upper_scale * upper_scale_factor, burnin_num, iter_num, obj_num)
 fig_log.suptitle(tit, fontsize=18, fontweight='bold')
 
 xlog = np.logspace(8, 13, 300)

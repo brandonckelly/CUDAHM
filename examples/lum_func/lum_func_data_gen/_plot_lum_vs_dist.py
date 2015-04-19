@@ -60,13 +60,12 @@ xlabel(r'Distance ($r$)')
 ylabel(r'Log-luminosity ($\log(L)$)')
 
 #lbl_1 = 'distance vs log-luminosity'
-ax.scatter(dist_data, lumVals, c='r', marker='.', linewidth=0, alpha=0.1)
+ax.scatter(dist_data, lumVals, c='r', marker='.', linewidth=0, alpha=0.2)
 lbl_2 = r'$\log(4\pi T r^2)$'
 ax.plot(distRange, limitLumVals, zorder=3, linewidth=4, c='b', label=lbl_2)
-lbl_3 = r'$\log(4\pi T r_{\max}^2)$'
-ax.axhline(y = np.log(4*np.pi*T*rmax**2), linewidth=4, color='g', label=lbl_3)
 
 ax.set_xlim([0, rmax])
+ax.set_ylim([22, 33])
 #ax.set_yscale('log')
 
 legend(loc=0)

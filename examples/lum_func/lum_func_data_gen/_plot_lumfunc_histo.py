@@ -113,18 +113,12 @@ figure(fig_log.number)
 ax = fig_log.add_subplot(1,1,1) # one row, one column, first plot
 
 xlim([10**xlog_min,10**xlog_max])
-ax.loglog(xlog, pdf_0, 'b--', linewidth=2, label=lbl_0, zorder=3)
+ax.loglog(xlog, pdf_0, 'g-', linewidth=2, label=lbl_0, zorder=3)
 ax.loglog(xlog, valsWSelEff, 'r-', linewidth=2, label=lbl_1, zorder=3)
-
-lbl_2 = r'$4\pi T r_{\max}^2$'
-ax.axvline(x = 4*np.pi*T*rmax**2, color='black', linewidth=3, label=lbl_2)
 
 #lbins_lums = np.logspace(np.log10(lum_data.min()),np.log10(lum_data.max()),n_bins+1)
 #figure(fig_log.number)
-ax.hist(lum_data, bins=xlog, label='luminosity sample data', log=True, normed=True)
-
-ax2 = fig_log.add_subplot(1,1,1) # one row, one column, first plot
-ax2.fill_between(xlog, pdf_0, valsWSelEff, facecolor='cyan', alpha=0.5)
+ax.hist(lum_data, bins=xlog, label='luminosity sample data', log=True, normed=True, edgecolor='blue')
 
 legend(loc=0)
 savefig('_lumfunc_histo.png')

@@ -56,8 +56,8 @@ for dist in distRange:
 
 fig_log = figure(figsize=(15.75, 10))
 ax = fig_log.add_subplot(1,1,1) # one row, one column, first plot
-xlabel(r'Distance ($r$)')
-ylabel(r'Log-luminosity ($\log(L)$)')
+xlabel(r'$r$')
+ylabel(r'$\log(L)$')
 
 #lbl_1 = 'distance vs log-luminosity'
 ax.scatter(dist_data, lumVals, c='r', marker='.', linewidth=0, alpha=0.2)

@@ -65,16 +65,19 @@ x = np.array(real_est_diff_data, float)
 
 xlin = np.linspace(x.min(), x.max(), 300)
 
-hist(real_filt_diff_data, bins=xlin, label='real-noisy flux diff', log=False, normed=True, color = 'b')
-hist(real_est_diff_data, bins=xlin, label='real-estim flux diff', log=False, normed=True, color = 'g')
+fig, ax = subplots()
+tit = r'Histogram of real-noisy-estimated fluxes'
+ax.set_title(tit)
+
+ax.hist(real_filt_diff_data, bins=xlin, label='real-noisy flux diff', log=False, normed=True, color = 'b')
+ax.hist(real_est_diff_data, bins=xlin, label='real-estim flux diff', log=False, normed=True, color = 'g')
 
 mu = 0.0
 sig = 1.0
 pdf_norm = norm(loc = mu, scale = sig).pdf(xlin)
-plot(xlin, pdf_norm, 'r')
+ax.plot(xlin, pdf_norm, 'r')
 
-suptitle("Histogram of real-noisy-estimated fluxes")
-legend(loc=0)
+ax.legend(loc=0)
 savefig('flux_histo.png')
 t1 = dt.datetime.today()
 print 'Elapsed time of generating figure of flux difference histogram:', t1-t0

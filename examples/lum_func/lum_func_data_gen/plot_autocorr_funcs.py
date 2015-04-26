@@ -61,8 +61,7 @@ tit_upperscale = 'upper scale'
 lbl_k = 'k'
 lbl_autocorr = 'kth order autocorrelation'
 
-fig = figure(figsize=(15.75, 10))
-ax = fig.add_subplot(1,1,1) # one row, one column, first plot
+fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_beta)),autocorrfn_beta, marker = ".", linewidth=0.01)
 ax.axhline(color='r')
 ax.axvline(color='r')
@@ -70,12 +69,11 @@ ax.axvline(color='r')
 ax.set_xlabel(lbl_k)
 ax.set_ylabel(lbl_autocorr)
 
-fig.suptitle(tit_beta, fontsize=18, fontweight='bold')
+ax.set_title(tit_beta)
 
 savefig(prefix + 'beta.png')
 
-fig = figure(figsize=(15.75, 10))
-ax = fig.add_subplot(1,1,1) # one row, one column, first plot
+fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_l)),autocorrfn_l, marker = ".", linewidth=0.01)
 ax.axhline(color='r')
 ax.axvline(color='r')
@@ -83,12 +81,11 @@ ax.axvline(color='r')
 ax.set_xlabel(lbl_k)
 ax.set_ylabel(lbl_autocorr)
 
-fig.suptitle(tit_lowerscale, fontsize=18, fontweight='bold')
+ax.set_title(tit_lowerscale)
 
 savefig(prefix + 'lowerscale.png')
 
-fig = figure(figsize=(15.75, 10))
-ax = fig.add_subplot(1,1,1) # one row, one column, first plot
+fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_u)),autocorrfn_u, marker = ".", linewidth=0.01)
 ax.axhline(color='r')
 ax.axvline(color='r')
@@ -96,6 +93,6 @@ ax.axvline(color='r')
 ax.set_xlabel(lbl_k)
 ax.set_ylabel(lbl_autocorr)
 
-fig.suptitle(tit_upperscale, fontsize=18, fontweight='bold')
+ax.set_title(tit_upperscale)
 
 savefig(prefix + 'upperscale.png')

@@ -73,16 +73,13 @@ print 'Mean of samples of theta parameters: (%5.4f,%5.4f,%5.4f)' % (mean_vec[0],
 print 'Standard deviation of samples of theta parameters: (%5.4f,%5.4f,%5.4f)' % (std_vec[0], std_vec[1], std_vec[2])
 print 'Standard error of the mean of sample values of theta parameters: (%e,%e,%e)' % (sem_vec[0], sem_vec[1], sem_vec[2])
 
-#figsize=(10, 10)
-fig_log = figure(figsize=(15.75, 10))
-xlabel('$x$')
-ylabel('$p(x)$')
-#tit = r'Init. values of $\theta$: (%5.4f,%e,%e); Iter. num.: %d; Obj. num.: %d;\\Means of $\theta$: (%5.4f,%e,%e);\\St. deviations of $\theta$: (%5.4f,%e,%e); St. error: (%e,%e,%e)' % (init_beta, init_lower_scale * lower_scale_factor, init_upper_scale * upper_scale_factor, iter_num, obj_num, mean_vec[0], mean_vec[1] * lower_scale_factor, mean_vec[2] * upper_scale_factor, std_vec[0], std_vec[1] * lower_scale_factor, std_vec[2] * lower_scale_factor, sem_vec[0], sem_vec[1], sem_vec[2])
-tit = r'Init. values of $\theta$: (%5.2f,%5.2e,%5.2e); Burn-in num.: %d; Iter. num.: %d; Obj. num.: %d;' % (init_beta, init_lower_scale * lower_scale_factor, init_upper_scale * upper_scale_factor, burnin_num, iter_num, obj_num)
-fig_log.suptitle(tit, fontsize=18, fontweight='bold')
+fig, ax = subplots()
+ax.set_xlabel(r'$L$')
+ax.set_ylabel(r'$\phi(L ; \theta)$')
+tit = r'Luminosity density function with true $\theta$ and samples from MCMC'
+ax.set_title(tit)
 
 xlog = np.logspace(8, 13, 300)
-#xlin = np.linspace(0.001, 300., 500)
 
 # Helper for plotting BB1 with samples of theta parameters:
 def plot_figs(idx, xlog, c):
@@ -91,27 +88,18 @@ def plot_figs(idx, xlog, c):
     smp_u = theta_data[idx][2] * upper_scale_factor
     bb1 = BB1TruncPL(smp_beta, smp_l, smp_u)
     pdf = bb1.pdf(xlog)
-    figure(fig_log.number)
-    #alpha=.01, linewidth=0.5
     #the green colored line belongs to the latest theta from iterations.
     red_rate = (1.0 - idx/float(theta_data.shape[0]))
-    loglog(xlog, pdf, color=(red_rate*1.0,1.0,0.0), alpha=.01, linewidth=0.5, zorder=1)
+    ax.loglog(xlog, pdf, color=(red_rate*1.0,1.0,0.0), alpha=.01, linewidth=0.5, zorder=1)
 
 t1 = dt.datetime.today()
 print 'Elapsed time of loading samples of theta parameters:', t1-t0
 
 t0 = dt.datetime.today()
 bb1_0 = BB1TruncPL(beta, lower_scale, upper_scale)
-lbl_0 = 'BB1 (%5.2f,%5.2e,%5.2e)' % (beta, lower_scale, upper_scale)
+lbl_0 = r'$\phi(L ; \theta)$ where true $\theta=(%5.2f,%5.2e,%5.2e)$' % (beta, lower_scale, upper_scale)
 pdf_0 = bb1_0.pdf(xlog)
-figure(fig_log.number)
-loglog(xlog, pdf_0, 'r-', linewidth=2, label=lbl_0, zorder=3)
-
-#bb1_1 = BB1TruncPL(mean_vec[0], mean_vec[1], mean_vec[2])
-#lbl_1 = 'Mean BB1 (%5.2f,%5.2f,%5.2f)' % (mean_vec[0], mean_vec[1], mean_vec[2])
-#pdf_1 = bb1_1.pdf(xlog)
-#figure(fig_log.number)
-#loglog(xlog, pdf_1, 'm-', linewidth=2, label=lbl_1, zorder=2)
+ax.loglog(xlog, pdf_0, 'r-', linewidth=2, label=lbl_0, zorder=3)
 
 u_array = np.random.uniform(size=theta_data.shape[0])
 accept_rate = cov/float(theta_data.shape[0])
@@ -123,9 +111,8 @@ for idx in range(0, theta_data.shape[0]):
 		cnt_accept += 1
 
 print 'Count of accepted array elements: %d' % cnt_accept
-#plot_figs(theta_data[19][0], theta_data[19][1], theta_data[19][2], xlog, 'm')
 
-legend(loc=3)
+ax.legend(loc=3)  # lower left
 savefig('lumfunc_w_thetas.png')
 t1 = dt.datetime.today()
 print 'Elapsed time of generating figure of luminosity density function with samples of theta parameters:', t1-t0

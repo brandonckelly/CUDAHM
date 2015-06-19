@@ -45,26 +45,7 @@ mu = args.mu
 xlog_min = args.xlog_min
 xlog_max = args.xlog_max
 
-# Wider margins to allow for larger labels; may need to adjust left:
-rc('figure.subplot', bottom=.125, top=.95, right=.95)  # left=0.125
-
-# Optionally make default line width thicker:
-#rc('lines', linewidth=2.0) # doesn't affect frame lines
-
-rc('font', size=14)  # default for labels (not axis labels)
-rc('font', family='serif')  # default for labels (not axis labels)
-rc('axes', labelsize=18)
-rc('xtick.major', pad=8)
-rc('xtick', labelsize=14)
-rc('ytick.major', pad=8)
-rc('ytick', labelsize=14)
-
-rc('savefig', dpi=150)  # mpl's default dpi is 100
-rc('axes.formatter', limits=(-4,4))
-
-# Use TeX labels with CMR font:
-rc('text', usetex=True)
-rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
+execfile("rc_settings.py")
 
 flux_data=np.loadtxt(flux_file)
 dist_data=np.loadtxt(dist_file)
@@ -85,10 +66,9 @@ def integrand(r, lum):
 #    res = np.power(4000.0/r, 3) * np.power(5.0/x, 1.5)
     return res
 
-#figsize=(10, 10)
-fig_log = figure(figsize=(15.75, 10))
+fig_log, ax =  subplots()
 xlabel(r'$L$')
-ylabel(r'$\phi(L | \theta)$ and $\phi^{T}(L | C, r, \theta)$')
+ylabel(r'$\phi(L ; \theta)$ and $\phi^{T}(L ; C, r, \theta)$')
 #tit = r'Difference between lumfunc and lumfunc with sel. eff. (Obj. num.: %d)' % (obj_num)
 #fig_log.suptitle(tit, fontsize=18, fontweight='bold')
 
@@ -96,8 +76,8 @@ xlog = np.logspace(xlog_min, xlog_max, 300)
 
 t0 = dt.datetime.today()
 bb1_0 = BB1TruncPL(beta, lower_scale, upper_scale)
-lbl_0 = r'$\phi(L | \theta)$ (%5.2f,%5.2e,%5.2e)' % (beta, lower_scale, upper_scale)
-lbl_1 = r'$\phi^{T}(L | C, r, \theta)$ (%5.2f,%5.2e,%5.2e)' % (beta, lower_scale, upper_scale)
+lbl_0 = r'$\phi(L ; \theta)$ (%5.2f,%5.2e,%5.2e)' % (beta, lower_scale, upper_scale)
+lbl_1 = r'$\phi^{T}(L ; C, r, \theta)$ (%5.2f,%5.2e,%5.2e)' % (beta, lower_scale, upper_scale)
 pdf_0 = bb1_0.pdf(xlog)
 valsWSelEff = []
 for lumIdx in range(0, xlog.shape[0]):
@@ -109,8 +89,6 @@ for lumIdx in range(0, xlog.shape[0]):
 
 print xlog[200], ' ', pdf_0[200]
 #pdf_1 = np.multiply(pdf_0,0.956104)
-figure(fig_log.number)
-ax = fig_log.add_subplot(1,1,1) # one row, one column, first plot
 
 xlim([10**xlog_min,10**xlog_max])
 ax.loglog(xlog, pdf_0, 'g-', linewidth=2, label=lbl_0, zorder=3)
@@ -118,7 +96,7 @@ ax.loglog(xlog, valsWSelEff, 'r-', linewidth=2, label=lbl_1, zorder=3)
 
 #lbins_lums = np.logspace(np.log10(lum_data.min()),np.log10(lum_data.max()),n_bins+1)
 #figure(fig_log.number)
-ax.hist(lum_data, bins=xlog, label='luminosity sample data', log=True, normed=True, edgecolor='blue')
+ax.hist(lum_data, bins=xlog, label='luminosity sample data', log=True, normed=True, color=(0.5,0.5,1.0), edgecolor=(0.5,0.5,1.0))
 
 legend(loc=0)
 savefig('_lumfunc_histo.png')

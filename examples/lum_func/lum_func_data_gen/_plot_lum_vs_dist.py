@@ -41,7 +41,7 @@ xlabel(r'$r$')
 ylabel(r'$\log(L)$')
 
 #lbl_1 = 'distance vs log-luminosity'
-ax.scatter(dist_data, lumVals, c='r', marker='.', linewidth=0, alpha=0.1)
+ax.scatter(dist_data, lumVals, c='r', marker='.', linewidth=0, alpha=0.015)
 lbl_2 = r'$\log(4\pi T r^2)$'
 ax.plot(distRange, limitLumVals, zorder=3, linewidth=4, c='b', label=lbl_2)
 
@@ -50,7 +50,7 @@ ax.set_ylim([22, 33])
 #ax.set_yscale('log')
 
 legend(loc=0)
-savefig('_lum_vs_dist.png')
+savefig('_lum_vs_dist.pdf', format='pdf')
 
 t1 = dt.datetime.today()
 print 'Elapsed time of generating figure of luminosity density function with noisy flux data:', t1-t0

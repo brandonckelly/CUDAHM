@@ -46,6 +46,7 @@ xlog_min = args.xlog_min
 xlog_max = args.xlog_max
 
 execfile("rc_settings.py")
+rc('font', size=20)  # default for labels (not axis labels)
 
 flux_data=np.loadtxt(flux_file)
 dist_data=np.loadtxt(dist_file)
@@ -98,7 +99,7 @@ ax.loglog(xlog, valsWSelEff, 'r-', linewidth=2, label=lbl_1, zorder=3)
 #figure(fig_log.number)
 ax.hist(lum_data, bins=xlog, label='luminosity sample data', log=True, normed=True, color=(0.5,0.5,1.0), edgecolor=(0.5,0.5,1.0))
 
-legend(loc=0)
-savefig('_lumfunc_histo.png')
+legend(loc=3)
+savefig('_lumfunc_histo.pdf', format='pdf')
 t1 = dt.datetime.today()
 print 'Elapsed time of generating figure of luminosity density function with noisy flux data:', t1-t0

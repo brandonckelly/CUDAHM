@@ -13,26 +13,7 @@ file = args.file
 prefix = args.prefix
 until = int(args.until)
 
-# Wider margins to allow for larger labels; may need to adjust left:
-rc('figure.subplot', bottom=.125, top=.95, right=.95)  # left=0.125
-
-# Optionally make default line width thicker:
-#rc('lines', linewidth=2.0) # doesn't affect frame lines
-
-rc('font', size=14)  # default for labels (not axis labels)
-rc('font', family='serif')  # default for labels (not axis labels)
-rc('axes', labelsize=18)
-rc('xtick.major', pad=8)
-rc('xtick', labelsize=14)
-rc('ytick.major', pad=8)
-rc('ytick', labelsize=14)
-
-rc('savefig', dpi=150)  # mpl's default dpi is 100
-rc('axes.formatter', limits=(-4,4))
-
-# Use TeX labels with CMR font:
-rc('text', usetex=True)
-rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
+execfile("rc_settings.py")
 
 def autocorr(k, n, data, idx):
     m_data = np.mean(data, axis = 0)[idx]
@@ -64,35 +45,32 @@ lbl_autocorr = 'kth order autocorrelation'
 fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_beta)),autocorrfn_beta, marker = ".", linewidth=0.01)
 ax.axhline(color='r')
-ax.axvline(color='r')
 
 ax.set_xlabel(lbl_k)
 ax.set_ylabel(lbl_autocorr)
-
+ax.set_xlim([0.0,len(autocorrfn_beta)])
 ax.set_title(tit_beta)
 
-savefig(prefix + 'beta.png')
+savefig(prefix + 'beta.pdf', format='pdf')
 
 fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_l)),autocorrfn_l, marker = ".", linewidth=0.01)
 ax.axhline(color='r')
-ax.axvline(color='r')
 
 ax.set_xlabel(lbl_k)
 ax.set_ylabel(lbl_autocorr)
-
+ax.set_xlim([0.0,len(autocorrfn_l)])
 ax.set_title(tit_lowerscale)
 
-savefig(prefix + 'lowerscale.png')
+savefig(prefix + 'lowerscale.pdf', format='pdf')
 
 fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_u)),autocorrfn_u, marker = ".", linewidth=0.01)
 ax.axhline(color='r')
-ax.axvline(color='r')
 
 ax.set_xlabel(lbl_k)
 ax.set_ylabel(lbl_autocorr)
-
+ax.set_xlim([0.0,len(autocorrfn_u)])
 ax.set_title(tit_upperscale)
 
-savefig(prefix + 'upperscale.png')
+savefig(prefix + 'upperscale.pdf', format='pdf')

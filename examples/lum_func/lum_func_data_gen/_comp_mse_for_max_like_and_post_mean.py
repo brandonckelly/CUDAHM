@@ -21,7 +21,7 @@ execfile("rc_settings.py")
 
 # Wider margins to allow for larger labels; may need to adjust left:
 # This is a different setting because the original bottom is .125
-rc('figure.subplot', bottom=.175, top=.95, right=.95)  # left=0.125
+rc('figure.subplot', bottom=.2, top=.95, right=.95, left=0.125)  # left=0.125
 
 real_flux_data=np.loadtxt(real_flux_file)
 noisy_flux_data=np.loadtxt(noisy_flux_file,delimiter=' ',usecols=(0,1))
@@ -78,7 +78,7 @@ rects2 = ax.bar(ind+width, mse_post_mean_list, width, color='r', label = 'Post m
 
 # add some text for labels, title and axes ticks
 ax.set_ylabel('Mean Squared Errors')
-ax.set_title('Comparison Mean Squared Errors by Different Regimes')
+#ax.set_title('Comparison Mean Squared Errors by Different Regimes')
 ax.set_xticks(ind+width)
 ax.set_xticklabels( regimes_text_list )
 
@@ -103,4 +103,4 @@ autolabel(rects1)
 autolabel(rects2)
 
 #legend(loc=0)
-savefig('comp_mse_for_max_like_and_post_mean.png')
+savefig('comp_mse_for_max_like_and_post_mean.pdf', format='pdf')

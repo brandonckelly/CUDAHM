@@ -1,4 +1,4 @@
-# executing e.g. python plot_lumfunc_w_thetas.py lumfunc_thetas_2.dat -1.5 50000000000.0 5000000000000.0 -1.41 4.0 5.8 -1.5564 7.3222 5.7207 1500000 1500000 100000 (--cov 1000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0)
+# executing e.g. python plot_lumfunc_w_thetas.py lumfunc_thetas_2.dat -1.5 50000000000.0 5000000000000.0 -1.41 4.0 5.8 -1.5564 7.3222 5.7207 1500000 1500000 100000 (--cov 1000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --pdf_format False)
 import argparse as argp
 from bb1truncpl import BB1TruncPL
 import numpy as np
@@ -27,6 +27,7 @@ parser.add_argument("obj_num", help="The object number of MCMC method", type=int
 parser.add_argument("--cov", default = 10000, help="The value of this number determines, how many BB1 with samples of parameters theta will be plotted", type=int)
 parser.add_argument("--lower_scale_factor", default = 1.0, help="The factor which scales up the lower scale samples", type=float)
 parser.add_argument("--upper_scale_factor", default = 1.0, help="The factor which scales up the upper scale samples", type=float)
+parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 
 args = parser.parse_args()
 file = args.file
@@ -45,8 +46,11 @@ obj_num = args.obj_num
 cov = args.cov 
 lower_scale_factor = args.lower_scale_factor
 upper_scale_factor = args.upper_scale_factor
+pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
+if(pdf_format!=True):
+  rc('savefig', dpi=100)
 
 #theta_data=np.loadtxt('lumfunc_thetas.dat',delimiter=' ',dtype=[('f0',np.float32),('f1',np.float32),('f2',np.float32)])
 
@@ -66,7 +70,7 @@ ax.set_ylabel(r'$\phi(L ; \theta)$')
 tit = r'Luminosity density function'
 #ax.set_title(tit)
 
-xlog = np.logspace(11, 13, 300)
+xlog = np.logspace(8, 13, 300)
 
 # Helper for plotting BB1 with samples of theta parameters:
 def plot_figs(idx, xlog, c):
@@ -105,6 +109,9 @@ for idx in range(0, theta_data.shape[0]):
 print 'Count of accepted array elements: %d' % cnt_accept
 
 ax.legend(loc=3)  # lower left
-savefig('lumfunc_w_thetas.pdf', format='pdf')
+if(pdf_format):
+  savefig('lumfunc_w_thetas.pdf', format='pdf')
+else:
+  savefig('lumfunc_w_thetas.png')
 t1 = dt.datetime.today()
 print 'Elapsed time of generating figure of luminosity density function with samples of theta parameters:', t1-t0

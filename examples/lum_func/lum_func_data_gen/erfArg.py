@@ -1,4 +1,4 @@
-# executing e.g. python erfArg.py
+# executing e.g. python erfArg.py --pdf_format False
 
 import argparse as argp
 import numpy as np
@@ -9,13 +9,17 @@ parser = argp.ArgumentParser()
 parser.add_argument("--T", default = 5.0, help="The flux limit", type=float)
 parser.add_argument("--sig0", default = 1.0, help="The sigma0", type=float)
 parser.add_argument("--c", default = 6.0, help="The erf limit", type=float)
+parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 
 args = parser.parse_args()
 T = args.T
 sig0 = args.sig0
 c = args.c
+pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
+if(pdf_format!=True):
+  rc('savefig', dpi=100)
 
 def IE(flux):
   return (flux - T) / np.sqrt(2.0*(sig0**2 + (0.01*flux)**2))
@@ -72,4 +76,7 @@ ylim([lims[0]-0.5, lims[1]+0.5])
 title('Error function')
 setp(a, xticks=[], yticks=[])
 
-savefig('erfArg.pdf', format='pdf')
+if(pdf_format):
+  savefig('erfArg.pdf', format='pdf')
+else:
+  savefig('erfArg.png')

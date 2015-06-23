@@ -1,4 +1,4 @@
-# executing e.g. python _plot_lumfunc_histo.py -1.5 50000000000.0 5000000000000.0 fluxes_cnt_100000.dat lums_cnt_100000.dat dists_cnt_100000.dat 100000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --rmax 1121041.72243 --mu 0.000536477 --xlog_min 10.0 --xlog_max 14.0
+# executing e.g. python _plot_lumfunc_histo.py -1.5 50000000000.0 5000000000000.0 fluxes_cnt_100000.dat lums_cnt_100000.dat dists_cnt_100000.dat 100000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --rmax 1121041.72243 --mu 0.000536477 --xlog_min 10.0 --xlog_max 14.0 --pdf_format False
 
 import argparse as argp
 from bb1truncpl import BB1TruncPL
@@ -28,6 +28,7 @@ parser.add_argument("--rmax", default = 4000.0, help="The maximal distance", typ
 parser.add_argument("--mu", default = 0.934197, help="The value of mu(theta)", type=float)
 parser.add_argument("--xlog_min", default = 8.0, help="The log of x-axis minimum", type=float)
 parser.add_argument("--xlog_max", default = 13.0, help="The log of x-axis maximum", type=float)
+parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 
 args = parser.parse_args()
 beta = args.beta
@@ -44,9 +45,12 @@ rmax = args.rmax
 mu = args.mu
 xlog_min = args.xlog_min
 xlog_max = args.xlog_max
+pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
 rc('font', size=20)  # default for labels (not axis labels)
+if(pdf_format!=True):
+  rc('savefig', dpi=100)
 
 flux_data=np.loadtxt(flux_file)
 dist_data=np.loadtxt(dist_file)
@@ -100,6 +104,9 @@ ax.loglog(xlog, valsWSelEff, 'r-', linewidth=2, label=lbl_1, zorder=3)
 ax.hist(lum_data, bins=xlog, label='luminosity sample data', log=True, normed=True, color=(0.5,0.5,1.0), edgecolor=(0.5,0.5,1.0))
 
 legend(loc=3)
-savefig('_lumfunc_histo.pdf', format='pdf')
+if(pdf_format):
+  savefig('_lumfunc_histo.pdf', format='pdf')
+else:
+  savefig('_lumfunc_histo.png')
 t1 = dt.datetime.today()
 print 'Elapsed time of generating figure of luminosity density function with noisy flux data:', t1-t0

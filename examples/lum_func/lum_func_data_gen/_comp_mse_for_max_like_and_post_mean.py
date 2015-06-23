@@ -1,4 +1,4 @@
-# executing e.g. python _comp_mse_for_max_like_and_post_mean.py fluxes_cnt_100000.dat filtered_fluxes_w_G_noise_mu_0.0_sig_1.0_fl_5.0_cnt_100000.dat lumfunc_chi_summary.dat
+# executing e.g. python _comp_mse_for_max_like_and_post_mean.py fluxes_cnt_100000.dat filtered_fluxes_w_G_noise_mu_0.0_sig_1.0_fl_5.0_cnt_100000.dat lumfunc_chi_summary.dat --pdf_format False
 
 import argparse as argp
 import datetime as dt
@@ -10,14 +10,18 @@ parser.add_argument("real_flux_file", help="The file name of real flux data file
 parser.add_argument("noisy_flux_file", help="The file name of noisy flux data file.", type = str)
 parser.add_argument("estimated_flux_file", help="The file name of estimated flux data file.", type = str)
 parser.add_argument("--n_regimes", default = 10, help="The number of flux regimes.", type = int)
+parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 
 args = parser.parse_args()
 real_flux_file = args.real_flux_file
 noisy_flux_file = args.noisy_flux_file
 estimated_flux_file = args.estimated_flux_file
 n_regimes = args.n_regimes
+pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
+if(pdf_format!=True):
+  rc('savefig', dpi=100)
 
 # Wider margins to allow for larger labels; may need to adjust left:
 # This is a different setting because the original bottom is .125
@@ -103,4 +107,7 @@ autolabel(rects1)
 autolabel(rects2)
 
 #legend(loc=0)
-savefig('comp_mse_for_max_like_and_post_mean.pdf', format='pdf')
+if(pdf_format):
+  savefig('comp_mse_for_max_like_and_post_mean.pdf', format='pdf')
+else:
+  savefig('comp_mse_for_max_like_and_post_mean.png')

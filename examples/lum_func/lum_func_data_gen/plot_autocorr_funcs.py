@@ -1,4 +1,4 @@
-# executing e.g. python plot_autocorr_funcs.py lumfunc_thetas.dat autocorr_b-1.2_l1.0_u100.0_init_b-1.3_l5.0_u110.0_ 100
+# executing e.g. python plot_autocorr_funcs.py lumfunc_thetas.dat autocorr_b-1.2_l1.0_u100.0_init_b-1.3_l5.0_u110.0_ 100 --pdf_format False
 import argparse as argp
 import numpy as np
 from matplotlib.pyplot import *
@@ -7,13 +7,17 @@ parser = argp.ArgumentParser()
 parser.add_argument("file", help="The file name of theta data file.", type = str)
 parser.add_argument("prefix", help="The prefix for created output files.", type = str)
 parser.add_argument("until", help="This is the maximal k for which the autocorrelation is computed.", type = str)
+parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 
 args = parser.parse_args()
 file = args.file
 prefix = args.prefix
 until = int(args.until)
+pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
+if(pdf_format!=True):
+  rc('savefig', dpi=100)
 
 def autocorr(k, n, data, idx):
     m_data = np.mean(data, axis = 0)[idx]
@@ -51,7 +55,10 @@ ax.set_ylabel(lbl_autocorr)
 ax.set_xlim([0.0,len(autocorrfn_beta)])
 ax.set_title(tit_beta)
 
-savefig(prefix + 'beta.pdf', format='pdf')
+if(pdf_format):
+  savefig(prefix + 'beta.pdf', format='pdf')
+else:
+  savefig(prefix + 'beta.png')
 
 fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_l)),autocorrfn_l, marker = ".", linewidth=0.01)
@@ -62,7 +69,10 @@ ax.set_ylabel(lbl_autocorr)
 ax.set_xlim([0.0,len(autocorrfn_l)])
 ax.set_title(tit_lowerscale)
 
-savefig(prefix + 'lowerscale.pdf', format='pdf')
+if(pdf_format):
+  savefig(prefix + 'lowerscale.pdf', format='pdf')
+else:
+  savefig(prefix + 'lowerscale.png')
 
 fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_u)),autocorrfn_u, marker = ".", linewidth=0.01)
@@ -73,4 +83,7 @@ ax.set_ylabel(lbl_autocorr)
 ax.set_xlim([0.0,len(autocorrfn_u)])
 ax.set_title(tit_upperscale)
 
-savefig(prefix + 'upperscale.pdf', format='pdf')
+if(pdf_format):
+  savefig(prefix + 'upperscale.pdf', format='pdf')
+else:
+  savefig(prefix + 'upperscale.png')

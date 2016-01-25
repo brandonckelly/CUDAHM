@@ -1,4 +1,4 @@
-# executing e.g. python plot_thetas_funcs.py lumfunc_thetas.dat b-1.2_l1.0_u100.0_init_b-1.3_l5.0_u110.0_ (--lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0)
+# executing e.g. ppython plot_thetas_funcs.py lumfunc_thetas_2.dat _ --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --nthin_theta 150
 import argparse as argp
 import numpy as np
 from matplotlib.pyplot import *
@@ -18,6 +18,8 @@ upper_scale_factor = args.upper_scale_factor
 nthin_theta = args.nthin_theta
 
 execfile("rc_settings.py")
+rc('figure', figsize=(1.9, 1.9))
+rc('figure.subplot', bottom=.275, top=.86, right=.9, left=.38)
 
 theta_data=np.loadtxt(file,delimiter=' ',usecols=(0,1,2))
 theta_data_beta=theta_data[:,0]
@@ -33,50 +35,82 @@ for idx in range(0, theta_data.shape[0]):
     blue_rate = idx/float(theta_data.shape[0])
     red_rate = (1.0 - idx/float(theta_data.shape[0]))
     color_list[idx]=(red_rate*1.0,0.0,blue_rate*1.0)
-    
+
+def determineMagnitude(floatNum):
+    sciNotationPython = '%e' % floatNum
+    mantissa, exp = sciNotationPython.split('e+')
+    return 10.0**int(exp),int(exp)
+
+def setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag):
+    ax.set_xlabel(lbl_iter)
+    ax.xaxis.set_ticks([0.0,0.5*max_x_pos,max_x_pos])
+    ax.xaxis.set_ticklabels([0.0,0.5*max_x_pos/max_x_pos_mag,max_x_pos/max_x_pos_mag])
+    ax.set_xlim([0.0,max_x_pos])
+
+def setYAxisProperties(ax, ylbl, data):
+    ax.set_ylabel(ylbl)
+    data_min = data.min()
+    data_yrange = data.max() - data_min
+    data_ticks = [data_min, data_min + data_yrange * 1.0/3.0, data_min + data_yrange * 2.0/3.0, data_min + data_yrange]
+    ax.yaxis.set_ticks(data_ticks)
+    return data_ticks
+
+max_x_pos = len(theta_data_beta) * nthin_theta
+max_x_pos_mag, max_x_pos_exp = determineMagnitude(max_x_pos)
+max_lowerscale = theta_data_l.max()
+max_lowerscale_mag, max_lowerscale_exp = determineMagnitude(max_lowerscale)
+max_upperscale = theta_data_u.max()
+max_upperscale_mag, max_upperscale_exp = determineMagnitude(max_upperscale)
+
 lbl_beta = r'$\beta$'
-lbl_lowerscale = 'lower scale'
-lbl_upperscale = 'upper scale'
-lbl_iter= 'Iterations'
-	
+lbl_lowerscale = r'lower scale ($\times 10^{%d}$)' % max_lowerscale_exp
+lbl_upperscale = r'upper scale ($\times 10^{%d}$)' % max_upperscale_exp
+lbl_iter= r'Iterations ($\times 10^{%d}$)' % max_x_pos_exp
+
 fig, ax = subplots()
 xrange = np.arange(1, len(theta_data_beta) + 1) * nthin_theta
-ax.scatter(xrange,theta_data_beta, c=color_list, marker = ".", linewidth=0.01)
-ax.set_xlabel(lbl_iter)
-ax.set_ylabel(lbl_beta)
-ax.set_xlim([0.0,len(theta_data_beta) * nthin_theta])
+ax.scatter(xrange,theta_data_beta, c=color_list, marker = ".", linewidth=0, alpha=0.05)
+setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
+beta_ticks = setYAxisProperties(ax, lbl_beta, theta_data_beta)
+ax.yaxis.set_ticklabels(['%.2f' % y for y in beta_ticks])
 savefig(prefix + 'beta.pdf', format='pdf')
 
 fig, ax = subplots()
 xrange = np.arange(1, len(theta_data_u) + 1) * nthin_theta
-ax.scatter(xrange,theta_data_u, c=color_list, marker = ".", linewidth=0.01)
-ax.set_xlabel(lbl_iter)
-ax.set_ylabel(lbl_upperscale)
-ax.set_xlim([0.0,len(theta_data_u) * nthin_theta])
+ax.scatter(xrange,theta_data_u, c=color_list, marker = ".", linewidth=0, alpha=0.05)
+setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
+upperscale_ticks = setYAxisProperties(ax, lbl_upperscale, theta_data_u)
+ax.yaxis.set_ticklabels(['%.2f' % (y/max_upperscale_mag) for y in upperscale_ticks])
 savefig(prefix + 'upperscale.pdf', format='pdf')
 
 fig, ax = subplots()
 xrange = np.arange(1, len(theta_data_l) + 1) * nthin_theta
-ax.scatter(xrange,theta_data_l, c=color_list, marker = ".", linewidth=0.01)
-ax.set_xlabel(lbl_iter)
-ax.set_ylabel(lbl_lowerscale)
-ax.set_xlim([0.0,len(theta_data_l) * nthin_theta])
+ax.scatter(xrange,theta_data_l, c=color_list, marker = ".", linewidth=0, alpha=0.05)
+setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
+lowerscale_ticks = setYAxisProperties(ax, lbl_lowerscale, theta_data_l)
+ax.yaxis.set_ticklabels(['%.2f' % (y/max_lowerscale_mag) for y in lowerscale_ticks])
 savefig(prefix + 'lowerscale.pdf', format='pdf')
 
 fig, ax = subplots()
-ax.scatter(theta_data_beta,theta_data_l, c=color_list, marker = ".", linewidth=0.01)
-ax.set_xlabel(lbl_beta)
-ax.set_ylabel(lbl_lowerscale)
+ax.scatter(theta_data_beta,theta_data_l, c=color_list, marker = ".", linewidth=0, alpha=0.05)
+#ax.set_xlabel(lbl_beta)
+#ax.set_ylabel(lbl_lowerscale)
+ax.xaxis.set_ticks([0.0,0.5*max_x_pos,max_x_pos])
+ax.set_xlim([0.0,max_x_pos])
 savefig(prefix + 'beta_lowerscale.pdf', format='pdf')
 
 fig, ax = subplots()
-ax.scatter(theta_data_beta,theta_data_u, c=color_list, marker = ".", linewidth=0.01)
-ax.set_xlabel(lbl_beta)
-ax.set_ylabel(lbl_upperscale)
+ax.scatter(theta_data_beta,theta_data_u, c=color_list, marker = ".", linewidth=0, alpha=0.05)
+#ax.set_xlabel(lbl_beta)
+#ax.set_ylabel(lbl_upperscale)
+ax.xaxis.set_ticks([0.0,0.5*max_x_pos,max_x_pos])
+ax.set_xlim([0.0,max_x_pos])
 savefig(prefix + 'beta_upperscale.pdf', format='pdf')
 
 fig, ax = subplots()
-ax.scatter(theta_data_l,theta_data_u, c=color_list, marker = ".", linewidth=0.01)
-ax.set_xlabel(lbl_lowerscale)
-ax.set_ylabel(lbl_upperscale)
+ax.scatter(theta_data_l,theta_data_u, c=color_list, marker = ".", linewidth=0, alpha=0.05)
+#ax.set_xlabel(lbl_lowerscale)
+#ax.set_ylabel(lbl_upperscale)
+ax.xaxis.set_ticks([0.0,0.5*max_x_pos,max_x_pos])
+ax.set_xlim([0.0,max_x_pos])
 savefig(prefix + 'lowerscale_upperscale.pdf', format='pdf')

@@ -1,4 +1,4 @@
-# executing e.g. python _comp_mse_for_max_like_and_post_mean.py fluxes_cnt_100000.dat filtered_fluxes_w_G_noise_mu_0.0_sig_1.0_fl_5.0_cnt_100000.dat lumfunc_chi_summary.dat
+# executing e.g. python _comp_mse_for_max_like_and_post_mean.py fluxes_cnt_100000.dat filtered_fluxes_w_G_noise_mu_0.0_sig_1.0_fl_5.0_cnt_100000.dat lumfunc_chi_summary_2.dat
 
 import argparse as argp
 import datetime as dt
@@ -9,19 +9,19 @@ parser = argp.ArgumentParser()
 parser.add_argument("real_flux_file", help="The file name of real flux data file.", type = str)
 parser.add_argument("noisy_flux_file", help="The file name of noisy flux data file.", type = str)
 parser.add_argument("estimated_flux_file", help="The file name of estimated flux data file.", type = str)
-parser.add_argument("--n_regimes", default = 10, help="The number of flux regimes.", type = int)
+parser.add_argument("--n_regions", default = 10, help="The number of flux regions.", type = int)
+parser.add_argument("--broken_y_axis_start", default = 0.16, help="The start position of y-axis breaking.", type = float)
+parser.add_argument("--broken_y_axis_end", default = 0.25, help="The end position of y-axis breaking.", type = float)
 
 args = parser.parse_args()
 real_flux_file = args.real_flux_file
 noisy_flux_file = args.noisy_flux_file
 estimated_flux_file = args.estimated_flux_file
-n_regimes = args.n_regimes
+n_regions = args.n_regions
+broken_y_axis_start = args.broken_y_axis_start
+broken_y_axis_end = args.broken_y_axis_end
 
 execfile("rc_settings.py")
-
-# Wider margins to allow for larger labels; may need to adjust left:
-# This is a different setting because the original bottom is .125
-rc('figure.subplot', bottom=.2, top=.95, right=.95, left=0.125)  # left=0.125
 
 real_flux_data=np.loadtxt(real_flux_file)
 noisy_flux_data=np.loadtxt(noisy_flux_file,delimiter=' ',usecols=(0,1))
@@ -38,20 +38,30 @@ sorted_fluxes = np.sort(fluxes,axis=0)
 
 print sorted_fluxes
 
-rate=len(sorted_fluxes)/n_regimes
+rate=len(sorted_fluxes)/n_regions
 
 mse_max_like_list = []
 mse_post_mean_list = []
 
-regimes_text_list = []
+regions_text_list = []
+def indexToOrdinal(idx):
+  if(idx==1):
+    retVal = r'$1^{st}$'
+  elif(idx==2):
+    retVal = r'$2^{nd}$'
+  elif(idx==3):
+    retVal = r'$3^{rd}$'
+  else:
+    retVal = r'$' + str(idx) + r'^{th}$'
+  return retVal
 
-for idx in range(1,n_regimes+1):
+for idx in range(1,n_regions+1):
   lim_reg_lower = rate * (idx - 1)
   lim_reg_upper = rate * idx
   current_mse_max_like = 0.0
   current_mse_post_mean = 0.0
-  current_text = '['+str(lim_reg_lower)+':'+str(lim_reg_upper-1)+']'
-  regimes_text_list.append(current_text)
+  current_text = indexToOrdinal(idx)
+  regions_text_list.append(current_text)
   for subIdx in range(lim_reg_lower,lim_reg_upper):
     current_mse_max_like += (sorted_fluxes[subIdx][1] - sorted_fluxes[subIdx][0])**2.0
     current_mse_post_mean += (sorted_fluxes[subIdx][2] - sorted_fluxes[subIdx][0])**2.0
@@ -63,44 +73,47 @@ for idx in range(1,n_regimes+1):
 print "MSE of max like - true", mse_max_like_list
 print "MSE of post mean - true", mse_post_mean_list
 
+#We need to create broken axis because of outlier values (based on matplotlib example: http://matplotlib.org/examples/pylab_examples/broken_axis.html)
+fig, (ax, ax2) = subplots(2, 1, sharex=True)
+
+ax.set_xlim([-0.3333, n_regions])
+ax2.set_xlim([-0.3333, n_regions])
+ax.set_ylim([broken_y_axis_end, max(max(mse_max_like_list), max(mse_post_mean_list))*1.03])
+ax2.set_ylim([0, broken_y_axis_start])
+
+# hide the spines between ax and ax2
+ax.spines['bottom'].set_visible(False)
+ax2.spines['top'].set_visible(False)
+ax.xaxis.tick_top()
+ax.tick_params(labeltop='off')  # don't put tick labels at the top
+ax2.xaxis.tick_bottom()
+
+d = .015  # how big to make the diagonal lines in axes coordinates
+# arguments to pass plot, just so we don't keep repeating them
+kwargs = dict(transform=ax.transAxes, color='k', clip_on=False)
+ax.plot((-d, +d), (-d, +d), **kwargs)        # top-left diagonal
+ax.plot((1 - d, 1 + d), (-d, +d), **kwargs)  # top-right diagonal
+
+kwargs.update(transform=ax2.transAxes)  # switch to the bottom axes
+ax2.plot((-d, +d), (1 - d, 1 + d), **kwargs)  # bottom-left diagonal
+ax2.plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs)  # bottom-right diagonal
+
 # based on matplotlib example: http://matplotlib.org/examples/api/barchart_demo.html
-
-ind = np.arange(n_regimes)  # the x locations for the groups
+ind = np.arange(n_regions)  # the x locations for the groups
 width = 0.35       # the width of the bars
-
-fig, ax = subplots()
-
-ax.set_xlim([-0.3333, n_regimes])
-ax.set_ylim([0, max(max(mse_max_like_list), max(mse_post_mean_list))*1.25])
-
 rects1 = ax.bar(ind, mse_max_like_list, width, color='b', label = 'Max like')
 rects2 = ax.bar(ind+width, mse_post_mean_list, width, color='r', label = 'Post mean')
+rects1 = ax2.bar(ind, mse_max_like_list, width, color='b')
+rects2 = ax2.bar(ind+width, mse_post_mean_list, width, color='r')
 
 # add some text for labels, title and axes ticks
-ax.set_ylabel('Mean Squared Errors')
+ax2.set_xlabel('Pieces of flux range')
+# For the 'common' y-axis label:
+fig.text(0.04, 0.5, 'Mean Squared Errors', verticalalignment='center', rotation='vertical', family='Computer Modern Roman', fontsize=12)
 #ax.set_title('Comparison Mean Squared Errors by Different Regimes')
-ax.set_xticks(ind+width)
-ax.set_xticklabels( regimes_text_list )
-
-# make font size of tick labels smaller and rotate it vertically:
-# based on http://stackoverflow.com/questions/6390393/matplotlib-make-tick-labels-font-size-smaller/11386056#11386056
-for tick in ax.xaxis.get_major_ticks():
-  tick.label.set_rotation('vertical')
+ax2.set_xticks(ind+width)
+ax2.set_xticklabels( regions_text_list )
 
 ax.legend(loc=2)  # upper left
 
-# based on: http://matplotlib.org/users/legend_guide.html#legend-location
-#ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.) # Place a legend to the right of this smaller figure.
-
-def autolabel(rects):
-    # attach some text labels
-    for rect in rects:
-        height = rect.get_height()
-        ax.text(rect.get_x()+rect.get_width()/2., 0.5 + height, '%5.5f'%float(height),
-                ha='center', va='bottom', size='small', rotation = 'vertical')
-
-autolabel(rects1)
-autolabel(rects2)
-
-#legend(loc=0)
 savefig('comp_mse_for_max_like_and_post_mean.pdf', format='pdf')

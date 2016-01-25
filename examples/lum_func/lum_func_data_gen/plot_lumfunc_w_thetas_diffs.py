@@ -1,4 +1,4 @@
-# executing e.g. python plot_lumfunc_w_thetas.py lumfunc_thetas_2.dat -1.5 50000000000.0 5000000000000.0 -1.41 4.0 5.8 -1.5564 7.3222 5.7207 1500000 1500000 100000 (--cov 1000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0)
+# executing e.g. python plot_lumfunc_w_thetas_diffs.py lumfunc_thetas_2.dat -1.5 50000000000.0 5000000000000.0 -1.41 4.0 5.8 -1.5564 7.3222 5.7207 1500000 1500000 100000 (--cov 1000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0)
 import argparse as argp
 from bb1truncpl import BB1TruncPL
 import numpy as np
@@ -30,6 +30,7 @@ parser.add_argument("--upper_scale_factor", default = 1.0, help="The factor whic
 parser.add_argument("--xlog_min", default = 8.0, help="The log of x-axis minimum", type=float)
 parser.add_argument("--xlog_max", default = 13.0, help="The log of x-axis maximum", type=float)
 parser.add_argument("--resolution", default = 300, help="The resolution of x-axis", type=int)
+parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 
 args = parser.parse_args()
 file = args.file
@@ -51,8 +52,11 @@ upper_scale_factor = args.upper_scale_factor
 xlog_min = args.xlog_min
 xlog_max = args.xlog_max
 resolution = args.resolution
+pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
+if(pdf_format!=True):
+  rc('savefig', dpi=100)
 
 #theta_data=np.loadtxt('lumfunc_thetas.dat',delimiter=' ',dtype=[('f0',np.float32),('f1',np.float32),('f2',np.float32)])
 
@@ -66,9 +70,12 @@ print 'Mean of samples of theta parameters: (%5.4f,%5.4f,%5.4f)' % (mean_vec[0],
 print 'Standard deviation of samples of theta parameters: (%5.4f,%5.4f,%5.4f)' % (std_vec[0], std_vec[1], std_vec[2])
 print 'Standard error of the mean of sample values of theta parameters: (%e,%e,%e)' % (sem_vec[0], sem_vec[1], sem_vec[2])
 
+#med_vec = np.median(theta_data, axis = 0)
+#print 'Median of samples of theta parameters: (%5.4f,%5.4f,%5.4f)' % (med_vec[0], med_vec[1], med_vec[2])
+
 fig, ax = subplots()
 ax.set_xlabel(r'$\log_{10}(L)$')
-ax.set_ylabel(r'$\log_{10}(\phi(L ; \theta))$')
+ax.set_ylabel(r'$\left|\log_{10}(\phi(L ; \theta)) - log_{10}(\phi(L ; \theta_{true})) \right|$')
 tit = r'Luminosity density function'
 #ax.set_title(tit)
 
@@ -85,7 +92,8 @@ def plot_figs(idx, xlin, log10_of_xlin, c):
     log10_of_pdf = np.log10(pdf)
     #the green colored line belongs to the latest theta from iterations.
     red_rate = (1.0 - idx/float(theta_data.shape[0]))
-    ax.plot(log10_of_xlin, log10_of_pdf, color=(red_rate*1.0,1.0,0.0), alpha=.01, linewidth=0.25, zorder=1)
+    log10_of_diff_true_mcmc = np.abs(log10_of_pdf_0 - log10_of_pdf)
+    ax.plot(log10_of_xlin, log10_of_diff_true_mcmc, color=(red_rate*1.0,1.0,0.0), alpha=.01, linewidth=0.25, zorder=1)
 
 t1 = dt.datetime.today()
 print 'Elapsed time of loading samples of theta parameters:', t1-t0
@@ -95,13 +103,23 @@ bb1_0 = BB1TruncPL(beta, lower_scale, upper_scale)
 lbl_0 = r'$\log_{10}(\phi(L ; \theta_{true}))$'
 pdf_0 = bb1_0.pdf(xlin)
 log10_of_pdf_0 = np.log10(pdf_0)
-ax.plot(log10_of_xlin, log10_of_pdf_0, 'r-', linewidth=0.5, label=lbl_0, zorder=3)
 
 bb1_1 = BB1TruncPL(maxlike_beta, maxlike_lower_scale, maxlike_upper_scale)
-lbl_1 = r'$\log_{10}(\phi(L ; \theta_{maxlike}))$'
+lbl_1 = r'$\left|\log_{10}(\phi(L ; \theta_{maxlike})) - log_{10}(\phi(L ; \theta_{true})) \right|$'
 pdf_1 = bb1_1.pdf(xlin)
 log10_of_pdf_1 = np.log10(pdf_1)
-ax.plot(log10_of_xlin, log10_of_pdf_1, 'b-', linewidth=0.5, label=lbl_1, zorder=2)
+log10_of_diff_true_maxlike = np.abs(log10_of_pdf_0 - log10_of_pdf_1)
+ax.plot(log10_of_xlin, log10_of_diff_true_maxlike, 'b-', linewidth=0.5, label=lbl_1, zorder=2)
+
+#med_beta = med_vec[0]
+#med_l = med_vec[1] * lower_scale_factor
+#med_u = med_vec[2] * upper_scale_factor
+#bb1_2 = BB1TruncPL(med_beta, med_l, med_u)
+#lbl_2 = r'$\left|\log_{10}(\phi(L ; \theta_{postmed})) - log_{10}(\phi(L ; \theta_{true})) \right|$'
+#pdf_2 = bb1_2.pdf(xlin)
+#log10_of_pdf_2 = np.log10(pdf_2)
+#log10_of_diff_post_med = np.abs(log10_of_pdf_0 - log10_of_pdf_2)
+#ax.plot(log10_of_xlin, log10_of_diff_post_med, 'darkgreen', linestyle='solid', linewidth=0.5, label=lbl_2, zorder=2)
 
 u_array = np.random.uniform(size=theta_data.shape[0])
 accept_rate = cov/float(theta_data.shape[0])
@@ -114,7 +132,10 @@ for idx in range(0, theta_data.shape[0]):
 
 print 'Count of accepted array elements: %d' % cnt_accept
 
-ax.legend(loc=3)  # lower left
-savefig('lumfunc_w_thetas.pdf', format='pdf')
+ax.legend(loc=1)  # upper right
+if(pdf_format):
+  savefig('lumfunc_w_thetas_diffs.pdf', format='pdf')
+else:
+  savefig('lumfunc_w_thetas_diffs.png')
 t1 = dt.datetime.today()
-print 'Elapsed time of generating figure of luminosity density function with samples of theta parameters:', t1-t0
+print 'Elapsed time of generating figure of luminosity density function differences between with true parameters and with samples of theta parameters:', t1-t0

@@ -1,4 +1,4 @@
-# executing e.g. python plot_autocorr_funcs.py lumfunc_thetas.dat autocorr_b-1.2_l1.0_u100.0_init_b-1.3_l5.0_u110.0_ 100
+# executing e.g. python plot_autocorr_funcs.py lumfunc_thetas_2.dat autocorr_ 100
 import argparse as argp
 import numpy as np
 from matplotlib.pyplot import *
@@ -14,6 +14,8 @@ prefix = args.prefix
 until = int(args.until)
 
 execfile("rc_settings.py")
+rc('figure', figsize=(1.9, 1.9))
+rc('figure.subplot', bottom=.275, top=.86, right=.9, left=.38)
 
 def autocorr(k, n, data, idx):
     m_data = np.mean(data, axis = 0)[idx]
@@ -30,6 +32,15 @@ def autocorrfunc(until, n, data, idx):
         lst.append(autocorr(k, n, data, idx))
     return lst
 
+def setAxesProperties(ax,lbl_k,lbl_autocorr,autocorrfn,tit):
+    ax.axhline(color='r')
+    ax.set_xlabel(lbl_k)
+    ax.set_ylabel(lbl_autocorr)
+    ax.set_xlim([0.0,len(autocorrfn)])
+    ax.set_ylim([-0.6,0.6])
+    ax.xaxis.set_ticks([0,until/2,until])
+    ax.set_title(tit)
+	
 theta_data=np.loadtxt(file,delimiter=' ',usecols=(0,1,2))
 
 autocorrfn_beta = autocorrfunc(until, theta_data.shape[0],theta_data,0)
@@ -39,38 +50,20 @@ autocorrfn_u = autocorrfunc(until, theta_data.shape[0],theta_data,2)
 tit_beta = r'$\beta$'
 tit_lowerscale = 'lower scale'
 tit_upperscale = 'upper scale'
-lbl_k = 'k'
-lbl_autocorr = 'kth order autocorrelation'
+lbl_k = r'$k$'
+lbl_autocorr = r'$k$th order autocorr.'
 
 fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_beta)),autocorrfn_beta, marker = ".", linewidth=0.01)
-ax.axhline(color='r')
-
-ax.set_xlabel(lbl_k)
-ax.set_ylabel(lbl_autocorr)
-ax.set_xlim([0.0,len(autocorrfn_beta)])
-ax.set_title(tit_beta)
-
+setAxesProperties(ax,lbl_k,lbl_autocorr,autocorrfn_beta,tit_beta)
 savefig(prefix + 'beta.pdf', format='pdf')
 
 fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_l)),autocorrfn_l, marker = ".", linewidth=0.01)
-ax.axhline(color='r')
-
-ax.set_xlabel(lbl_k)
-ax.set_ylabel(lbl_autocorr)
-ax.set_xlim([0.0,len(autocorrfn_l)])
-ax.set_title(tit_lowerscale)
-
+setAxesProperties(ax,lbl_k,lbl_autocorr,autocorrfn_l,tit_lowerscale)
 savefig(prefix + 'lowerscale.pdf', format='pdf')
 
 fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_u)),autocorrfn_u, marker = ".", linewidth=0.01)
-ax.axhline(color='r')
-
-ax.set_xlabel(lbl_k)
-ax.set_ylabel(lbl_autocorr)
-ax.set_xlim([0.0,len(autocorrfn_u)])
-ax.set_title(tit_upperscale)
-
+setAxesProperties(ax,lbl_k,lbl_autocorr,autocorrfn_u,tit_upperscale)
 savefig(prefix + 'upperscale.pdf', format='pdf')

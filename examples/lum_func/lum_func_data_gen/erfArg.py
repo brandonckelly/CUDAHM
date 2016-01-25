@@ -26,18 +26,12 @@ vals = []
 for flux in xlin:
   vals.append(IE(flux))
 
-fig = figure(figsize=(15.75, 10))
-# The following is needed because of xticklabels:
-#fig.canvas.draw()
-
-xlabel(r'$\chi$')
-#ylabel(r'$\frac{\chi - T}{\sqrt{2\cdot(\sigma_{0}^2 + (0.01\chi)^2)}}$')
+fig = figure()
 tit = r'The argument function of error function with flux limit: %5.2f, $\sigma_{0}$: %5.2f and c: %5.2f' % (T, sig0, c)
 #fig.suptitle(tit, fontsize=18, fontweight='bold')
 
-figure(fig.number)
-ax = fig.add_subplot(1,1,1) # one row, one column, first plot
-
+ax = fig.add_subplot(1,1,1,xlim = [-200,1000],ylim = [-80,80]) # one row, one column, first plot
+ax.set_xlabel(r'$\chi$')
 ax.axvline(x = 0, color='black', linewidth=2, linestyle='-')
 
 lbl_0 = r'$\frac{\chi - T}{\sqrt{2\cdot(\sigma_{0}^2 + (0.01\chi)^2)}}$'
@@ -59,17 +53,17 @@ erfvals = []
 for erfinput in xlinerf:
   erfvals.append(erf(erfinput))
 
-a = axes([.65, .65, .2, .2])
+a = axes([.65, .65, .18, .18])
 plot(xlinerf, erfvals, 'r--', linewidth=1, linestyle='-', zorder=3)
-annotate('c', xy=(c, 0),  xycoords='data', xytext=(-50, 30), textcoords='offset points', color='green',
-                arrowprops=dict(arrowstyle="->"), zorder=4)
-axvline(x = c, color='green', linewidth=1, linestyle='-')
+annotate('c', xy=(c, 0),  xycoords='data', xytext=(-20, -20), textcoords='offset points', color='green',
+                arrowprops=dict(arrowstyle="->"), zorder=4, family='Computer Modern Roman', fontsize=12)
+axvline(x = c, color='green', linewidth=1, linestyle='-') 
 
 xlim([-7.0, 7.0]) 
 lims = ylim()
-ylim([lims[0]-0.5, lims[1]+0.5]) 
+ylim([lims[0]-0.5, lims[1]+0.5])
 
-title('Error function')
+title('Error function', family='Computer Modern Roman', fontsize=12)
 setp(a, xticks=[], yticks=[])
 
 savefig('erfArg.pdf', format='pdf')

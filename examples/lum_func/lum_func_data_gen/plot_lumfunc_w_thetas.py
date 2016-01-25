@@ -1,4 +1,4 @@
-# executing e.g. python plot_lumfunc_w_thetas.py lumfunc_thetas_2.dat -1.5 50000000000.0 5000000000000.0 -1.41 4.0 5.8 -1.5564 7.3222 5.7207 1500000 1500000 100000 (--cov 1000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0)
+# executing e.g. python plot_lumfunc_w_thetas.py lumfunc_thetas_2.dat -1.5 50000000000.0 5000000000000.0 -1.41 4.0 5.8 -1.5564 7.3222 5.7207 1500000 1500000 100000 (--cov 1000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --pdf_format False)
 import argparse as argp
 from bb1truncpl import BB1TruncPL
 import numpy as np
@@ -30,7 +30,7 @@ parser.add_argument("--upper_scale_factor", default = 1.0, help="The factor whic
 parser.add_argument("--xlog_min", default = 8.0, help="The log of x-axis minimum", type=float)
 parser.add_argument("--xlog_max", default = 13.0, help="The log of x-axis maximum", type=float)
 parser.add_argument("--resolution", default = 300, help="The resolution of x-axis", type=int)
-
+parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 args = parser.parse_args()
 file = args.file
 beta = args.beta
@@ -51,8 +51,10 @@ upper_scale_factor = args.upper_scale_factor
 xlog_min = args.xlog_min
 xlog_max = args.xlog_max
 resolution = args.resolution
-
+pdf_format = eval(args.pdf_format)
 execfile("rc_settings.py")
+if(pdf_format!=True):
+  rc('savefig', dpi=100)
 
 #theta_data=np.loadtxt('lumfunc_thetas.dat',delimiter=' ',dtype=[('f0',np.float32),('f1',np.float32),('f2',np.float32)])
 
@@ -74,7 +76,6 @@ tit = r'Luminosity density function'
 
 xlin = np.linspace(10**xlog_min, 10**xlog_max, resolution)
 log10_of_xlin = np.log10(xlin)
-
 # Helper for plotting BB1 with samples of theta parameters:
 def plot_figs(idx, xlin, log10_of_xlin, c):
     smp_beta = theta_data[idx][0]
@@ -115,6 +116,9 @@ for idx in range(0, theta_data.shape[0]):
 print 'Count of accepted array elements: %d' % cnt_accept
 
 ax.legend(loc=3)  # lower left
-savefig('lumfunc_w_thetas.pdf', format='pdf')
+if(pdf_format):
+  savefig('lumfunc_w_thetas.pdf', format='pdf')
+else:
+  savefig('lumfunc_w_thetas.png')
 t1 = dt.datetime.today()
 print 'Elapsed time of generating figure of luminosity density function with samples of theta parameters:', t1-t0

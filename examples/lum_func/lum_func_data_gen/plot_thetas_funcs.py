@@ -1,5 +1,4 @@
-# executing e.g. ppython plot_thetas_funcs.py lumfunc_thetas_2.dat _ --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --nthin_theta 150
-import argparse as argp
+# executing e.g. python plot_thetas_funcs.py lumfunc_thetas_2.dat _ (--lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --nthin_theta 150 --pdf_format False)import argparse as argp
 import numpy as np
 from matplotlib.pyplot import *
 
@@ -9,6 +8,7 @@ parser.add_argument("prefix", help="The prefic for created output files.", type 
 parser.add_argument("--lower_scale_factor", default = 1.0, help="The factor which scales up the lower scale samples", type=float)
 parser.add_argument("--upper_scale_factor", default = 1.0, help="The factor which scales up the upper scale samples", type=float)
 parser.add_argument("--nthin_theta", default = 1.0, help="The thinning factor for theta", type=float)
+parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 
 args = parser.parse_args()
 file = args.file
@@ -16,11 +16,13 @@ prefix = args.prefix
 lower_scale_factor = args.lower_scale_factor
 upper_scale_factor = args.upper_scale_factor
 nthin_theta = args.nthin_theta
+pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
 rc('figure', figsize=(1.9, 1.9))
 rc('figure.subplot', bottom=.275, top=.86, right=.9, left=.38)
-
+if(pdf_format!=True):
+  rc('savefig', dpi=100)
 theta_data=np.loadtxt(file,delimiter=' ',usecols=(0,1,2))
 theta_data_beta=theta_data[:,0]
 theta_data_l=theta_data[:,1]
@@ -73,7 +75,10 @@ ax.scatter(xrange,theta_data_beta, c=color_list, marker = ".", linewidth=0, alph
 setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
 beta_ticks = setYAxisProperties(ax, lbl_beta, theta_data_beta)
 ax.yaxis.set_ticklabels(['%.2f' % y for y in beta_ticks])
-savefig(prefix + 'beta.pdf', format='pdf')
+if(pdf_format):
+  savefig('beta.pdf', format='pdf')
+else:
+  savefig('beta.png')
 
 fig, ax = subplots()
 xrange = np.arange(1, len(theta_data_u) + 1) * nthin_theta
@@ -81,7 +86,10 @@ ax.scatter(xrange,theta_data_u, c=color_list, marker = ".", linewidth=0, alpha=0
 setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
 upperscale_ticks = setYAxisProperties(ax, lbl_upperscale, theta_data_u)
 ax.yaxis.set_ticklabels(['%.2f' % (y/max_upperscale_mag) for y in upperscale_ticks])
-savefig(prefix + 'upperscale.pdf', format='pdf')
+if(pdf_format):
+  savefig('upperscale.pdf', format='pdf')
+else:
+  savefig('upperscale.png')
 
 fig, ax = subplots()
 xrange = np.arange(1, len(theta_data_l) + 1) * nthin_theta
@@ -89,7 +97,10 @@ ax.scatter(xrange,theta_data_l, c=color_list, marker = ".", linewidth=0, alpha=0
 setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
 lowerscale_ticks = setYAxisProperties(ax, lbl_lowerscale, theta_data_l)
 ax.yaxis.set_ticklabels(['%.2f' % (y/max_lowerscale_mag) for y in lowerscale_ticks])
-savefig(prefix + 'lowerscale.pdf', format='pdf')
+if(pdf_format):
+  savefig('lowerscale.pdf', format='pdf')
+else:
+  savefig('lowerscale.png')
 
 fig, ax = subplots()
 ax.scatter(theta_data_beta,theta_data_l, c=color_list, marker = ".", linewidth=0, alpha=0.05)
@@ -97,7 +108,10 @@ ax.scatter(theta_data_beta,theta_data_l, c=color_list, marker = ".", linewidth=0
 #ax.set_ylabel(lbl_lowerscale)
 ax.xaxis.set_ticks([0.0,0.5*max_x_pos,max_x_pos])
 ax.set_xlim([0.0,max_x_pos])
-savefig(prefix + 'beta_lowerscale.pdf', format='pdf')
+if(pdf_format):
+  savefig('beta_lowerscale.pdf', format='pdf')
+else:
+  savefig('beta_lowerscale.png')
 
 fig, ax = subplots()
 ax.scatter(theta_data_beta,theta_data_u, c=color_list, marker = ".", linewidth=0, alpha=0.05)
@@ -105,7 +119,10 @@ ax.scatter(theta_data_beta,theta_data_u, c=color_list, marker = ".", linewidth=0
 #ax.set_ylabel(lbl_upperscale)
 ax.xaxis.set_ticks([0.0,0.5*max_x_pos,max_x_pos])
 ax.set_xlim([0.0,max_x_pos])
-savefig(prefix + 'beta_upperscale.pdf', format='pdf')
+if(pdf_format):
+  savefig('beta_upperscale.pdf', format='pdf')
+else:
+  savefig('beta_upperscale.png')
 
 fig, ax = subplots()
 ax.scatter(theta_data_l,theta_data_u, c=color_list, marker = ".", linewidth=0, alpha=0.05)
@@ -113,4 +130,7 @@ ax.scatter(theta_data_l,theta_data_u, c=color_list, marker = ".", linewidth=0, a
 #ax.set_ylabel(lbl_upperscale)
 ax.xaxis.set_ticks([0.0,0.5*max_x_pos,max_x_pos])
 ax.set_xlim([0.0,max_x_pos])
-savefig(prefix + 'lowerscale_upperscale.pdf', format='pdf')
+if(pdf_format):
+  savefig('lowerscale_upperscale.pdf', format='pdf')
+else:
+  savefig('lowerscale_upperscale.png')

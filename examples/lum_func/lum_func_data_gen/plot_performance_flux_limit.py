@@ -1,7 +1,17 @@
+# executing e.g. python plot_performance_flux_limit.py --pdf_format False
+
+import argparse as argp
 import numpy as np
 from matplotlib.pyplot import *
 
+parser = argp.ArgumentParser()
+parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
+
+pdf_format = eval(args.pdf_format)
+
 execfile("rc_settings.py")
+if(pdf_format!=True):
+  rc('savefig', dpi=100)
 
 performance_iter_vs_time_data_10000_with_fl=np.loadtxt('performance_iter_vs_time_data_10000_with_fl.dat',delimiter=' ',usecols=(0,1))
 performance_iter_vs_time_data_100000_with_fl=np.loadtxt('performance_iter_vs_time_data_100000_with_fl.dat',delimiter=' ',usecols=(0,1))
@@ -21,7 +31,10 @@ ax.set_xlabel('Iteration numbers')
 ax.set_ylabel('Elapsed time (min)')
 ax.legend(loc=2)
 
-savefig('performance_iter_vs_time.pdf', format='pdf')
+if(pdf_format):
+  savefig('performance_iter_vs_time.pdf', format='pdf')
+else:
+  savefig('performance_iter_vs_time.png')
 
 performance_obj_vs_time_data_10000_with_fl=np.loadtxt('performance_obj_vs_time_data_10000_with_fl.dat',delimiter=' ',usecols=(0,1))
 performance_obj_vs_time_data_100000_with_fl=np.loadtxt('performance_obj_vs_time_data_100000_with_fl.dat',delimiter=' ',usecols=(0,1))
@@ -47,4 +60,7 @@ ax.set_xlabel('Object numbers')
 ax.set_ylabel('Elapsed time (min)')
 ax.legend(loc=0)
 
-savefig('performance_obj_vs_time.pdf', format='pdf')
+if(pdf_format):
+  savefig('performance_obj_vs_time.pdf', format='pdf')
+else:
+  savefig('performance_obj_vs_time.png')

@@ -1,5 +1,4 @@
-# executing e.g. python _comp_mse_for_max_like_and_post_mean.py fluxes_cnt_100000.dat filtered_fluxes_w_G_noise_mu_0.0_sig_1.0_fl_5.0_cnt_100000.dat lumfunc_chi_summary_2.dat
-
+# executing e.g. python _comp_mse_for_max_like_and_post_mean.py fluxes_cnt_100000.dat filtered_fluxes_w_G_noise_mu_0.0_sig_1.0_fl_5.0_cnt_100000.dat lumfunc_chi_summary_2.dat --pdf_format False
 import argparse as argp
 import datetime as dt
 import numpy as np
@@ -12,6 +11,7 @@ parser.add_argument("estimated_flux_file", help="The file name of estimated flux
 parser.add_argument("--n_regions", default = 10, help="The number of flux regions.", type = int)
 parser.add_argument("--broken_y_axis_start", default = 0.16, help="The start position of y-axis breaking.", type = float)
 parser.add_argument("--broken_y_axis_end", default = 0.25, help="The end position of y-axis breaking.", type = float)
+parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 
 args = parser.parse_args()
 real_flux_file = args.real_flux_file
@@ -20,8 +20,11 @@ estimated_flux_file = args.estimated_flux_file
 n_regions = args.n_regions
 broken_y_axis_start = args.broken_y_axis_start
 broken_y_axis_end = args.broken_y_axis_end
+pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
+if(pdf_format!=True):
+  rc('savefig', dpi=100)
 
 real_flux_data=np.loadtxt(real_flux_file)
 noisy_flux_data=np.loadtxt(noisy_flux_file,delimiter=' ',usecols=(0,1))
@@ -116,4 +119,7 @@ ax2.set_xticklabels( regions_text_list )
 
 ax.legend(loc=2)  # upper left
 
-savefig('comp_mse_for_max_like_and_post_mean.pdf', format='pdf')
+if(pdf_format):
+  savefig('comp_mse_for_max_like_and_post_mean.pdf', format='pdf')
+else:
+  savefig('comp_mse_for_max_like_and_post_mean.png')

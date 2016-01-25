@@ -1,4 +1,4 @@
-# executing e.g. python _plot_lumfunc_histo.py -1.5 50000000000.0 5000000000000.0 fluxes_cnt_100000.dat lums_cnt_100000.dat dists_cnt_100000.dat 100000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --rmax 1121041.72243 --mu 0.000536477 --xlog_min 10.0 --xlog_max 14.0
+# executing e.g. python _plot_lumfunc_histo.py -1.5 50000000000.0 5000000000000.0 fluxes_cnt_100000.dat lums_cnt_100000.dat dists_cnt_100000.dat 100000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --rmax 1121041.72243 --mu 0.000536477 --xlog_min 10.0 --xlog_max 14.0 --pdf_format False
 
 import argparse as argp
 from bb1truncpl import BB1TruncPL
@@ -29,7 +29,7 @@ parser.add_argument("--mu", default = 0.934197, help="The value of mu(theta)", t
 parser.add_argument("--xlog_min", default = 8.0, help="The log of x-axis minimum", type=float)
 parser.add_argument("--xlog_max", default = 13.0, help="The log of x-axis maximum", type=float)
 parser.add_argument("--resolution", default = 300, help="The resolution of x-axis", type=int)
-
+parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 args = parser.parse_args()
 beta = args.beta
 lower_scale = args.lower_scale
@@ -46,8 +46,10 @@ mu = args.mu
 xlog_min = args.xlog_min
 xlog_max = args.xlog_max
 resolution = args.resolution
-
+pdf_format = eval(args.pdf_format)
 execfile("rc_settings.py")
+if(pdf_format!=True):
+  rc('savefig', dpi=100)
 
 flux_data=np.loadtxt(flux_file)
 dist_data=np.loadtxt(dist_file)
@@ -121,6 +123,9 @@ ax.set_xlim([xlog_min,xlog_max])
 ax.set_ylim([bottom_of_hist_height, top_of_y_axis])
 
 legend(loc=3)
-savefig('_lumfunc_histo.pdf', format='pdf')
+if(pdf_format):
+  savefig('_lumfunc_histo.pdf', format='pdf')
+else:
+  savefig('_lumfunc_histo.png')
 t1 = dt.datetime.today()
 print 'Elapsed time of generating figure of luminosity density function with noisy flux data:', t1-t0

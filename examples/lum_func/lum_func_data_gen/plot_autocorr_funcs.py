@@ -1,4 +1,5 @@
-executing e.g. python plot_autocorr_funcs.py lumfunc_thetas_2.dat autocorr_ 100 --pdf_format Falseimport argparse as argp
+#executing e.g. python plot_autocorr_funcs.py lumfunc_thetas_2.dat autocorr_ 100 --pdf_format False
+import argparse as argp
 import numpy as np
 from matplotlib.pyplot import *
 
@@ -40,7 +41,7 @@ def setAxesProperties(ax,lbl_k,lbl_autocorr,autocorrfn,tit):
     ax.set_xlabel(lbl_k)
     ax.set_ylabel(lbl_autocorr)
     ax.set_xlim([0.0,len(autocorrfn)])
-    ax.set_ylim([-0.6,0.6])
+    ax.set_ylim([-0.05,0.05])
     ax.xaxis.set_ticks([0,until/2,until])
     ax.set_title(tit)
 	

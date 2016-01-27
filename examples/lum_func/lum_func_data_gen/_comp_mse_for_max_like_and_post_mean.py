@@ -3,14 +3,16 @@ import argparse as argp
 import datetime as dt
 import numpy as np
 from matplotlib.pyplot import *
+from matplotlib import gridspec
 
 parser = argp.ArgumentParser()
 parser.add_argument("real_flux_file", help="The file name of real flux data file.", type = str)
 parser.add_argument("noisy_flux_file", help="The file name of noisy flux data file.", type = str)
 parser.add_argument("estimated_flux_file", help="The file name of estimated flux data file.", type = str)
 parser.add_argument("--n_regions", default = 10, help="The number of flux regions.", type = int)
-parser.add_argument("--broken_y_axis_start", default = 0.16, help="The start position of y-axis breaking.", type = float)
-parser.add_argument("--broken_y_axis_end", default = 0.25, help="The end position of y-axis breaking.", type = float)
+parser.add_argument("--broken_y_axis_start", default = 2.52, help="The start position of y-axis breaking.", type = float)
+parser.add_argument("--broken_y_axis_end", default = 10.0, help="The end position of y-axis breaking.", type = float)
+parser.add_argument("--broken_height_ratio", default = 5.0, help="The height ratio of the bottom part of broken y-axis.", type = float)
 parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 
 args = parser.parse_args()
@@ -20,6 +22,7 @@ estimated_flux_file = args.estimated_flux_file
 n_regions = args.n_regions
 broken_y_axis_start = args.broken_y_axis_start
 broken_y_axis_end = args.broken_y_axis_end
+broken_height_ratio = args.broken_height_ratio
 pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
@@ -77,7 +80,11 @@ print "MSE of max like - true", mse_max_like_list
 print "MSE of post mean - true", mse_post_mean_list
 
 #We need to create broken axis because of outlier values (based on matplotlib example: http://matplotlib.org/examples/pylab_examples/broken_axis.html)
-fig, (ax, ax2) = subplots(2, 1, sharex=True)
+#fig, (ax, ax2) = subplots(2, 1, sharex=True)
+fig = figure()
+gs = gridspec.GridSpec(2, 1, height_ratios=[1, broken_height_ratio])
+ax = subplot(gs[0])
+ax2 = subplot(gs[1], sharex=ax)
 
 ax.set_xlim([-0.3333, n_regions])
 ax2.set_xlim([-0.3333, n_regions])
@@ -94,8 +101,8 @@ ax2.xaxis.tick_bottom()
 d = .015  # how big to make the diagonal lines in axes coordinates
 # arguments to pass plot, just so we don't keep repeating them
 kwargs = dict(transform=ax.transAxes, color='k', clip_on=False)
-ax.plot((-d, +d), (-d, +d), **kwargs)        # top-left diagonal
-ax.plot((1 - d, 1 + d), (-d, +d), **kwargs)  # top-right diagonal
+ax.plot((-d, +d), (-d*broken_height_ratio, +d*broken_height_ratio), **kwargs)        # top-left diagonal
+ax.plot((1 - d, 1 + d), (-d*broken_height_ratio, +d*broken_height_ratio), **kwargs)  # top-right diagonal
 
 kwargs.update(transform=ax2.transAxes)  # switch to the bottom axes
 ax2.plot((-d, +d), (1 - d, 1 + d), **kwargs)  # bottom-left diagonal
@@ -104,8 +111,8 @@ ax2.plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs)  # bottom-right diagonal
 # based on matplotlib example: http://matplotlib.org/examples/api/barchart_demo.html
 ind = np.arange(n_regions)  # the x locations for the groups
 width = 0.35       # the width of the bars
-rects1 = ax.bar(ind, mse_max_like_list, width, color='b', label = 'Max like')
-rects2 = ax.bar(ind+width, mse_post_mean_list, width, color='r', label = 'Post mean')
+rects1 = ax.bar(ind, mse_max_like_list, width, color='b', label = 'Maximum likelihood estimate')
+rects2 = ax.bar(ind+width, mse_post_mean_list, width, color='r', label = 'Posterior mean')
 rects1 = ax2.bar(ind, mse_max_like_list, width, color='b')
 rects2 = ax2.bar(ind+width, mse_post_mean_list, width, color='r')
 

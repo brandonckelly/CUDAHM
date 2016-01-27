@@ -1,4 +1,4 @@
-# executing e.g. python plot_performance_combined.py
+# executing e.g. python plot_performance_combined.py --pdf_format False
 import argparse as argp
 import numpy as np
 from matplotlib.pyplot import *
@@ -6,6 +6,7 @@ from matplotlib.pyplot import *
 parser = argp.ArgumentParser()
 parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 
+args = parser.parse_args()
 pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
@@ -64,13 +65,11 @@ else:
   savefig('performance_iter_vs_time.png')
 
 performance_obj_vs_time_data_10000_without_fl=np.loadtxt('performance_obj_vs_time_data_10000_without_fl.dat',delimiter=' ',usecols=(0,1))
-performance_obj_vs_time_data_100000_without_fl=np.loadtxt('performance_obj_vs_time_data_100000_without_fl.dat',delimiter=' ',usecols=(0,1))
 performance_obj_vs_time_data_200000_without_fl=np.loadtxt('performance_obj_vs_time_data_200000_without_fl.dat',delimiter=' ',usecols=(0,1))
 performance_obj_vs_time_data_500000_without_fl=np.loadtxt('performance_obj_vs_time_data_500000_without_fl.dat',delimiter=' ',usecols=(0,1))
 performance_obj_vs_time_data_1000000_without_fl=np.loadtxt('performance_obj_vs_time_data_1000000_without_fl.dat',delimiter=' ',usecols=(0,1))
 performance_obj_vs_time_data_2000000_without_fl=np.loadtxt('performance_obj_vs_time_data_2000000_without_fl.dat',delimiter=' ',usecols=(0,1))
 performance_obj_vs_time_data_10000_with_fl=np.loadtxt('performance_obj_vs_time_data_10000_with_fl.dat',delimiter=' ',usecols=(0,1))
-performance_obj_vs_time_data_100000_with_fl=np.loadtxt('performance_obj_vs_time_data_100000_with_fl.dat',delimiter=' ',usecols=(0,1))
 performance_obj_vs_time_data_200000_with_fl=np.loadtxt('performance_obj_vs_time_data_200000_with_fl.dat',delimiter=' ',usecols=(0,1))
 performance_obj_vs_time_data_500000_with_fl=np.loadtxt('performance_obj_vs_time_data_500000_with_fl.dat',delimiter=' ',usecols=(0,1))
 performance_obj_vs_time_data_1000000_with_fl=np.loadtxt('performance_obj_vs_time_data_1000000_with_fl.dat',delimiter=' ',usecols=(0,1))
@@ -80,24 +79,20 @@ fig = figure()
 ax = fig.add_subplot(1,1,1, xlim=[0, 1010000], ylim=[0, 170]) # one row, one column, first plot
 ax.scatter(performance_obj_vs_time_data_10000_without_fl[:,0], performance_obj_vs_time_data_10000_without_fl[:,1], color = 'b', marker = "o", s = 15, label = '10000 iterations')
 ax.plot(performance_obj_vs_time_data_10000_without_fl[:,0], performance_obj_vs_time_data_10000_without_fl[:,1], 'b-')
-ax.scatter(performance_obj_vs_time_data_100000_without_fl[:,0], performance_obj_vs_time_data_100000_without_fl[:,1], color = 'g', marker = "o", s = 15, label = '100000 iterations')
-ax.plot(performance_obj_vs_time_data_100000_without_fl[:,0], performance_obj_vs_time_data_100000_without_fl[:,1], 'g-')
-ax.scatter(performance_obj_vs_time_data_200000_without_fl[:,0], performance_obj_vs_time_data_200000_without_fl[:,1], color = 'r', marker = "o", s = 15, label = '200000 iterations')
-ax.plot(performance_obj_vs_time_data_200000_without_fl[:,0], performance_obj_vs_time_data_200000_without_fl[:,1], 'r-')
-ax.scatter(performance_obj_vs_time_data_500000_without_fl[:,0], performance_obj_vs_time_data_500000_without_fl[:,1], color = 'y', marker = "o", s = 15, label = '500000 iterations')
-ax.plot(performance_obj_vs_time_data_500000_without_fl[:,0], performance_obj_vs_time_data_500000_without_fl[:,1], 'y-')
+ax.scatter(performance_obj_vs_time_data_200000_without_fl[:,0], performance_obj_vs_time_data_200000_without_fl[:,1], color = 'g', marker = "o", s = 15, label = '200000 iterations')
+ax.plot(performance_obj_vs_time_data_200000_without_fl[:,0], performance_obj_vs_time_data_200000_without_fl[:,1], 'g-')
+ax.scatter(performance_obj_vs_time_data_500000_without_fl[:,0], performance_obj_vs_time_data_500000_without_fl[:,1], color = 'r', marker = "o", s = 15, label = '500000 iterations')
+ax.plot(performance_obj_vs_time_data_500000_without_fl[:,0], performance_obj_vs_time_data_500000_without_fl[:,1], 'r-')
 ax.scatter(performance_obj_vs_time_data_1000000_without_fl[:,0], performance_obj_vs_time_data_1000000_without_fl[:,1], color = 'm', marker = "o", s = 15, label = '1000000 iterations')
 ax.plot(performance_obj_vs_time_data_1000000_without_fl[:,0], performance_obj_vs_time_data_1000000_without_fl[:,1], 'm-')
 ax.scatter(performance_obj_vs_time_data_2000000_without_fl[:,0], performance_obj_vs_time_data_2000000_without_fl[:,1], color = 'gray', marker = "o", s = 15, label = '2000000 iterations')
 ax.plot(performance_obj_vs_time_data_2000000_without_fl[:,0], performance_obj_vs_time_data_2000000_without_fl[:,1], color='gray', linestyle='solid')
 ax.scatter(performance_obj_vs_time_data_10000_with_fl[:,0], performance_obj_vs_time_data_10000_with_fl[:,1], color = 'b', marker = "o", s = 15)
 ax.plot(performance_obj_vs_time_data_10000_with_fl[:,0], performance_obj_vs_time_data_10000_with_fl[:,1], 'b--')
-ax.scatter(performance_obj_vs_time_data_100000_with_fl[:,0], performance_obj_vs_time_data_100000_with_fl[:,1], color = 'g', marker = "o", s = 15)
-ax.plot(performance_obj_vs_time_data_100000_with_fl[:,0], performance_obj_vs_time_data_100000_with_fl[:,1], 'g--')
-ax.scatter(performance_obj_vs_time_data_200000_with_fl[:,0], performance_obj_vs_time_data_200000_with_fl[:,1], color = 'r', marker = "o", s = 15)
-ax.plot(performance_obj_vs_time_data_200000_with_fl[:,0], performance_obj_vs_time_data_200000_with_fl[:,1], 'r--')
-ax.scatter(performance_obj_vs_time_data_500000_with_fl[:,0], performance_obj_vs_time_data_500000_with_fl[:,1], color = 'y', marker = "o", s = 15)
-ax.plot(performance_obj_vs_time_data_500000_with_fl[:,0], performance_obj_vs_time_data_500000_with_fl[:,1], 'y--')
+ax.scatter(performance_obj_vs_time_data_200000_with_fl[:,0], performance_obj_vs_time_data_200000_with_fl[:,1], color = 'g', marker = "o", s = 15)
+ax.plot(performance_obj_vs_time_data_200000_with_fl[:,0], performance_obj_vs_time_data_200000_with_fl[:,1], 'g--')
+ax.scatter(performance_obj_vs_time_data_500000_with_fl[:,0], performance_obj_vs_time_data_500000_with_fl[:,1], color = 'r', marker = "o", s = 15)
+ax.plot(performance_obj_vs_time_data_500000_with_fl[:,0], performance_obj_vs_time_data_500000_with_fl[:,1], 'r--')
 ax.scatter(performance_obj_vs_time_data_1000000_with_fl[:,0], performance_obj_vs_time_data_1000000_with_fl[:,1], color = 'm', marker = "o", s = 15)
 ax.plot(performance_obj_vs_time_data_1000000_with_fl[:,0], performance_obj_vs_time_data_1000000_with_fl[:,1], 'm--')
 

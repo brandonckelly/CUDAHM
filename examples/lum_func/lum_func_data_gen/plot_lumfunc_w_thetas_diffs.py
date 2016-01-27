@@ -55,6 +55,8 @@ resolution = args.resolution
 pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
+rc('figure.subplot', bottom=.195, top=.85, right=.95, left=0.175)
+rc('figure', figsize=(5, 2.5))
 if(pdf_format!=True):
   rc('savefig', dpi=100)
 
@@ -75,7 +77,7 @@ print 'Standard error of the mean of sample values of theta parameters: (%e,%e,%
 
 fig, ax = subplots()
 ax.set_xlabel(r'$\log_{10}(L)$')
-ax.set_ylabel(r'$\left|\log_{10}(\phi(L ; \theta)) - log_{10}(\phi(L ; \theta_{true})) \right|$')
+ax.set_ylabel(r'$\log_{10}(\phi(L ; \theta)) - log_{10}(\phi(L ; \theta_{true}))$')
 tit = r'Luminosity density function'
 #ax.set_title(tit)
 
@@ -92,7 +94,7 @@ def plot_figs(idx, xlin, log10_of_xlin, c):
     log10_of_pdf = np.log10(pdf)
     #the green colored line belongs to the latest theta from iterations.
     red_rate = (1.0 - idx/float(theta_data.shape[0]))
-    log10_of_diff_true_mcmc = np.abs(log10_of_pdf_0 - log10_of_pdf)
+    log10_of_diff_true_mcmc = log10_of_pdf_0 - log10_of_pdf
     ax.plot(log10_of_xlin, log10_of_diff_true_mcmc, color=(red_rate*1.0,1.0,0.0), alpha=.01, linewidth=0.25, zorder=1)
 
 t1 = dt.datetime.today()
@@ -105,20 +107,20 @@ pdf_0 = bb1_0.pdf(xlin)
 log10_of_pdf_0 = np.log10(pdf_0)
 
 bb1_1 = BB1TruncPL(maxlike_beta, maxlike_lower_scale, maxlike_upper_scale)
-lbl_1 = r'$\left|\log_{10}(\phi(L ; \theta_{maxlike})) - log_{10}(\phi(L ; \theta_{true})) \right|$'
+lbl_1 = r'$\log_{10}(\phi(L ; \theta_{maxlike})) - log_{10}(\phi(L ; \theta_{true}))$'
 pdf_1 = bb1_1.pdf(xlin)
 log10_of_pdf_1 = np.log10(pdf_1)
-log10_of_diff_true_maxlike = np.abs(log10_of_pdf_0 - log10_of_pdf_1)
+log10_of_diff_true_maxlike = log10_of_pdf_0 - log10_of_pdf_1
 ax.plot(log10_of_xlin, log10_of_diff_true_maxlike, 'b-', linewidth=0.5, label=lbl_1, zorder=2)
 
 #med_beta = med_vec[0]
 #med_l = med_vec[1] * lower_scale_factor
 #med_u = med_vec[2] * upper_scale_factor
 #bb1_2 = BB1TruncPL(med_beta, med_l, med_u)
-#lbl_2 = r'$\left|\log_{10}(\phi(L ; \theta_{postmed})) - log_{10}(\phi(L ; \theta_{true})) \right|$'
+#lbl_2 = r'$\log_{10}(\phi(L ; \theta_{postmed})) - log_{10}(\phi(L ; \theta_{true}))$'
 #pdf_2 = bb1_2.pdf(xlin)
 #log10_of_pdf_2 = np.log10(pdf_2)
-#log10_of_diff_post_med = np.abs(log10_of_pdf_0 - log10_of_pdf_2)
+#log10_of_diff_post_med = log10_of_pdf_0 - log10_of_pdf_2
 #ax.plot(log10_of_xlin, log10_of_diff_post_med, 'darkgreen', linestyle='solid', linewidth=0.5, label=lbl_2, zorder=2)
 
 u_array = np.random.uniform(size=theta_data.shape[0])

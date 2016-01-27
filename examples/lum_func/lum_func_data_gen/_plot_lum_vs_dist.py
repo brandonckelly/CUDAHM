@@ -45,9 +45,9 @@ xlabel(r'$r$')
 ylabel(r'$\log(L)$')
 
 #lbl_1 = 'distance vs log-luminosity'
-ax.scatter(dist_data, lumVals, c='r', marker='.', linewidth=0, alpha=0.015)
+ax.scatter(dist_data, lumVals, color='r', marker='.', edgecolors='none', alpha=0.015, rasterized = True)
 lbl_2 = r'$\log(4\pi T r^2)$'
-ax.plot(distRange, limitLumVals, zorder=3, linewidth=4, c='b', label=lbl_2)
+ax.plot(distRange, limitLumVals, zorder=3, linewidth=4, color='b', label=lbl_2, rasterized = True)
 
 ax.set_xlim([0, rmax])
 ax.set_ylim([22, 33])

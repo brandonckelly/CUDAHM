@@ -32,13 +32,6 @@ theta_data_u=theta_data[:,2]
 theta_data_l *= lower_scale_factor
 theta_data_u *= upper_scale_factor
 
-color_list = range(0, theta_data.shape[0])
-
-for idx in range(0, theta_data.shape[0]):
-    blue_rate = idx/float(theta_data.shape[0])
-    red_rate = (1.0 - idx/float(theta_data.shape[0]))
-    color_list[idx]=(red_rate*1.0,0.0,blue_rate*1.0)
-
 def determineMagnitude(floatNum):
     sciNotationPython = '%e' % floatNum
     mantissa, exp = sciNotationPython.split('e+')
@@ -72,7 +65,7 @@ lbl_iter= r'Iterations ($\times 10^{%d}$)' % max_x_pos_exp
 
 fig, ax = subplots()
 xrange = np.arange(1, len(theta_data_beta) + 1) * nthin_theta
-ax.scatter(xrange,theta_data_beta, c=color_list, marker = ".", linewidth=0, alpha=0.05)
+ax.scatter(xrange,theta_data_beta, color = 'b', marker = ".", edgecolors='none', alpha=0.01, rasterized = True)
 setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
 beta_ticks = setYAxisProperties(ax, lbl_beta, theta_data_beta)
 ax.yaxis.set_ticklabels(['%.2f' % y for y in beta_ticks])
@@ -83,7 +76,7 @@ else:
 
 fig, ax = subplots()
 xrange = np.arange(1, len(theta_data_u) + 1) * nthin_theta
-ax.scatter(xrange,theta_data_u, c=color_list, marker = ".", linewidth=0, alpha=0.05)
+ax.scatter(xrange,theta_data_u, color = 'b', marker = ".", edgecolors='none', alpha=0.01, rasterized = True)
 setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
 upperscale_ticks = setYAxisProperties(ax, lbl_upperscale, theta_data_u)
 ax.yaxis.set_ticklabels(['%.2f' % (y/max_upperscale_mag) for y in upperscale_ticks])
@@ -94,7 +87,7 @@ else:
 
 fig, ax = subplots()
 xrange = np.arange(1, len(theta_data_l) + 1) * nthin_theta
-ax.scatter(xrange,theta_data_l, c=color_list, marker = ".", linewidth=0, alpha=0.05)
+ax.scatter(xrange,theta_data_l, color = 'b', marker = ".", edgecolors='none', alpha=0.01, rasterized = True)
 setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
 lowerscale_ticks = setYAxisProperties(ax, lbl_lowerscale, theta_data_l)
 ax.yaxis.set_ticklabels(['%.2f' % (y/max_lowerscale_mag) for y in lowerscale_ticks])
@@ -104,7 +97,7 @@ else:
   savefig('lowerscale.png')
 
 fig, ax = subplots()
-ax.scatter(theta_data_beta,theta_data_l, c=color_list, marker = ".", linewidth=0, alpha=0.05)
+ax.scatter(theta_data_beta,theta_data_l, color = 'b', marker = ".", edgecolors='none', alpha=0.01, rasterized = True)
 #ax.set_xlabel(lbl_beta)
 #ax.set_ylabel(lbl_lowerscale)
 ax.xaxis.set_ticks([0.0,0.5*max_x_pos,max_x_pos])
@@ -115,7 +108,7 @@ else:
   savefig('beta_lowerscale.png')
 
 fig, ax = subplots()
-ax.scatter(theta_data_beta,theta_data_u, c=color_list, marker = ".", linewidth=0, alpha=0.05)
+ax.scatter(theta_data_beta,theta_data_u, color = 'b', marker = ".", edgecolors='none', alpha=0.01, rasterized = True)
 #ax.set_xlabel(lbl_beta)
 #ax.set_ylabel(lbl_upperscale)
 ax.xaxis.set_ticks([0.0,0.5*max_x_pos,max_x_pos])
@@ -126,7 +119,7 @@ else:
   savefig('beta_upperscale.png')
 
 fig, ax = subplots()
-ax.scatter(theta_data_l,theta_data_u, c=color_list, marker = ".", linewidth=0, alpha=0.05)
+ax.scatter(theta_data_l,theta_data_u, color = 'b', marker = ".", edgecolors='none', alpha=0.01, rasterized = True)
 #ax.set_xlabel(lbl_lowerscale)
 #ax.set_ylabel(lbl_upperscale)
 ax.xaxis.set_ticks([0.0,0.5*max_x_pos,max_x_pos])

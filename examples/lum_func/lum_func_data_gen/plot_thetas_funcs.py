@@ -1,4 +1,5 @@
-# executing e.g. python plot_thetas_funcs.py lumfunc_thetas_2.dat _ (--lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --nthin_theta 150 --pdf_format False)import argparse as argp
+# executing e.g. python plot_thetas_funcs.py lumfunc_thetas_2.dat _ (--lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --nthin_theta 150 --pdf_format False)
+import argparse as argp
 import numpy as np
 from matplotlib.pyplot import *
 

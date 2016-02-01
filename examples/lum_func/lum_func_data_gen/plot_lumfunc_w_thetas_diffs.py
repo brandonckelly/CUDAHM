@@ -3,8 +3,10 @@ import argparse as argp
 from bb1truncpl import BB1TruncPL
 import numpy as np
 from matplotlib.pyplot import *
+from matplotlib.cbook import get_sample_data
 import datetime as dt
 from scipy import stats
+import os
 
 #ion()
 
@@ -55,7 +57,7 @@ resolution = args.resolution
 pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
-rc('figure.subplot', bottom=.195, top=.85, right=.95, left=0.175)
+rc('figure.subplot', bottom=0.0, top=1.0, right=1.0, left=0.0)
 rc('figure', figsize=(5, 2.5))
 if(pdf_format!=True):
   rc('savefig', dpi=100)
@@ -76,10 +78,11 @@ print 'Standard error of the mean of sample values of theta parameters: (%e,%e,%
 #print 'Median of samples of theta parameters: (%5.4f,%5.4f,%5.4f)' % (med_vec[0], med_vec[1], med_vec[2])
 
 fig, ax = subplots()
-ax.set_xlabel(r'$\log_{10}(L)$')
-ax.set_ylabel(r'$\log_{10}(\phi(L ; \theta)) - log_{10}(\phi(L ; \theta_{true}))$')
-tit = r'Luminosity density function'
-#ax.set_title(tit)
+ax.spines['bottom'].set_visible(False)
+ax.spines['top'].set_visible(False)
+ax.spines['left'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.tick_params(bottom='off',top='off',left='off',right='off')
 
 xlin = np.linspace(10**xlog_min, 10**xlog_max, resolution)
 log10_of_xlin = np.log10(xlin)
@@ -95,23 +98,21 @@ def plot_figs(idx, xlin, log10_of_xlin, c):
     #the green colored line belongs to the latest theta from iterations.
     red_rate = (1.0 - idx/float(theta_data.shape[0]))
     log10_of_diff_true_mcmc = log10_of_pdf_0 - log10_of_pdf
-    ax.plot(log10_of_xlin, log10_of_diff_true_mcmc, color=(red_rate*1.0,1.0,0.0), alpha=.01, linewidth=0.25, zorder=1)
+    ax.plot(log10_of_xlin, log10_of_diff_true_mcmc, color=(red_rate*1.0,1.0,0.0), alpha=.03, linewidth=0.25, zorder=1)
 
 t1 = dt.datetime.today()
 print 'Elapsed time of loading samples of theta parameters:', t1-t0
 
 t0 = dt.datetime.today()
 bb1_0 = BB1TruncPL(beta, lower_scale, upper_scale)
-lbl_0 = r'$\log_{10}(\phi(L ; \theta_{true}))$'
 pdf_0 = bb1_0.pdf(xlin)
 log10_of_pdf_0 = np.log10(pdf_0)
 
 bb1_1 = BB1TruncPL(maxlike_beta, maxlike_lower_scale, maxlike_upper_scale)
-lbl_1 = r'$\log_{10}(\phi(L ; \theta_{maxlike})) - log_{10}(\phi(L ; \theta_{true}))$'
 pdf_1 = bb1_1.pdf(xlin)
 log10_of_pdf_1 = np.log10(pdf_1)
 log10_of_diff_true_maxlike = log10_of_pdf_0 - log10_of_pdf_1
-ax.plot(log10_of_xlin, log10_of_diff_true_maxlike, 'b-', linewidth=0.5, label=lbl_1, zorder=2)
+ax.plot(log10_of_xlin, log10_of_diff_true_maxlike, 'b-', linewidth=0.5, zorder=2)
 
 #med_beta = med_vec[0]
 #med_l = med_vec[1] * lower_scale_factor
@@ -134,10 +135,40 @@ for idx in range(0, theta_data.shape[0]):
 
 print 'Count of accepted array elements: %d' % cnt_accept
 
-ax.legend(loc=1)  # upper right
+original_xticks = ax.get_xticks()
+original_yticks = ax.get_yticks()
+
+savefig('lumfunc_w_thetas_diffs_curve.png')
+
+t1 = dt.datetime.today()
+print 'Elapsed time of generating figure of luminosity density function differences between with true parameters and with samples of theta parameters:', t1-t0
+
+execfile("rc_settings.py")
+rc('figure.subplot', bottom=.195, top=.85, right=.95, left=0.175)
+rc('figure', figsize=(5, 2.5))
+fig, ax = subplots()
+ax.set_xlabel(r'$\log_{10}(L)$')
+ax.set_ylabel(r'$\log_{10}(\phi(L ; \theta)) - log_{10}(\phi(L ; \theta_{true}))$')
+
+currentdir = os.getcwd()
+im = imread(get_sample_data(currentdir+'\\'+'lumfunc_w_thetas_diffs_curve.png'))
+ax.imshow(im, extent=[original_xticks[0],original_xticks[-1],original_yticks[0], original_yticks[-1]], aspect="auto")
+
+lbl_1 = r'$\log_{10}(\phi(L ; \theta_{maxlike})) - log_{10}(\phi(L ; \theta_{true}))$'
+
+#The following 'custom legend' based on http://stackoverflow.com/questions/13303928/how-to-make-custom-legend-in-matplotlib
+#Get artists and labels for legend and chose which ones to display
+handles, labels = ax.get_legend_handles_labels()
+display = tuple(range(5))
+
+#Create custom artists
+trueMaxlikeDiffFLArtist = Line2D((0,1),(0,0), color='b', linestyle='-', linewidth=0.5)
+
+#Create legend from custom artist/label lists
+ax.legend([handle for i,handle in enumerate(handles) if i in display]+[trueMaxlikeDiffFLArtist],
+          [label for i,label in enumerate(labels) if i in display]+[lbl_1], loc=1) # upper right
+
 if(pdf_format):
   savefig('lumfunc_w_thetas_diffs.pdf', format='pdf')
 else:
   savefig('lumfunc_w_thetas_diffs.png')
-t1 = dt.datetime.today()
-print 'Elapsed time of generating figure of luminosity density function differences between with true parameters and with samples of theta parameters:', t1-t0

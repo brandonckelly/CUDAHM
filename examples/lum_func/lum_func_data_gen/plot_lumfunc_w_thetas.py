@@ -3,8 +3,10 @@ import argparse as argp
 from bb1truncpl import BB1TruncPL
 import numpy as np
 from matplotlib.pyplot import *
+from matplotlib.cbook import get_sample_data
 import datetime as dt
 from scipy import stats
+import os
 
 #ion()
 
@@ -53,6 +55,7 @@ xlog_max = args.xlog_max
 resolution = args.resolution
 pdf_format = eval(args.pdf_format)
 execfile("rc_settings.py")
+rc('figure.subplot', bottom=0.0, top=1.0, right=1.0, left=0.0)
 if(pdf_format!=True):
   rc('savefig', dpi=100)
 
@@ -69,10 +72,11 @@ print 'Standard deviation of samples of theta parameters: (%5.4f,%5.4f,%5.4f)' %
 print 'Standard error of the mean of sample values of theta parameters: (%e,%e,%e)' % (sem_vec[0], sem_vec[1], sem_vec[2])
 
 fig, ax = subplots()
-ax.set_xlabel(r'$\log_{10}(L)$')
-ax.set_ylabel(r'$\log_{10}(\phi(L ; \theta))$')
-tit = r'Luminosity density function'
-#ax.set_title(tit)
+ax.spines['bottom'].set_visible(False)
+ax.spines['top'].set_visible(False)
+ax.spines['left'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.tick_params(bottom='off',top='off',left='off',right='off')
 
 xlin = np.linspace(10**xlog_min, 10**xlog_max, resolution)
 log10_of_xlin = np.log10(xlin)
@@ -93,16 +97,14 @@ print 'Elapsed time of loading samples of theta parameters:', t1-t0
 
 t0 = dt.datetime.today()
 bb1_0 = BB1TruncPL(beta, lower_scale, upper_scale)
-lbl_0 = r'$\log_{10}(\phi(L ; \theta_{true}))$'
 pdf_0 = bb1_0.pdf(xlin)
 log10_of_pdf_0 = np.log10(pdf_0)
-ax.plot(log10_of_xlin, log10_of_pdf_0, 'r-', linewidth=0.5, label=lbl_0, zorder=3)
+ax.plot(log10_of_xlin, log10_of_pdf_0, 'r-', linewidth=0.6, zorder=3)
 
 bb1_1 = BB1TruncPL(maxlike_beta, maxlike_lower_scale, maxlike_upper_scale)
-lbl_1 = r'$\log_{10}(\phi(L ; \theta_{maxlike}))$'
 pdf_1 = bb1_1.pdf(xlin)
 log10_of_pdf_1 = np.log10(pdf_1)
-ax.plot(log10_of_xlin, log10_of_pdf_1, 'b-', linewidth=0.5, label=lbl_1, zorder=2)
+ax.plot(log10_of_xlin, log10_of_pdf_1, 'b-', linewidth=0.6, zorder=2)
 
 u_array = np.random.uniform(size=theta_data.shape[0])
 accept_rate = cov/float(theta_data.shape[0])
@@ -115,10 +117,44 @@ for idx in range(0, theta_data.shape[0]):
 
 print 'Count of accepted array elements: %d' % cnt_accept
 
-ax.legend(loc=3)  # lower left
+original_xticks = ax.get_xticks()
+original_yticks = ax.get_yticks()
+
+savefig('lumfunc_w_thetas_curve.png')
+
+t1 = dt.datetime.today()
+print 'Elapsed time of generating figure of luminosity density function with samples of theta parameters:', t1-t0
+
+execfile("rc_settings.py")
+fig, ax = subplots()
+ax.set_xlabel(r'$\log_{10}(L)$')
+ax.set_ylabel(r'$\log_{10}(\phi(L ; \theta))$')
+tit = r'Luminosity density function'
+#ax.set_title(tit))
+
+currentdir = os.getcwd()
+print currentdir
+
+im = imread(get_sample_data(currentdir+'\\'+'lumfunc_w_thetas_curve.png'))
+ax.imshow(im, extent=[original_xticks[0],original_xticks[-1],original_yticks[0], original_yticks[-1]], aspect="auto")
+
+lbl_0 = r'$\log_{10}(\phi(L ; \theta_{true}))$'
+lbl_1 = r'$\log_{10}(\phi(L ; \theta_{maxlike}))$'
+
+#The following 'custom legend' based on http://stackoverflow.com/questions/13303928/how-to-make-custom-legend-in-matplotlib
+#Get artists and labels for legend and chose which ones to display
+handles, labels = ax.get_legend_handles_labels()
+display = tuple(range(5))
+
+#Create custom artists
+trueFLArtist = Line2D((0,1),(0,0), color='r', linestyle='-', linewidth=0.5)
+maxlikeFLArtist = Line2D((0,1),(0,0), color='b', linestyle='-', linewidth=0.5)
+
+#Create legend from custom artist/label lists
+ax.legend([handle for i,handle in enumerate(handles) if i in display]+[trueFLArtist,maxlikeFLArtist],
+          [label for i,label in enumerate(labels) if i in display]+[lbl_0, lbl_1], loc=3)
+
 if(pdf_format):
   savefig('lumfunc_w_thetas.pdf', format='pdf')
 else:
   savefig('lumfunc_w_thetas.png')
-t1 = dt.datetime.today()
-print 'Elapsed time of generating figure of luminosity density function with samples of theta parameters:', t1-t0

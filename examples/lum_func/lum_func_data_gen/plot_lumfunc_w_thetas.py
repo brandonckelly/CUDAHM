@@ -1,9 +1,10 @@
-# executing e.g. python plot_lumfunc_w_thetas.py lumfunc_thetas_2.dat -1.5 50000000000.0 5000000000000.0 -1.41 4.0 5.8 -1.5564 7.3222 5.7207 1500000 1500000 100000 (--cov 1000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --pdf_format False)
+# executing e.g. python plot_lumfunc_w_thetas.py lumfunc_thetas_2.dat -1.5 50000000000.0 5000000000000.0 -1.41 4.0 5.8 -1.5564 7.3222 5.7207 1500000 1500000 100000 (--cov 1000 --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --pdf_format False --resolution 3000)
 import argparse as argp
 from bb1truncpl import BB1TruncPL
 import numpy as np
 from matplotlib.pyplot import *
 from matplotlib.cbook import get_sample_data
+from matplotlib import gridspec
 import datetime as dt
 from scipy import stats
 import os
@@ -31,7 +32,7 @@ parser.add_argument("--lower_scale_factor", default = 1.0, help="The factor whic
 parser.add_argument("--upper_scale_factor", default = 1.0, help="The factor which scales up the upper scale samples", type=float)
 parser.add_argument("--xlog_min", default = 8.0, help="The log of x-axis minimum", type=float)
 parser.add_argument("--xlog_max", default = 13.0, help="The log of x-axis maximum", type=float)
-parser.add_argument("--resolution", default = 300, help="The resolution of x-axis", type=int)
+parser.add_argument("--resolution", default = 5000, help="The resolution of x-axis", type=int)
 parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 args = parser.parse_args()
 file = args.file
@@ -63,6 +64,30 @@ if(pdf_format!=True):
 
 theta_data=np.loadtxt(file,delimiter=' ',usecols=(0,1,2))
 
+# Helper for plotting BB1 with samples of theta parameters:
+def plot_figs(idx, xlin, log10_of_xlin, c, ax):
+    smp_beta = theta_data[idx][0]
+    smp_l =theta_data[idx][1] * lower_scale_factor
+    smp_u = theta_data[idx][2] * upper_scale_factor
+    bb1 = BB1TruncPL(smp_beta, smp_l, smp_u)
+    pdf = bb1.pdf(xlin)
+    log10_of_pdf = np.log10(pdf)
+    #the green colored line belongs to the latest theta from iterations.
+    red_rate = (1.0 - idx/float(theta_data.shape[0]))
+    ax.plot(log10_of_xlin, log10_of_pdf, color=(red_rate*1.0,1.0,0.0), alpha=.01, linewidth=0.25, zorder=1)
+
+def plot_figs_diffs(idx, xlin, log10_of_xlin, c, ax):
+    smp_beta = theta_data[idx][0]
+    smp_l =theta_data[idx][1] * lower_scale_factor
+    smp_u = theta_data[idx][2] * upper_scale_factor
+    bb1 = BB1TruncPL(smp_beta, smp_l, smp_u)
+    pdf = bb1.pdf(xlin)
+    log10_of_pdf = np.log10(pdf)
+    #the green colored line belongs to the latest theta from iterations.
+    red_rate = (1.0 - idx/float(theta_data.shape[0]))
+    log10_of_diff_true_mcmc = log10_of_pdf_0 - log10_of_pdf
+    ax.plot(log10_of_xlin, log10_of_diff_true_mcmc, color=(red_rate*1.0,1.0,0.0), alpha=.03, linewidth=0.25, zorder=1)
+
 mean_vec = np.mean(theta_data, axis = 0)
 std_vec = np.std(theta_data, axis = 0)
 sem_vec = stats.sem(theta_data, axis = 0)
@@ -80,17 +105,6 @@ ax.tick_params(bottom='off',top='off',left='off',right='off')
 
 xlin = np.linspace(10**xlog_min, 10**xlog_max, resolution)
 log10_of_xlin = np.log10(xlin)
-# Helper for plotting BB1 with samples of theta parameters:
-def plot_figs(idx, xlin, log10_of_xlin, c):
-    smp_beta = theta_data[idx][0]
-    smp_l =theta_data[idx][1] * lower_scale_factor
-    smp_u = theta_data[idx][2] * upper_scale_factor
-    bb1 = BB1TruncPL(smp_beta, smp_l, smp_u)
-    pdf = bb1.pdf(xlin)
-    log10_of_pdf = np.log10(pdf)
-    #the green colored line belongs to the latest theta from iterations.
-    red_rate = (1.0 - idx/float(theta_data.shape[0]))
-    ax.plot(log10_of_xlin, log10_of_pdf, color=(red_rate*1.0,1.0,0.0), alpha=.01, linewidth=0.25, zorder=1)
 
 t1 = dt.datetime.today()
 print 'Elapsed time of loading samples of theta parameters:', t1-t0
@@ -112,23 +126,69 @@ accept_rate = cov/float(theta_data.shape[0])
 cnt_accept = 0
 for idx in range(0, theta_data.shape[0]):
 	if u_array[idx] < accept_rate:
-		plot_figs(idx, xlin, log10_of_xlin, 'b')
+		plot_figs(idx, xlin, log10_of_xlin, 'b', ax)
 		cnt_accept += 1
 
 print 'Count of accepted array elements: %d' % cnt_accept
 
-original_xticks = ax.get_xticks()
-original_yticks = ax.get_yticks()
+original_xticks1 = ax.get_xticks()
+original_yticks1 = ax.get_yticks()
 
 savefig('lumfunc_w_thetas_curve.png')
 
 t1 = dt.datetime.today()
 print 'Elapsed time of generating figure of luminosity density function with samples of theta parameters:', t1-t0
 
+close() # it closes the previous plot to avoid memory leak
+
 execfile("rc_settings.py")
+rc('figure.subplot', bottom=0.0, top=1.0, right=1.0, left=0.0)
 fig, ax = subplots()
-ax.set_xlabel(r'$\log_{10}(L)$')
+ax.spines['bottom'].set_visible(False)
+ax.spines['top'].set_visible(False)
+ax.spines['left'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.tick_params(bottom='off',top='off',left='off',right='off')
+
+t0 = dt.datetime.today()
+
+log10_of_diff_true_maxlike = log10_of_pdf_0 - log10_of_pdf_1
+ax.plot(log10_of_xlin, log10_of_diff_true_maxlike, 'b-', linewidth=1.0, zorder=2)
+
+u_array = np.random.uniform(size=theta_data.shape[0])
+accept_rate = cov/float(theta_data.shape[0])
+
+cnt_accept = 0
+for idx in range(0, theta_data.shape[0]):
+	if u_array[idx] < accept_rate:
+		plot_figs_diffs(idx, xlin, log10_of_xlin, 'b', ax)
+		cnt_accept += 1
+
+print 'Count of accepted array elements: %d' % cnt_accept
+
+original_xticks2 = ax.get_xticks()
+original_yticks2 = ax.get_yticks()
+
+savefig('lumfunc_w_thetas_diffs_curve.png')
+
+t1 = dt.datetime.today()
+print 'Elapsed time of generating figure of luminosity density function differences between with true parameters and with samples of theta parameters:', t1-t0
+
+close() # it closes the previous plot to avoid memory leak
+
+execfile("rc_settings.py")
+rc('figure.subplot', bottom=.08, top=.97, right=.95, left=0.175)
+rc('figure', figsize=(5, 7.5))
+fig = figure()
+gs = gridspec.GridSpec(2, 1, height_ratios=[2, 1])
+gs.update(hspace=0.1) # set the spacing between axes.
+ax2 = subplot(gs[1])
+ax = subplot(gs[0], sharex=ax2)
+
 ax.set_ylabel(r'$\log_{10}(\phi(L ; \theta))$')
+ax.tick_params(labelbottom='off')  # don't put tick labels at the bottom
+ax2.set_ylabel(r'$\log_{10}(\phi(L ; \theta)) - log_{10}(\phi(L ; \theta_{true}))$')
+ax2.set_xlabel(r'$\log_{10}(L)$')
 tit = r'Luminosity density function'
 #ax.set_title(tit))
 
@@ -136,7 +196,10 @@ currentdir = os.getcwd()
 print currentdir
 
 im = imread(get_sample_data(currentdir+'\\'+'lumfunc_w_thetas_curve.png'))
-ax.imshow(im, extent=[original_xticks[0],original_xticks[-1],original_yticks[0], original_yticks[-1]], aspect="auto")
+ax.imshow(im, extent=[original_xticks1[0],original_xticks1[-1],original_yticks1[0], original_yticks1[-1]], aspect="auto")
+
+im = imread(get_sample_data(currentdir+'\\'+'lumfunc_w_thetas_diffs_curve.png'))
+ax2.imshow(im, extent=[original_xticks2[0],original_xticks2[-1],original_yticks2[0], original_yticks2[-1]], aspect="auto")
 
 lbl_0 = r'$\log_{10}(\phi(L ; \theta_{true}))$'
 lbl_1 = r'$\log_{10}(\phi(L ; \theta_{maxlike}))$'
@@ -153,6 +216,20 @@ maxlikeFLArtist = Line2D((0,1),(0,0), color='b', linestyle='-', linewidth=0.5)
 #Create legend from custom artist/label lists
 ax.legend([handle for i,handle in enumerate(handles) if i in display]+[trueFLArtist,maxlikeFLArtist],
           [label for i,label in enumerate(labels) if i in display]+[lbl_0, lbl_1], loc=3)
+
+lbl_3 = r'$\log_{10}(\phi(L ; \theta_{maxlike})) - log_{10}(\phi(L ; \theta_{true}))$'
+		  
+#The following 'custom legend' based on http://stackoverflow.com/questions/13303928/how-to-make-custom-legend-in-matplotlib
+#Get artists and labels for legend and chose which ones to display
+handles, labels = ax2.get_legend_handles_labels()
+display = tuple(range(5))
+
+#Create custom artists
+trueMaxlikeDiffFLArtist = Line2D((0,1),(0,0), color='b', linestyle='-', linewidth=0.5)
+
+#Create legend from custom artist/label lists
+ax2.legend([handle for i,handle in enumerate(handles) if i in display]+[trueMaxlikeDiffFLArtist],
+          [label for i,label in enumerate(labels) if i in display]+[lbl_3], loc=1) # upper right
 
 if(pdf_format):
   savefig('lumfunc_w_thetas.pdf', format='pdf')

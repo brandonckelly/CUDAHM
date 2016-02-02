@@ -177,8 +177,8 @@ print 'Elapsed time of generating figure of luminosity density function differen
 close() # it closes the previous plot to avoid memory leak
 
 execfile("rc_settings.py")
-rc('figure.subplot', bottom=.08, top=.97, right=.95, left=0.175)
-rc('figure', figsize=(5, 7.5))
+rc('figure.subplot', bottom=.1, top=.97, right=.95, left=0.24)
+rc('figure', figsize=(3.75, 5.625))
 fig = figure()
 gs = gridspec.GridSpec(2, 1, height_ratios=[2, 1])
 gs.update(hspace=0.1) # set the spacing between axes.
@@ -217,19 +217,19 @@ maxlikeFLArtist = Line2D((0,1),(0,0), color='b', linestyle='-', linewidth=0.5)
 ax.legend([handle for i,handle in enumerate(handles) if i in display]+[trueFLArtist,maxlikeFLArtist],
           [label for i,label in enumerate(labels) if i in display]+[lbl_0, lbl_1], loc=3)
 
-lbl_3 = r'$\log_{10}(\phi(L ; \theta_{maxlike})) - log_{10}(\phi(L ; \theta_{true}))$'
+#lbl_3 = r'$\log_{10}(\phi(L ; \theta_{maxlike})) - log_{10}(\phi(L ; \theta_{true}))$'
 		  
 #The following 'custom legend' based on http://stackoverflow.com/questions/13303928/how-to-make-custom-legend-in-matplotlib
 #Get artists and labels for legend and chose which ones to display
-handles, labels = ax2.get_legend_handles_labels()
-display = tuple(range(5))
+#handles, labels = ax2.get_legend_handles_labels()
+#display = tuple(range(5))
 
 #Create custom artists
-trueMaxlikeDiffFLArtist = Line2D((0,1),(0,0), color='b', linestyle='-', linewidth=0.5)
+#trueMaxlikeDiffFLArtist = Line2D((0,1),(0,0), color='b', linestyle='-', linewidth=0.5)
 
 #Create legend from custom artist/label lists
-ax2.legend([handle for i,handle in enumerate(handles) if i in display]+[trueMaxlikeDiffFLArtist],
-          [label for i,label in enumerate(labels) if i in display]+[lbl_3], loc=1) # upper right
+#ax2.legend([handle for i,handle in enumerate(handles) if i in display]+[trueMaxlikeDiffFLArtist],
+#          [label for i,label in enumerate(labels) if i in display]+[lbl_3], loc=1) # upper right
 
 if(pdf_format):
   savefig('lumfunc_w_thetas.pdf', format='pdf')

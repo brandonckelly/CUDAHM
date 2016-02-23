@@ -154,6 +154,7 @@ t0 = dt.datetime.today()
 
 log10_of_diff_true_maxlike = log10_of_pdf_0 - log10_of_pdf_1
 ax.plot(log10_of_xlin, log10_of_diff_true_maxlike, 'b-', linewidth=1.0, zorder=2)
+ax.axhline(y = 0.0, color='red', linewidth=1.5, linestyle='-', zorder=3)
 
 u_array = np.random.uniform(size=theta_data.shape[0])
 accept_rate = cov/float(theta_data.shape[0])
@@ -167,6 +168,7 @@ for idx in range(0, theta_data.shape[0]):
 print 'Count of accepted array elements: %d' % cnt_accept
 
 original_xticks2 = ax.get_xticks()
+ax.set_yticks([-0.08,-0.04,0.0,0.04,0.08])
 original_yticks2 = ax.get_yticks()
 
 savefig('lumfunc_w_thetas_diffs_curve.png')
@@ -185,9 +187,9 @@ gs.update(hspace=0.1) # set the spacing between axes.
 ax2 = subplot(gs[1])
 ax = subplot(gs[0], sharex=ax2)
 
-ax.set_ylabel(r'$\log_{10}(\phi(L ; \theta))$')
+ax.set_ylabel(r'$\log_{10}\phi$')
 ax.tick_params(labelbottom='off')  # don't put tick labels at the bottom
-ax2.set_ylabel(r'$\log_{10}(\phi(L ; \theta)) - log_{10}(\phi(L ; \theta_{true}))$')
+ax2.set_ylabel(r'$\log_{10}\phi - log_{10}\phi_{true}$')
 ax2.set_xlabel(r'$\log_{10}(L)$')
 tit = r'Luminosity density function'
 #ax.set_title(tit))
@@ -200,6 +202,7 @@ ax.imshow(im, extent=[original_xticks1[0],original_xticks1[-1],original_yticks1[
 
 im = imread(get_sample_data(currentdir+'\\'+'lumfunc_w_thetas_diffs_curve.png'))
 ax2.imshow(im, extent=[original_xticks2[0],original_xticks2[-1],original_yticks2[0], original_yticks2[-1]], aspect="auto")
+ax2.set_yticks([-0.08,-0.04,0.0,0.04,0.08])
 
 lbl_0 = r'$\log_{10}(\phi(L ; \theta_{true}))$'
 lbl_1 = r'$\log_{10}(\phi(L ; \theta_{maxlike}))$'

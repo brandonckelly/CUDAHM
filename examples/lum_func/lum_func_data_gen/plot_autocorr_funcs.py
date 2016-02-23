@@ -17,7 +17,7 @@ pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
 rc('figure', figsize=(1.9, 1.9))
-rc('figure.subplot', bottom=.275, top=.86, right=.9, left=.38)
+rc('figure.subplot', bottom=.275, top=.85, right=.85, left=.3)
 if(pdf_format!=True):
   rc('savefig', dpi=100)
 
@@ -36,10 +36,10 @@ def autocorrfunc(until, n, data, idx):
         lst.append(autocorr(k, n, data, idx))
     return lst
 
-def setAxesProperties(ax,lbl_k,lbl_autocorr,autocorrfn,tit):
+def setAxesProperties(ax,lbl_k,autocorrfn,tit):
     ax.axhline(color='r')
     ax.set_xlabel(lbl_k)
-    ax.set_ylabel(lbl_autocorr)
+#    ax.set_ylabel(lbl_autocorr)
     ax.set_xlim([0.0,len(autocorrfn)])
     ax.set_ylim([-0.05,0.05])
     ax.xaxis.set_ticks([0,until/2,until])
@@ -52,14 +52,14 @@ autocorrfn_l = autocorrfunc(until, theta_data.shape[0],theta_data,1)
 autocorrfn_u = autocorrfunc(until, theta_data.shape[0],theta_data,2)
 
 tit_beta = r'$\beta$'
-tit_lowerscale = 'lower scale'
-tit_upperscale = 'upper scale'
+tit_lowerscale = r'$l$'
+tit_upperscale = r'$u$'
 lbl_k = r'$k$'
-lbl_autocorr = r'$k$th order autocorr.'
+#lbl_autocorr = r'$k$th order autocorr.'
 
 fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_beta)),autocorrfn_beta, marker = ".", linewidth=0.01)
-setAxesProperties(ax,lbl_k,lbl_autocorr,autocorrfn_beta,tit_beta)
+setAxesProperties(ax,lbl_k,autocorrfn_beta,tit_beta)
 if(pdf_format):
   savefig(prefix + 'beta.pdf', format='pdf')
 else:
@@ -67,7 +67,7 @@ else:
 
 fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_l)),autocorrfn_l, marker = ".", linewidth=0.01)
-setAxesProperties(ax,lbl_k,lbl_autocorr,autocorrfn_l,tit_lowerscale)
+setAxesProperties(ax,lbl_k,autocorrfn_l,tit_lowerscale)
 if(pdf_format):
   savefig(prefix + 'lowerscale.pdf', format='pdf')
 else:
@@ -75,7 +75,7 @@ else:
 
 fig, ax = subplots()
 ax.scatter(range(0, len(autocorrfn_u)),autocorrfn_u, marker = ".", linewidth=0.01)
-setAxesProperties(ax,lbl_k,lbl_autocorr,autocorrfn_u,tit_upperscale)
+setAxesProperties(ax,lbl_k,autocorrfn_u,tit_upperscale)
 if(pdf_format):
   savefig(prefix + 'upperscale.pdf', format='pdf')
 else:

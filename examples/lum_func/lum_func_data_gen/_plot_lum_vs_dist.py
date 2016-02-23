@@ -47,13 +47,13 @@ ylabel(r'$\log(L)$')
 #lbl_1 = 'distance vs log-luminosity'
 ax.scatter(dist_data, lumVals, color='r', marker='.', edgecolors='none', alpha=0.015, rasterized = True)
 lbl_2 = r'$\log(4\pi T r^2)$'
-ax.plot(distRange, limitLumVals, zorder=3, linewidth=4, color='b', label=lbl_2, rasterized = True)
+ax.plot(distRange, limitLumVals, zorder=3, linewidth=1.5, color='b', label=lbl_2, rasterized = True)
 
 ax.set_xlim([0, rmax])
 ax.set_ylim([22, 33])
 #ax.set_yscale('log')
 
-legend(loc=0)
+legend(loc=4) # lower right
 if(pdf_format):
   savefig('_lum_vs_dist.pdf', format='pdf')
 else:

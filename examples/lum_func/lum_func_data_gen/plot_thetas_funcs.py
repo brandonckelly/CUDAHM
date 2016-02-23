@@ -21,7 +21,7 @@ pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
 rc('figure', figsize=(1.9, 1.9))
-rc('figure.subplot', bottom=.275, top=.86, right=.9, left=.38)
+rc('figure.subplot', bottom=.275, top=.85, right=.85, left=.3)
 if(pdf_format!=True):
   rc('savefig', dpi=100)
 theta_data=np.loadtxt(file,delimiter=' ',usecols=(0,1,2))
@@ -43,8 +43,7 @@ def setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag):
     ax.xaxis.set_ticklabels([0.0,0.5*max_x_pos/max_x_pos_mag,max_x_pos/max_x_pos_mag])
     ax.set_xlim([0.0,max_x_pos])
 
-def setYAxisProperties(ax, ylbl, data):
-    ax.set_ylabel(ylbl)
+def setYAxisProperties(ax, data):
     data_min = data.min()
     data_yrange = data.max() - data_min
     data_ticks = [data_min, data_min + data_yrange * 1.0/3.0, data_min + data_yrange * 2.0/3.0, data_min + data_yrange]
@@ -59,16 +58,20 @@ max_upperscale = theta_data_u.max()
 max_upperscale_mag, max_upperscale_exp = determineMagnitude(max_upperscale)
 
 lbl_beta = r'$\beta$'
-lbl_lowerscale = r'lower scale ($\times 10^{%d}$)' % max_lowerscale_exp
-lbl_upperscale = r'upper scale ($\times 10^{%d}$)' % max_upperscale_exp
+lbl_lowerscale = r'$l$ ($\times 10^{%d}$)' % max_lowerscale_exp
+lbl_upperscale = r'$u$ ($\times 10^{%d}$)' % max_upperscale_exp
 lbl_iter= r'Iterations ($\times 10^{%d}$)' % max_x_pos_exp
 
 fig, ax = subplots()
 xrange = np.arange(1, len(theta_data_beta) + 1) * nthin_theta
 ax.scatter(xrange,theta_data_beta, color = 'b', marker = ".", edgecolors='none', alpha=0.01, rasterized = True)
 setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
-beta_ticks = setYAxisProperties(ax, lbl_beta, theta_data_beta)
-ax.yaxis.set_ticklabels(['%.2f' % y for y in beta_ticks])
+beta_ticks = setYAxisProperties(ax, theta_data_beta)
+beta_tick_labels = ['%.2f' % y for y in beta_ticks]
+#We should modify the format of the tick labels of y axis otherwise the minus sign will be too short:
+ax.yaxis.set_ticklabels([r'$%s$' % y for y in beta_tick_labels])
+ax.set_ylim([beta_ticks[0],beta_ticks[-1]])
+ax.set_title(lbl_beta)
 if(pdf_format):
   savefig('beta.pdf', format='pdf')
 else:
@@ -78,8 +81,9 @@ fig, ax = subplots()
 xrange = np.arange(1, len(theta_data_u) + 1) * nthin_theta
 ax.scatter(xrange,theta_data_u, color = 'b', marker = ".", edgecolors='none', alpha=0.01, rasterized = True)
 setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
-upperscale_ticks = setYAxisProperties(ax, lbl_upperscale, theta_data_u)
+upperscale_ticks = setYAxisProperties(ax, theta_data_u)
 ax.yaxis.set_ticklabels(['%.2f' % (y/max_upperscale_mag) for y in upperscale_ticks])
+ax.set_title(lbl_upperscale)
 if(pdf_format):
   savefig('upperscale.pdf', format='pdf')
 else:
@@ -89,8 +93,9 @@ fig, ax = subplots()
 xrange = np.arange(1, len(theta_data_l) + 1) * nthin_theta
 ax.scatter(xrange,theta_data_l, color = 'b', marker = ".", edgecolors='none', alpha=0.01, rasterized = True)
 setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
-lowerscale_ticks = setYAxisProperties(ax, lbl_lowerscale, theta_data_l)
+lowerscale_ticks = setYAxisProperties(ax, theta_data_l)
 ax.yaxis.set_ticklabels(['%.2f' % (y/max_lowerscale_mag) for y in lowerscale_ticks])
+ax.set_title(lbl_lowerscale)
 if(pdf_format):
   savefig('lowerscale.pdf', format='pdf')
 else:

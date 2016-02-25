@@ -13,8 +13,8 @@ parser.add_argument("upper_scale", help="The upper scale of 'Break-By-1 Truncate
 parser.add_argument("--lower_scale_factor", default = 1.0, help="The factor which scales up the lower scale samples", type=float)
 parser.add_argument("--upper_scale_factor", default = 1.0, help="The factor which scales up the upper scale samples", type=float)
 parser.add_argument("--xlog_min", default = 8.0, help="The log of x-axis minimum", type=float)
-parser.add_argument("--xlog_max", default = 13.0, help="The log of x-axis maximum", type=float)
-parser.add_argument("--resolution", default = 5000, help="The resolution of x-axis", type=int)
+parser.add_argument("--xlog_max", default = 14.6, help="The log of x-axis maximum", type=float)
+parser.add_argument("--resolution", default = 5000000, help="The resolution of x-axis", type=int)
 parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 
 args = parser.parse_args()
@@ -27,6 +27,8 @@ resolution = args.resolution
 pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
+rc('figure', figsize=(3.0, 3.0))
+rc('figure.subplot', bottom=.125, top=.9, right=.95, left=0.175)
 
 if(pdf_format!=True):
   rc('savefig', dpi=100)
@@ -44,7 +46,9 @@ fig, ax = subplots()
 
 ax.plot(log10_of_xlin, log10_of_pdf_0, 'r-', linewidth=1.0, zorder=1)
 
-ax.text(8.8, -10.2, r'$\sim (\phi_{0}(\theta)/(l\cdot u^{\beta}))\cdot L^{\beta+1}$',zorder=1)
+ax.text(9.3, -3.8, r'$\sim L^{\beta+1}$', rotation=45,zorder=1)
+ax.text(11.7, -8.8, r'$\sim L^{\beta}$', rotation=45,zorder=1)
+ax.text(13.0, -5.2, r'$\sim \exp(-L)$', rotation=45,zorder=1)
 
 ax.axvline(x = np.log10(lower_scale), color='blue', linewidth=1.0, linestyle='-', zorder=2)
 
@@ -52,6 +56,8 @@ ax.axvline(x = np.log10(upper_scale), color='blue', linewidth=1.0, linestyle='-'
 
 #ax.annotate(r'$\sim \frac{\phi_{0}(\theta)}{l\cdot u^{\beta}}\cdot L^{\beta+1}$', xy=(9, -10.5), xytext=(10, -10.5),
 #            arrowprops=dict(facecolor='black', shrink=0.05, width=1.0, headwidth=2.0), zorder=1)
+
+ax.set_xlim([xlog_min, xlog_max])
 
 if(pdf_format):
   savefig('lumfunc_loglog.pdf', format='pdf')
@@ -62,18 +68,9 @@ close() # it closes the previous plot to avoid memory leak
 
 fig, ax = subplots()
 
-ax.plot(xlin, log10_of_pdf_0, 'r-', linewidth=1.0, zorder=2)
-
-if(pdf_format):
-  savefig('lumfunc_linlog.pdf', format='pdf')
-else:
-  savefig('lumfunc_linlog.png')
-
-close() # it closes the previous plot to avoid memory leak
-
-fig, ax = subplots()
-
 ax.plot(log10_of_xlin, pdf_0, 'r-', linewidth=1.0, zorder=2)
+
+ax.set_xlim([xlog_min, xlog_max])
 
 if(pdf_format):
   savefig('lumfunc_loglin.pdf', format='pdf')

@@ -47,7 +47,7 @@ theta_data_u *= upper_scale_factor
 
 std_vec = np.std(theta_data, axis = 0)
 
-print 'Standard deviation of samples of theta parameters: (beta: %5.4f, l: %5.4f, u: %5.4f)' % (std_vec[0], std_vec[1], std_vec[2])
+print 'Standard deviation of samples of theta parameters: (beta: %5.4f, l: %e, u: %e)' % (std_vec[0], std_vec[1], std_vec[2])
 print 'How many  \'sigma_MCMC\' the difference between true theta and maximum likelihood estimate is?', 'beta: %5.4f, lowerscale: %5.4f, upperscale: %5.4f' % (np.abs(-1.5 - (-1.5564))/std_vec[0], np.abs(5.0*10**10 - 7.3222*10**10)/std_vec[1], np.abs(5.0*10**12 - 5.7207*10**12)/std_vec[2])
 
 print "Beta min:", theta_data_beta.min(), "max:", theta_data_beta.max()
@@ -67,6 +67,7 @@ print n.max(),n.argmax()
 ax.bar(bins[n.argmax()], n.max(), width =  bins[n.argmax()+1] - bins[n.argmax()], bottom = 0.0, color=(0.0,1.0,0.0), edgecolor=(0.0,1.0,0.0), zorder=2)
 
 print 'The most likely bin of beta: [%5.4f,%5.4f]' % (bins[n.argmax()], bins[n.argmax()+1])
+print 'The center of the most likely bin of beta: %5.4f' % ((bins[n.argmax()] + bins[n.argmax()+1])/2.0)
 
 # Histogram hull:
 ax.plot(bins[:len(bins)-1], n, color=(0.0,1.0,0.0), zorder=1)
@@ -95,6 +96,7 @@ print n.max(),n.argmax()
 ax.bar(bins[n.argmax()], n.max(), width =  bins[n.argmax()+1] - bins[n.argmax()], bottom = 0.0, color=(0.0,1.0,0.0), edgecolor=(0.0,1.0,0.0), zorder=2)
 
 print 'The most likely bin of lowerscale: [%5.4f,%5.4f]' % (bins[n.argmax()], bins[n.argmax()+1])
+print 'The center of the most likely bin of lowerscale: %5.4f' % ((bins[n.argmax()] + bins[n.argmax()+1])/2.0)
 
 # Histogram hull:
 ax.plot(bins[:len(bins)-1], n, color=(0.0,1.0,0.0), zorder=1)
@@ -122,6 +124,7 @@ print n.max(),n.argmax()
 ax.bar(bins[n.argmax()], n.max(), width =  bins[n.argmax()+1] - bins[n.argmax()], bottom = 0.0, color=(0.0,1.0,0.0), edgecolor=(0.0,1.0,0.0), zorder=2)
 
 print 'The most likely bin of upperscale: [%5.4f,%5.4f]' % (bins[n.argmax()], bins[n.argmax()+1])
+print 'The center of the most likely bin of upperscale: %5.4f' % ((bins[n.argmax()] + bins[n.argmax()+1])/2.0)
 
 # Histogram hull:
 ax.plot(bins[:len(bins)-1], n, color=(0.0,1.0,0.0), zorder=1)

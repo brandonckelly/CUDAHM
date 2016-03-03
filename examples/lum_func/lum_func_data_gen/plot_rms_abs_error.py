@@ -75,7 +75,7 @@ ax.set_ylabel("RMS abs error")
 ax.set_xlim(limit)
 ax.set_ylim([0, 5])
 #legend(handles=[line1, line2])
-legend(loc=4) # lower right
+legend(loc=1)
 
 if(pdf_format):
   savefig('rms_abs_error.pdf', format='pdf')

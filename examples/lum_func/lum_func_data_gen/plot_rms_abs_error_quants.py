@@ -67,7 +67,7 @@ ax.set_xlabel("quantile")
 ax.set_ylabel("RMS abs error")
 
 #legend(handles=[line1, line2])
-legend(loc=4) # lower right
+legend(loc=2)
 
 if(pdf_format):
   savefig('rms_abs_error_quants.pdf', format='pdf')

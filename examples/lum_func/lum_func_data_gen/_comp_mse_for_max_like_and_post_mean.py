@@ -40,11 +40,14 @@ for idx in range(0, len(real_flux_data)):
   fluxes_list.append((real_flux_data[idx],noisy_flux_data_0[idx],estimated_flux_data_0[idx]))
 
 fluxes = np.array(fluxes_list)
-sorted_fluxes = np.sort(fluxes,axis=0)
 
-print sorted_fluxes
+arg_sort = np.argsort(fluxes, axis=0)
 
-rate=len(sorted_fluxes)/n_regions
+sorted_real_fluxes = fluxes[arg_sort,0].flatten()
+sorted_noisy_fluxes = fluxes[arg_sort,1].flatten()
+sorted_estimated_fluxes = fluxes[arg_sort,2].flatten()
+
+rate=len(sorted_real_fluxes)/n_regions
 
 mse_max_like_list = []
 mse_post_mean_list = []
@@ -69,8 +72,8 @@ for idx in range(1,n_regions+1):
   current_text = indexToOrdinal(idx)
   regions_text_list.append(current_text)
   for subIdx in range(lim_reg_lower,lim_reg_upper):
-    current_mse_max_like += (sorted_fluxes[subIdx][1] - sorted_fluxes[subIdx][0])**2.0
-    current_mse_post_mean += (sorted_fluxes[subIdx][2] - sorted_fluxes[subIdx][0])**2.0
+    current_mse_max_like += (sorted_noisy_fluxes[subIdx] - sorted_real_fluxes[subIdx])**2.0
+    current_mse_post_mean += (sorted_estimated_fluxes[subIdx] - sorted_real_fluxes[subIdx])**2.0
   current_mse_max_like /= rate
   current_mse_post_mean /= rate
   mse_max_like_list.append(current_mse_max_like)

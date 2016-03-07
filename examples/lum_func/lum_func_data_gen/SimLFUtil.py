@@ -222,6 +222,8 @@ class SimLFUtil:
             print('Number of dropped flux samples:', droppedNum)
             
             t0 = dt.datetime.today()
+            print('Basic statistics for filtered luminosities with flux limit:')
+            self._sample_stats(lums_with_limit)
             print('Basic statistics for filtered noisy fluxes with flux limit:')
             self._sample_stats(noisy_fluxes_with_limit)
             t1 = dt.datetime.today()

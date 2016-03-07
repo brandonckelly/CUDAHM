@@ -35,10 +35,10 @@ tit = r'The argument function of error function with flux limit: %5.2f, $\sigma_
 #fig.suptitle(tit, fontsize=18, fontweight='bold')
 
 ax = fig.add_subplot(1,1,1,xlim = [-200,1000],ylim = [-80,80]) # one row, one column, first plot
-ax.set_xlabel(r'$\chi$')
+ax.set_xlabel(r'$F$')
 ax.axvline(x = 0, color='black', linewidth=2, linestyle='-')
 
-lbl_0 = r'$\frac{\chi - T}{\sqrt{2\cdot(\sigma_{0}^2 + (0.01\chi)^2)}}$'
+lbl_0 = r'$\frac{F - T}{\sqrt{2\cdot(\sigma_{0}^2 + (0.01F)^2)}}$'
 ax.plot(xlin, vals, 'b--', linewidth=3, linestyle='-', label=lbl_0, zorder=3)
 
 lbl_1 = r'$\frac{1}{0.01\sqrt{2}}$'

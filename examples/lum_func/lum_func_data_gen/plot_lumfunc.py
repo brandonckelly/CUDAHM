@@ -48,7 +48,7 @@ ax.plot(log10_of_xlin, log10_of_pdf_0, 'r-', linewidth=1.0, zorder=1)
 
 ax.text(9.3, -3.8, r'$\sim L^{\beta+1}$', rotation=45,zorder=1)
 ax.text(11.7, -8.8, r'$\sim L^{\beta}$', rotation=45,zorder=1)
-ax.text(13.0, -5.2, r'$\sim \exp(-L)$', rotation=45,zorder=1)
+ax.text(12.7, -30.0, r'$\exp(-L)\sim$', rotation=45,zorder=1)
 
 ax.axvline(x = np.log10(lower_scale), color='blue', linewidth=1.0, linestyle='-', zorder=2)
 

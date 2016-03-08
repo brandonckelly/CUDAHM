@@ -1,4 +1,4 @@
-# executing e.g. python plot_rms_abs_error_quants.py fluxes_cnt_100000.dat filtered_fluxes_w_G_noise_mu_0.0_sig_1.0_fl_5.0_cnt_100000.dat lumfunc_chi_summary_2.dat --pdf_format False
+# executing e.g.: python plot_recalib_hist.py fluxes_cnt_100000.dat filtered_fluxes_w_G_noise_mu_0.0_sig_1.0_fl_5.0_cnt_100000.dat lumfunc_chi_summary_2.dat --pdf_format False
 import argparse as argp
 import datetime as dt
 import numpy as np
@@ -15,10 +15,6 @@ real_flux_file = args.real_flux_file
 noisy_flux_file = args.noisy_flux_file
 estimated_flux_file = args.estimated_flux_file
 pdf_format = eval(args.pdf_format)
-
-execfile("rc_settings.py")
-if(pdf_format!=True):
-  rc('savefig', dpi=100)
 
 real_flux_data=np.loadtxt(real_flux_file)
 noisy_flux_data=np.loadtxt(noisy_flux_file,delimiter=' ',usecols=(0,1))
@@ -38,38 +34,22 @@ F_real = fluxes[arg_sort,0].flatten()
 F_obs = fluxes[arg_sort,1].flatten()
 F_recal = fluxes[arg_sort,2].flatten()
 
-logF_real = np.log10(F_real)
-
-limit = [0, 2.5]
-
-quants = 10
-n = np.int32(F_real.shape[0] / quants)
-rms_obs = np.zeros(quants)
-rms_recal = np.zeros(quants)
-rms_obs_rel = np.zeros(quants)
-rms_recal_rel = np.zeros(quants)
-
-for i in range(0, quants):
-  fo = F_obs[n*i:n*i+n]
-  fr = F_real[n*i:n*i+n]
-  fc = F_recal[n*i:n*i+n]
-  rms_obs[i] = np.sqrt(np.sum(((fo - fr))**2)/n)
-  rms_recal[i] = np.sqrt(np.sum(((fc - fr))**2)/n)
-  rms_obs_rel[i] = np.sqrt(np.sum(((fo - fr)/fr)**2)/n)
-  rms_recal_rel[i] = np.sqrt(np.sum(((fc - fr)/fr)**2)/n)
-
-bins = np.arange(1, quants + 1)
-
+execfile("rc_settings.py")
+if(pdf_format!=True):
+  rc('savefig', dpi=100)
+  
 fig, ax = subplots()
-line1, = ax.step(bins,rms_obs, where='mid', label='obs')
-line2, = ax.step(bins,rms_recal, where='mid', label='recal')
-ax.set_xlabel("quantile")
-ax.set_ylabel("RMS abs error")
 
-#legend(handles=[line1, line2])
-legend(loc=2)
+r = 1000
+hist, bins = np.histogram(F_obs-F_real, bins=r)
+ax.plot(bins[:-1], hist)
+hist, bins = np.histogram(F_recal-F_real, bins=r)
+ax.plot(bins[:-1], hist)
+ax.set_xlim([-10,10])
+ax.set_xlabel('$\Delta F$')
+ax.set_ylabel('counts')
 
 if(pdf_format):
-  savefig('rms_abs_error_quants.pdf', format='pdf')
+  savefig('recalib_hist.pdf', format='pdf')
 else:
-  savefig('rms_abs_error_quants.png')
+  savefig('recalib_hist.png')

@@ -30,11 +30,13 @@ fluxes = np.array(fluxes_list)
 
 arg_sort = np.argsort(fluxes, axis=0)
 
-F_real = fluxes[arg_sort,0].flatten()
-F_obs = fluxes[arg_sort,1].flatten()
-F_recal = fluxes[arg_sort,2].flatten()
+F_real = fluxes[arg_sort[:,0],0].flatten()
+F_obs = fluxes[arg_sort[:,0],1].flatten()
+F_recal = fluxes[arg_sort[:,0],2].flatten()
 
 execfile("rc_settings.py")
+rc('figure.subplot', bottom=.2, top=.92, right=.95, left=0.25)
+rc('figure', figsize=(2.5, 2.5))
 if(pdf_format!=True):
   rc('savefig', dpi=100)
   

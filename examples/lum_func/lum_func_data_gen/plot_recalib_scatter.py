@@ -34,9 +34,9 @@ fluxes = np.array(fluxes_list)
 
 arg_sort = np.argsort(fluxes, axis=0)
 
-F_real = fluxes[arg_sort,0].flatten()
-F_obs = fluxes[arg_sort,1].flatten()
-F_recal = fluxes[arg_sort,2].flatten()
+F_real = fluxes[arg_sort[:,0],0].flatten()
+F_obs = fluxes[arg_sort[:,0],1].flatten()
+F_recal = fluxes[arg_sort[:,0],2].flatten()
 
 zz = np.arange(0, 5.1, 0.1)
 
@@ -93,8 +93,8 @@ fig, ax = subplots()
 
 ax.set_xlim(limit)
 ax.set_ylim(limit)
-ax.set_xlabel('$\log_{10}F_{real}$')
-ax.set_ylabel('$\log_{10}F_{obs}$')
+ax.set_xlabel('$\log_{10}F_{true}$')
+ax.set_ylabel('$\log_{10}F_{noisy}$')
 
 currentdir = os.getcwd()
 
@@ -112,8 +112,8 @@ fig, ax = subplots()
 
 ax.set_xlim(limit)
 ax.set_ylim(limit)
-ax.set_xlabel('$\log_{10}F_{real}$')
-ax.set_ylabel('$\log_{10}F_{recalib}$')
+ax.set_xlabel('$\log_{10}F_{true}$')
+ax.set_ylabel('$\log_{10}F_{MCMC}$')
 
 currentdir = os.getcwd()
 

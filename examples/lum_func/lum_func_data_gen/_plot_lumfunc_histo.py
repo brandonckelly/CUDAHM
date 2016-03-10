@@ -81,8 +81,8 @@ def transformScientificNotationToLaTeXCode(floatNum, format = '%5.2e'):
     return sciNotationPython.replace('e+','\cdot 10^{')+'}'
 
 fig_log, ax =  subplots()
-xlabel(r'$\log_{10}(L)$')
-ylabel(r'$\log_{10}(\phi(L ; \theta))$ and $\log_{10}(\phi^{T}(L ; C, r, \theta))$')
+xlabel(r'$\log_{10} L$')
+ylabel(r'$\log_{10} \phi$')
 
 xlin = np.linspace(10**xlog_min, 10**xlog_max, resolution)
 log10_of_xlin = np.log10(xlin)
@@ -122,7 +122,7 @@ ax.bar(log10_of_bins[0:299], log10_of_hist_height, width = 0.8 * (log10_of_bins[
 ax.set_xlim([xlog_min,xlog_max])
 ax.set_ylim([bottom_of_hist_height, top_of_y_axis])
 
-legend(loc=3)
+#legend(loc=3)
 if(pdf_format):
   savefig('_lumfunc_histo.pdf', format='pdf')
 else:

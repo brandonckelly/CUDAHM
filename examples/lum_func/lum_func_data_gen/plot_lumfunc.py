@@ -27,8 +27,8 @@ resolution = args.resolution
 pdf_format = eval(args.pdf_format)
 
 execfile("rc_settings.py")
-rc('figure', figsize=(3.0, 3.0))
-rc('figure.subplot', bottom=.125, top=.9, right=.95, left=0.175)
+rc('figure.subplot', bottom=.2, top=.92, right=.95, left=.28)
+rc('figure', figsize=(2.5, 2.5))
 
 if(pdf_format!=True):
   rc('savefig', dpi=100)
@@ -46,9 +46,9 @@ fig, ax = subplots()
 
 ax.plot(log10_of_xlin, log10_of_pdf_0, 'r-', linewidth=1.0, zorder=1)
 
-ax.text(9.3, -3.8, r'$\sim L^{\beta+1}$', rotation=45,zorder=1)
-ax.text(11.7, -8.8, r'$\sim L^{\beta}$', rotation=45,zorder=1)
-ax.text(12.7, -30.0, r'$\exp(-L)\sim$', rotation=45,zorder=1)
+ax.text(8.5, -12.6, r'$L^{\beta+1}\sim$', rotation=45,zorder=1)
+ax.text(11.0, -15.0, r'$L^{\beta}\sim$', rotation=45,zorder=1)
+ax.text(12.7, -25.0, r'$e^{-L}\sim$', rotation=45,zorder=1)
 
 ax.axvline(x = np.log10(lower_scale), color='blue', linewidth=1.0, linestyle='-', zorder=2)
 
@@ -58,6 +58,8 @@ ax.axvline(x = np.log10(upper_scale), color='blue', linewidth=1.0, linestyle='-'
 #            arrowprops=dict(facecolor='black', shrink=0.05, width=1.0, headwidth=2.0), zorder=1)
 
 ax.set_xlim([xlog_min, xlog_max])
+ax.set_xlabel('$\log_{10} L$')
+ax.set_ylabel('$\log_{10} \phi$')
 
 if(pdf_format):
   savefig('lumfunc_loglog.pdf', format='pdf')
@@ -71,6 +73,8 @@ fig, ax = subplots()
 ax.plot(log10_of_xlin, pdf_0, 'r-', linewidth=1.0, zorder=2)
 
 ax.set_xlim([xlog_min, xlog_max])
+ax.set_xlabel('$\log_{10} L$')
+ax.set_ylabel('$\phi$')
 
 if(pdf_format):
   savefig('lumfunc_loglin.pdf', format='pdf')

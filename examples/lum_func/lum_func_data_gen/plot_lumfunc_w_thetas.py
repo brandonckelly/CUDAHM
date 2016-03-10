@@ -189,8 +189,8 @@ ax = subplot(gs[0], sharex=ax2)
 
 ax.set_ylabel(r'$\log_{10}\phi$')
 ax.tick_params(labelbottom='off')  # don't put tick labels at the bottom
-ax2.set_ylabel(r'$\log_{10}\phi - log_{10}\phi_{true}$')
-ax2.set_xlabel(r'$\log_{10}(L)$')
+ax2.set_ylabel(r'$\log_{10}\phi - \log_{10}\phi_{true}$')
+ax2.set_xlabel(r'$\log_{10}L$')
 tit = r'Luminosity density function'
 #ax.set_title(tit))
 
@@ -204,8 +204,9 @@ im = imread(get_sample_data(currentdir+'\\'+'lumfunc_w_thetas_diffs_curve.png'))
 ax2.imshow(im, extent=[original_xticks2[0],original_xticks2[-1],original_yticks2[0], original_yticks2[-1]], aspect="auto")
 ax2.set_yticks([-0.08,-0.04,0.0,0.04,0.08])
 
-lbl_0 = r'$\log_{10}(\phi(L ; \theta_{true}))$'
-lbl_1 = r'$\log_{10}(\phi(L ; \theta_{maxlike}))$'
+lbl_0 = r'true'
+lbl_1 = r'MLE'
+lbl_2 = r'MCMC'
 
 #The following 'custom legend' based on http://stackoverflow.com/questions/13303928/how-to-make-custom-legend-in-matplotlib
 #Get artists and labels for legend and chose which ones to display
@@ -215,10 +216,11 @@ display = tuple(range(5))
 #Create custom artists
 trueFLArtist = Line2D((0,1),(0,0), color='r', linestyle='-', linewidth=0.5)
 maxlikeFLArtist = Line2D((0,1),(0,0), color='b', linestyle='-', linewidth=0.5)
+mcmcFLArtist = Line2D((0,1),(0,0), color='g', linestyle='-', linewidth=0.5)
 
 #Create legend from custom artist/label lists
-ax.legend([handle for i,handle in enumerate(handles) if i in display]+[trueFLArtist,maxlikeFLArtist],
-          [label for i,label in enumerate(labels) if i in display]+[lbl_0, lbl_1], loc=3)
+ax.legend([handle for i,handle in enumerate(handles) if i in display]+[trueFLArtist,maxlikeFLArtist,mcmcFLArtist],
+          [label for i,label in enumerate(labels) if i in display]+[lbl_0, lbl_1, lbl_2], loc=3)
 
 #lbl_3 = r'$\log_{10}(\phi(L ; \theta_{maxlike})) - log_{10}(\phi(L ; \theta_{true}))$'
 		  

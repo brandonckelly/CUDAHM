@@ -55,7 +55,7 @@ withFLArtist = Line2D((0,1),(0,0), color='k', linestyle='--')
 ax.legend([handle for i,handle in enumerate(handles) if i in display]+[withoutFLArtist,withFLArtist],
           [label for i,label in enumerate(labels) if i in display]+['without flux limit', 'with flux limit 0.5'], loc=2)
 
-ax.set_xlabel('Iteration numbers')
+ax.set_xlabel('Iteration number')
 ax.set_ylabel('Elapsed time (min)')
 #ax.legend(loc=2)
 
@@ -109,7 +109,7 @@ withFLArtist = Line2D((0,1),(0,0), color='k', linestyle='--')
 ax.legend([handle for i,handle in enumerate(handles) if i in display]+[withoutFLArtist,withFLArtist],
           [label for i,label in enumerate(labels) if i in display]+['without flux limit', 'with flux limit 0.5'], loc=2)
 
-ax.set_xlabel('Object numbers')
+ax.set_xlabel('Object number')
 ax.set_ylabel('Elapsed time (min)')
 #ax.legend(loc=0)
 if(pdf_format):

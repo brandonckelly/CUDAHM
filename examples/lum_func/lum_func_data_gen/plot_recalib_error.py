@@ -19,7 +19,7 @@ pdf_format = eval(args.pdf_format)
 t0 = dt.datetime.today()
 
 execfile("rc_settings.py")
-rc('figure.subplot', bottom=.2, top=.95, right=.95, left=.25)
+rc('figure.subplot', bottom=.2, top=.95, right=.95, left=.28)
 rc('figure', figsize=(2.5, 2.5))
 if(pdf_format!=True):
   rc('savefig', dpi=100)
@@ -38,9 +38,9 @@ fluxes = np.array(fluxes_list)
 
 arg_sort = np.argsort(fluxes, axis=0)
 
-F_real = fluxes[arg_sort,0].flatten()
-F_obs = fluxes[arg_sort,1].flatten()
-F_recal = fluxes[arg_sort,2].flatten()
+F_real = fluxes[arg_sort[:,0],0].flatten()
+F_obs = fluxes[arg_sort[:,0],1].flatten()
+F_recal = fluxes[arg_sort[:,0],2].flatten()
 
 logF_real = np.log10(F_real)
 hist, bins = np.histogram(logF_real,bins=100)
@@ -73,8 +73,8 @@ for i in range(0, hist.shape[0]):
 fig, ax = subplots()
 line1, = ax.plot(bins[:-1],rms_obs, '-', label='obs')
 line2, = ax.plot(bins[:-1],rms_recal, '-', label='recal')
-ax.set_xlabel("$\log_{10}F_{real}$")
-ax.set_ylabel("RMS abs error")
+ax.set_xlabel("$\log_{10}F_{true}$")
+ax.set_ylabel("$\Delta F$")
 
 ax.set_xlim(limit)
 ax.set_ylim([0, 5])
@@ -88,8 +88,8 @@ else:
 fig, ax = subplots()
 line1, = ax.plot(bins[:-1],rms_obs_rel, '-', label='obs')
 line2, = ax.plot(bins[:-1],rms_recal_rel, '-', label='recal')
-ax.set_xlabel("$\log_{10}F_{real}$")
-ax.set_ylabel("RMS rel error")
+ax.set_xlabel("$\log_{10}F_{true}$")
+ax.set_ylabel(r"$ \frac{ \Delta F }{ F } $")
 
 ax.set_xlim(limit)
 ax.set_ylim([0, 4])

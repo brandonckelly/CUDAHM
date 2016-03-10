@@ -43,9 +43,9 @@ fluxes = np.array(fluxes_list)
 
 arg_sort = np.argsort(fluxes, axis=0)
 
-sorted_real_fluxes = fluxes[arg_sort,0].flatten()
-sorted_noisy_fluxes = fluxes[arg_sort,1].flatten()
-sorted_estimated_fluxes = fluxes[arg_sort,2].flatten()
+sorted_real_fluxes = fluxes[arg_sort[:,0],0].flatten()
+sorted_noisy_fluxes = fluxes[arg_sort[:,0],1].flatten()
+sorted_estimated_fluxes = fluxes[arg_sort[:,0],2].flatten()
 
 rate=len(sorted_real_fluxes)/n_regions
 

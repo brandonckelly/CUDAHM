@@ -2,6 +2,7 @@
 import argparse as argp
 import numpy as np
 from matplotlib.pyplot import *
+from AutoCorrUtil import AutoCorrUtil
 
 parser = argp.ArgumentParser()
 parser.add_argument("file", help="The file name of theta data file.", type = str)
@@ -15,26 +16,13 @@ prefix = args.prefix
 until = int(args.until)
 pdf_format = eval(args.pdf_format)
 
+util = AutoCorrUtil()
+
 execfile("rc_settings.py")
 rc('figure', figsize=(1.9, 1.9))
 rc('figure.subplot', bottom=.275, top=.85, right=.85, left=.3)
 if(pdf_format!=True):
   rc('savefig', dpi=100)
-
-def autocorr(k, n, data, idx):
-    m_data = np.mean(data, axis = 0)[idx]
-    var_data = np.var(data[:n-k], axis = 0)[idx]
-    cov_data = 0.0
-    for t in range(0, n-k):
-        cov_data += float(data[t][idx] - m_data)*float(data[t+k][idx] - m_data)
-    cov_data/=float(n)
-    return cov_data / var_data
-
-def autocorrfunc(until, n, data, idx):
-    lst = []
-    for k in range(0,until):
-        lst.append(autocorr(k, n, data, idx))
-    return lst
 
 def setAxesProperties(ax,lbl_k,autocorrfn,tit):
     ax.axhline(color='r')
@@ -47,9 +35,15 @@ def setAxesProperties(ax,lbl_k,autocorrfn,tit):
 	
 theta_data=np.loadtxt(file,delimiter=' ',usecols=(0,1,2))
 
-autocorrfn_beta = autocorrfunc(until, theta_data.shape[0],theta_data,0)
-autocorrfn_l = autocorrfunc(until, theta_data.shape[0],theta_data,1)
-autocorrfn_u = autocorrfunc(until, theta_data.shape[0],theta_data,2)
+autocorrfn_beta = util.autocorrfunc(until, theta_data.shape[0],theta_data,0)
+autocorrfn_l = util.autocorrfunc(until, theta_data.shape[0],theta_data,1)
+autocorrfn_u = util.autocorrfunc(until, theta_data.shape[0],theta_data,2)
+
+ess_beta = util.effectiveSampleSize(until, theta_data.shape[0], theta_data, 0)
+ess_l = util.effectiveSampleSize(until, theta_data.shape[0], theta_data, 1)
+ess_u = util.effectiveSampleSize(until, theta_data.shape[0], theta_data, 2)
+
+print "n:", theta_data.shape[0], ", ESS_beta:", ess_beta, ", ESS_l:", ess_l, ", ESS_u:", ess_u
 
 tit_beta = r'$\beta$'
 tit_lowerscale = r'$l$'

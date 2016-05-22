@@ -28,7 +28,7 @@ def setAxesProperties(ax,lbl_k,autocorrfn,tit):
     ax.axhline(color='r')
     ax.set_xlabel(lbl_k)
 #    ax.set_ylabel(lbl_autocorr)
-    ax.set_xlim([0.0,len(autocorrfn)])
+    ax.set_xlim([1.0,len(autocorrfn)])
     ax.set_ylim([-0.05,0.05])
     ax.xaxis.set_ticks([0,until/2,until])
     ax.set_title(tit)

@@ -1,4 +1,4 @@
-# executing e.g. python plot_pairs_plot.py lumfunc_thetas_2.dat _ --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --pdf_format False
+# executing e.g. python plot_pairs_plot.py lumfunc_thetas_2.dat _ --lower_scale_factor 10000000000.0 --upper_scale_factor 1000000000000.0 --smooth 0.85 --pdf_format False
 import argparse as argp
 import datetime as dt
 import numpy as np
@@ -10,6 +10,8 @@ parser.add_argument("file", help="The file name of theta data file.", type = str
 parser.add_argument("prefix", help="The prefic for created output files.", type = str)
 parser.add_argument("--lower_scale_factor", default = 1.0, help="The factor which scales up the lower scale samples", type=float)
 parser.add_argument("--upper_scale_factor", default = 1.0, help="The factor which scales up the upper scale samples", type=float)
+parser.add_argument("--smooth", default = 0.0, help="The standard deviation for Gaussian kernel passed to gaussian_filter of corner method", type=float)
+parser.add_argument("--bins", default = 50, help="The bin numbers of histogram", type=int)
 parser.add_argument("--pdf_format", default = 'True', help="Would you like pdf format and high resolution for the figure output(s)?", type=str)
 
 args = parser.parse_args()
@@ -17,6 +19,8 @@ file = args.file
 prefix = args.prefix
 lower_scale_factor = args.lower_scale_factor
 upper_scale_factor = args.upper_scale_factor
+smooth = args.smooth
+bins = args.bins
 pdf_format = eval(args.pdf_format)
 
 t0 = dt.datetime.today()
@@ -37,7 +41,7 @@ max_upperscale_mag, max_upperscale_exp = determineMagnitude(max_upperscale)
 
 lbl_lowerscale = r'$l$ ($\times 10^{%d}$)' % max_lowerscale_exp
 lbl_upperscale = r'$u$ ($\times 10^{%d}$)' % max_upperscale_exp
-figure = corner.corner(theta_data, labels=[r'$\beta$', lbl_lowerscale, lbl_upperscale], color='b', bins=50, hist_kwargs={'color':'b','edgecolor':'b','zorder':5})
+figure = corner.corner(theta_data, labels=[r'$\beta$', lbl_lowerscale, lbl_upperscale], color='b', bins=bins, smooth=smooth, hist_kwargs={'color':'b','edgecolor':'b','zorder':5})
 
 if(pdf_format):
   savefig('pairs_plot.pdf', format='pdf')

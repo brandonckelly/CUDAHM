@@ -1,4 +1,4 @@
-#executing e.g. python comp_post_thinned_data.py lumfunc_thetas_2.dat 0.25
+#executing e.g. python comp_post_thinned_data.py lumfunc_thetas_2.dat 0.1
 import argparse as argp
 import numpy as np
 from AutoCorrUtil import AutoCorrUtil
@@ -47,8 +47,11 @@ print "ESS_beta_lag1:", (thinned_theta_data.shape[0]*(float(1-autocorr_beta_lag1
 print "ESS_l_lag1:", (thinned_theta_data.shape[0]*(float(1-autocorr_l_lag1)/float(1+autocorr_l_lag1)))
 print "ESS_u_lag1:", (thinned_theta_data.shape[0]*(float(1-autocorr_u_lag1)/float(1+autocorr_u_lag1)))
 
-ess_beta = util.effectiveSampleSizePymc(until, thinned_theta_data.shape[0], thinned_theta_data, 0)
-ess_l = util.effectiveSampleSizePymc(until, thinned_theta_data.shape[0], thinned_theta_data, 1)
-ess_u = util.effectiveSampleSizePymc(until, thinned_theta_data.shape[0], thinned_theta_data, 2)
+ess_beta = util.effectiveSampleSize(until, thinned_theta_data.shape[0], thinned_theta_data, 0)
+ess_l = util.effectiveSampleSize(until, thinned_theta_data.shape[0], thinned_theta_data, 1)
+ess_u = util.effectiveSampleSize(until, thinned_theta_data.shape[0], thinned_theta_data, 2)
 
 print "thinned n:", n_thinned_data, ", ESS_beta:", ess_beta, ", ESS_l:", ess_l, ", ESS_u:", ess_u
+
+filename = file.split('.')[0]
+np.savetxt(filename + '_thinned.dat', thinned_theta_data, fmt='%10.6e')

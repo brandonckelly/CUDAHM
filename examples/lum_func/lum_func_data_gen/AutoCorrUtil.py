@@ -21,12 +21,24 @@ class AutoCorrUtil:
             lst.append(self.autocorr(k, n, data, m_data, var_data, idx))
         return lst
     
+    # This is based on Kass et al. "Markov chain Monte Carlo in practice: a roundtable discussion"
     def effectiveSampleSize(self, until, n, data, idx):
+        # The following threshol is based on this article:
+        # author: van Dyk, David A and Park, Taeyoung:
+        # title: Partially collapsed Gibbs sampling and path-adaptive Metropolis-Hastings in high-energy astrophysics
+        # book: Handbook of Markov Chain Monte Carlo, 2011 (Editors: S. Brooks, A. Gelman, G. Jones and X.-L. Meng)
+        # pages: 383-397
+        truncatingThreshold = 0.05
         m_data = np.mean(data, axis = 0)[idx]
         var_data = np.var(data, axis = 0)[idx]
+        print m_data, var_data
         autoCorrTime = 0
         for k in range(1,until):
-            autoCorrTime += self.autocorr(k, n, data, m_data, var_data, idx)
+            autoCorr = self.autocorr(k, n, data, m_data, var_data, idx)
+            if autoCorr < truncatingThreshold:
+              print k
+              break
+            autoCorrTime += autoCorr
         autoCorrTime = 1 + 2 * autoCorrTime
         return float(n)/float(autoCorrTime)
 

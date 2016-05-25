@@ -25,7 +25,7 @@ if(pdf_format!=True):
   rc('savefig', dpi=100)
 
 def setAxesProperties(ax,lbl_k,autocorrfn,tit):
-    ax.axhline(color='r')
+    ax.axhline(color='r',zorder=1)
     ax.set_xlabel(lbl_k)
 #    ax.set_ylabel(lbl_autocorr)
     ax.set_xlim([1.0,len(autocorrfn)])
@@ -52,7 +52,7 @@ lbl_k = r'$k$'
 #lbl_autocorr = r'$k$th order autocorr.'
 
 fig, ax = subplots()
-ax.scatter(range(0, len(autocorrfn_beta)),autocorrfn_beta, marker = ".", linewidth=0.01)
+ax.scatter(range(0, len(autocorrfn_beta)),autocorrfn_beta, marker = ".", linewidth=0.01, zorder=2)
 setAxesProperties(ax,lbl_k,autocorrfn_beta,tit_beta)
 if(pdf_format):
   savefig(prefix + 'beta.pdf', format='pdf')
@@ -60,7 +60,7 @@ else:
   savefig(prefix + 'beta.png')
 
 fig, ax = subplots()
-ax.scatter(range(0, len(autocorrfn_l)),autocorrfn_l, marker = ".", linewidth=0.01)
+ax.scatter(range(0, len(autocorrfn_l)),autocorrfn_l, marker = ".", linewidth=0.01, zorder=2)
 setAxesProperties(ax,lbl_k,autocorrfn_l,tit_lowerscale)
 if(pdf_format):
   savefig(prefix + 'lowerscale.pdf', format='pdf')
@@ -68,7 +68,7 @@ else:
   savefig(prefix + 'lowerscale.png')
 
 fig, ax = subplots()
-ax.scatter(range(0, len(autocorrfn_u)),autocorrfn_u, marker = ".", linewidth=0.01)
+ax.scatter(range(0, len(autocorrfn_u)),autocorrfn_u, marker = ".", linewidth=0.01, zorder=2)
 setAxesProperties(ax,lbl_k,autocorrfn_u,tit_upperscale)
 if(pdf_format):
   savefig(prefix + 'upperscale.pdf', format='pdf')

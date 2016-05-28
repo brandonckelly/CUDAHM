@@ -25,7 +25,7 @@ alpha_rate = 0.01
 
 execfile("rc_settings.py")
 rc('figure', figsize=(5.0, 1.666))
-rc('figure.subplot', bottom=.315, top=.85, right=.95, left=.125)
+rc('figure.subplot', bottom=.315, top=.85, right=.95, left=.16)
 if(pdf_format!=True):
   rc('savefig', dpi=100)
 theta_data=np.loadtxt(file,delimiter=' ',usecols=(0,1,2))
@@ -75,7 +75,7 @@ beta_tick_labels = ['%.2f' % y for y in beta_ticks]
 #We should modify the format of the tick labels of y axis otherwise the minus sign will be too short:
 ax.yaxis.set_ticklabels([r'$%s$' % y for y in beta_tick_labels])
 ax.set_ylim([beta_ticks[0],beta_ticks[-1]])
-ax.set_title(lbl_beta)
+ax.set_ylabel(lbl_beta)
 if(pdf_format):
   savefig('beta_after_burnin.pdf', format='pdf')
 else:
@@ -87,7 +87,7 @@ ax.plot(xrange,theta_data_u, 'b-')
 setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
 upperscale_ticks = setYAxisProperties(ax, theta_data_u)
 ax.yaxis.set_ticklabels(['%.2f' % (y/max_upperscale_mag) for y in upperscale_ticks])
-ax.set_title(lbl_upperscale)
+ax.set_ylabel(lbl_upperscale)
 if(pdf_format):
   savefig('upperscale_after_burnin.pdf', format='pdf')
 else:
@@ -99,7 +99,7 @@ ax.plot(xrange,theta_data_l, 'b-')
 setXAxisProperties(ax, lbl_iter, max_x_pos, max_x_pos_mag)
 lowerscale_ticks = setYAxisProperties(ax, theta_data_l)
 ax.yaxis.set_ticklabels(['%.2f' % (y/max_lowerscale_mag) for y in lowerscale_ticks])
-ax.set_title(lbl_lowerscale)
+ax.set_ylabel(lbl_lowerscale)
 if(pdf_format):
   savefig('lowerscale_after_burnin.pdf', format='pdf')
 else:

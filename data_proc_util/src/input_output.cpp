@@ -33,7 +33,7 @@ public:
 			while (std::getline(input_file, line))
 			{
 				int pos = line.find(delimiter);
-				std::string propKey = line.substr(0, pos); // token is "scott"
+				std::string propKey = line.substr(0, pos);
 				std::string propValue = line.substr(pos + 1, line.length());
 				props[propKey] = propValue;
 			}

@@ -12,6 +12,7 @@
 #include <exception>
 #include <sstream>
 #include <fstream>
+#include <string>
 
 // boost includes
 #include <boost/shared_ptr.hpp>
@@ -250,8 +251,6 @@ protected:
 	}
 };
 
-const unsigned int lengthOfBuffer = 50000;
-
 template<int mfeat, int pchi, int dtheta>
 class GibbsSamplerWithCompactMemoryUsage : public GibbsSampler<mfeat, pchi, dtheta>
 {
@@ -327,25 +326,29 @@ public:
 			// TODO: How long does saving the values take? Maybe replace these with iterators?
 			if (!fix_poppar && (current_iter_ % nthin_theta_ == 0)) {
 				double * current_theta = PopPar_->GetTheta();
-				// save the value of the population parameter since we've done nthin_theta_ iterations since the last save
+				std::string str = "";
 				for (int j = 0; j < dtheta; j++)
 				{
-					(*outputThetaFile) << current_theta[j] << " ";
+					str += std::to_string(current_theta[j]);
+					str += " ";
 				}
-				outputThetaFile->put('\n');
+				str += "\n";
+				(*outputThetaFile) << str;
 				ntheta_samples_++;
 			}
 			if (!fix_char && (current_iter_ % nthin_chi_ == 0) && Daug_->SaveTrace()) {
 				double * chi = Daug_->GetChi();
-				// save the value of the characteristics
+				std::string str = "";
 				for (int i = 0; i < ndata; ++i)
 				{
 					for (int j = 0; j < pchi; ++j)
 					{
-						post_mean_i[ndata * j + i] += chi[ndata * j + i] / nchi_samples_num;
-						post_msqr_i[ndata * j + i] += chi[ndata * j + i] * chi[ndata * j + i] / nchi_samples_num;
+						str += std::to_string(chi[ndata * j + i]);
+						str += " ";
 					}
 				}
+				str += "\n";
+				(*outputChiFile) << str;
 				nchi_samples_++;
 			}
 		}
@@ -353,27 +356,14 @@ public:
 		Report();
 		std::cout << "Writing results to text files..." << std::endl;
 		(*outputThetaFile) << std::flush;
-		write_chis();
-	}
-
-	void write_chis()
-	{
-		std::ofstream outfile(chifile.c_str());
-		int ndata = Daug_->GetDataDim();
-		for (int i = 0; i < ndata; ++i) {
-			for (int j = 0; j < pchi; ++j) {
-				// posterior standard deviation
-				double post_sigma_ik = sqrt(post_msqr_i[ndata * j + i] - post_mean_i[ndata * j + i] * post_mean_i[ndata * j + i]);
-				outfile << post_mean_i[ndata * j + i] << " " << post_sigma_ik << " ";
-			}
-			outfile << std::endl;
-		}
+		(*outputChiFile) << std::flush;
 	}
 
 protected:
 	std::string& thetafile;
 	std::string& chifile;
 	std::ofstream * outputThetaFile;
+	std::ofstream * outputChiFile;
 	double * post_mean_i;
 	double * post_msqr_i;
 
@@ -404,8 +394,10 @@ protected:
 		}
 
 		outputThetaFile = new std::ofstream(thetafile.c_str());
-		char bufferOfOutput[lengthOfBuffer];
-		outputThetaFile->rdbuf()->pubsetbuf(bufferOfOutput, lengthOfBuffer);
+		outputThetaFile->rdbuf()->pubsetbuf(0, 0);
+
+		outputChiFile = new std::ofstream(chifile.c_str());
+		outputChiFile->rdbuf()->pubsetbuf(0, 0);
 
 		ntheta_samples_ = 0;
 		nchi_samples_ = 0;
